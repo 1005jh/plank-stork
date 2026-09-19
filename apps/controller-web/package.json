@@ -7,19 +7,23 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run --environment jsdom"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "1.0.1",
+    "@plank-stork/protocol": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@plank-stork/protocol": "workspace:*",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@types/node": "^24.0.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "vite": "~8.3.0"
+    "jsdom": "^30.1.0",
+    "vite": "~8.3.0",
+    "vitest": "^5.0.1"
   }
 }

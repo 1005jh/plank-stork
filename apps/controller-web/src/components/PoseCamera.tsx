@@ -1,0 +1,99 @@
+import { useState } from 'react';
+import { usePoseCamera } from '../camera/usePoseCamera';
+import { DEFAULT_MIRROR_PREVIEW, KEY_LANDMARKS, SIGNAL_LANDMARKS } from '../pose/poseConstants';
+import './PoseCamera.css';
+
+const SIGNAL_FIELDS = ['x', 'y', 'z', 'visibility', 'worldX', 'worldY', 'worldZ'] as const;
+
+export function PoseCamera() {
+  const { videoRef, canvasRef, status, error, delegate, metrics, start, stop } = usePoseCamera();
+  const [mirrored, setMirrored] = useState(DEFAULT_MIRROR_PREVIEW);
+
+  return (
+    <section className="pose-panel" aria-labelledby="pose-title">
+      <h2 id="pose-title">Pose Landmark POC</h2>
+      <p>Pose Landmarker Full · Delegate: {delegate ?? '-'} · Preview {mirrored ? 'mirrored' : 'unmirrored'}</p>
+      <div className="camera-controls">
+        <button type="button" onClick={() => void start()} disabled={status !== 'STOPPED'}>
+          Start Camera
+        </button>
+        <button type="button" onClick={stop} disabled={status === 'STOPPED'}>
+          Stop Camera
+        </button>
+        <button type="button" aria-pressed={mirrored} onClick={() => setMirrored((value) => !value)}>
+          Mirror {mirrored ? 'ON' : 'OFF'}
+        </button>
+        <span role="status">Camera: {status}</span>
+      </div>
+      {status === 'STARTING' && <p>카메라 권한을 확인하고 모델을 불러오는 중입니다…</p>}
+      {error && <p className="camera-error" role="alert">{error}</p>}
+      <div className="pose-layout">
+        <div>
+          <div className={`pose-preview${mirrored ? ' is-mirrored' : ''}`}>
+            <video ref={videoRef} muted playsInline aria-label="Webcam preview" />
+            <canvas ref={canvasRef} aria-label="Pose landmark overlay" />
+          </div>
+          <p>Pose: <strong>{metrics.detected ? 'DETECTED' : 'NOT DETECTED'}</strong></p>
+          <dl className="pose-metrics">
+            <div>
+              <dt>Camera / Render FPS</dt>
+              <dd>{metrics.cameraFps.toFixed(1)} / {metrics.renderFps.toFixed(1)}</dd>
+            </div>
+            <div>
+              <dt>Pose inference FPS</dt>
+              <dd>{metrics.inferenceFps.toFixed(1)}</dd>
+            </div>
+            <div>
+              <dt>Average inference time (ms)</dt>
+              <dd>{metrics.averageInferenceMs?.toFixed(1) ?? '-'}</dd>
+            </div>
+          </dl>
+          <p className="pose-note">
+            UI: 500ms 주기 · 추론 시간: 최근 30회 평균 · 영상 크기:{' '}
+            {metrics.width ? `${metrics.width} × ${metrics.height}` : '-'}
+          </p>
+        </div>
+        <div>
+          <h3>Key landmark visibility</h3>
+          <table className="visibility-table">
+            <thead><tr><th scope="col">Landmark</th><th scope="col">Visibility</th></tr></thead>
+            <tbody>
+              {KEY_LANDMARKS.map(({ index, name }, row) => (
+                <tr key={index}>
+                  <th scope="row">{index} {name}</th>
+                  <td>{metrics.visibility[row]?.toFixed(2) ?? '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <section aria-labelledby="pose-signal-title">
+        <h3 id="pose-signal-title">Pose Signal Analysis — Hip / Knee</h3>
+        <p className="pose-note">
+          500ms마다 원본 좌표를 표시합니다. Mirror는 영상·overlay 표시만 바꾸며 좌표와 신체 기준 LEFT/RIGHT는 유지됩니다.
+        </p>
+        <div className="signal-table-scroll" role="region" aria-labelledby="pose-signal-title" tabIndex={0}>
+          <table className="visibility-table signal-table" aria-label="Hip and knee landmark values">
+            <thead>
+              <tr>
+                <th scope="col">Landmark</th>
+                {SIGNAL_FIELDS.map((field) => <th scope="col" key={field}>{field}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {SIGNAL_LANDMARKS.map(({ index, name }, row) => (
+                <tr key={index}>
+                  <th scope="row">{index} {name}</th>
+                  {SIGNAL_FIELDS.map((field) => (
+                    <td key={field}>{metrics.signalLandmarks[row]?.[field]?.toFixed(3) ?? '-'}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  );
+}

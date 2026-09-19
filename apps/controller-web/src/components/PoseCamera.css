@@ -1,0 +1,35 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #172b3a;
+  background: #f5f7fa;
+}
+
+body { margin: 0; }
+main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+button { padding: 10px 16px; cursor: pointer; font: inherit; }
+button:disabled { cursor: default; }
+.pose-panel { padding: 20px; border: 1px solid #dbe1e8; border-radius: 12px; background: white; }
+.camera-controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.camera-error { padding: 12px; background: #fff0ed; color: #9a2615; }
+.pose-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(270px, 1fr); gap: 24px; }
+.pose-preview { position: relative; background: #111827; overflow: hidden; border-radius: 8px; }
+/* Mirror the shared container, so the video and overlay always agree. */
+.pose-preview.is-mirrored { transform: scaleX(-1); }
+.pose-preview video { display: block; width: 100%; height: auto; aspect-ratio: auto 16 / 9; }
+.pose-preview canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.pose-metrics { display: flex; flex-wrap: wrap; gap: 20px; }
+.pose-metrics dt, .pose-note { color: #526475; font-size: 0.85rem; }
+.pose-metrics dd { margin: 4px 0 0; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.visibility-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.visibility-table th, .visibility-table td { padding: 10px 4px; border-bottom: 1px solid #e4e9ef; text-align: left; }
+.visibility-table tbody th { font-weight: normal; }
+.visibility-table td { font-variant-numeric: tabular-nums; }
+.signal-table-scroll { overflow-x: auto; }
+.signal-table { min-width: 720px; white-space: nowrap; }
+.signal-table td, .signal-table thead th:not(:first-child) { text-align: right; }
+
+@media (max-width: 850px) {
+  main { padding: 12px; }
+  .pose-panel { padding: 12px; }
+  .pose-layout { grid-template-columns: 1fr; }
+}
