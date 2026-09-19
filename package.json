@@ -1,0 +1,20 @@
+{
+  "name": "plank-stork",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" run dev",
+    "dev:controller-web": "pnpm --filter @plank-stork/controller-web dev",
+    "dev:mobile": "pnpm --filter @plank-stork/mobile dev",
+    "dev:server": "pnpm --filter @plank-stork/server dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}
