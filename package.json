@@ -7,12 +7,12 @@
     "node": ">=24 <25"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter \"./apps/*\" run dev",
-    "dev:controller-web": "pnpm --filter @plank-stork/controller-web dev",
-    "dev:mobile": "pnpm --filter @plank-stork/mobile dev",
-    "dev:server": "pnpm --filter @plank-stork/server dev",
+    "dev": "pnpm --filter @plank-stork/protocol build && pnpm --parallel --filter \"./apps/*\" run dev",
+    "dev:controller-web": "pnpm --filter @plank-stork/protocol build && pnpm --filter @plank-stork/controller-web dev",
+    "dev:mobile": "pnpm --filter @plank-stork/protocol build && pnpm --filter @plank-stork/mobile dev",
+    "dev:server": "pnpm --filter @plank-stork/protocol build && pnpm --filter @plank-stork/server dev",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm --filter @plank-stork/protocol build && pnpm -r typecheck"
   },
   "devDependencies": {
     "typescript": "~5.9.3"
