@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-vision';
 import { createPoseLandmarker } from '../pose/createPoseLandmarker';
 import { usePoseCamera } from './usePoseCamera';
+import { PoseDatasetRecorder } from '../recorder/poseDatasetRecorder';
 
 const drawing = vi.hoisted(() => ({
   drawConnectors: vi.fn(), drawLandmarks: vi.fn(), close: vi.fn(),
@@ -39,9 +40,13 @@ describe('Pose camera lifecycle and measurement', () => {
   let model: { detectForVideo: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
   let result: Pick<PoseLandmarkerResult, 'landmarks' | 'worldLandmarks' | 'close'>;
   let clearRect: ReturnType<typeof vi.fn>;
+  let recorder: PoseDatasetRecorder;
 
   function Probe() {
-    camera = usePoseCamera();
+    camera = usePoseCamera({
+      onFrame: (frame) => recorder.recordFrame(frame),
+      onCameraStopped: () => recorder.interrupt(),
+    });
     renderCount++;
     return <><video ref={camera.videoRef} /><canvas ref={camera.canvasRef} /></>;
   }
@@ -64,6 +69,7 @@ describe('Pose camera lifecycle and measurement', () => {
     renderCount = 0;
     frameId = 0;
     frames = new Map();
+    recorder = new PoseDatasetRecorder();
     vi.spyOn(performance, 'now').mockImplementation(() => now);
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frames.set(++frameId, callback);
@@ -285,10 +291,13 @@ describe('Pose camera lifecycle and measurement', () => {
 
   it('stops the loop and releases the model after an inference error', async () => {
     await act(async () => camera.start());
-    model.detectForVideo.mockImplementationOnce(() => { throw new Error('inference failed'); });
+    const cause = new Error('inference failed');
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    model.detectForVideo.mockImplementationOnce(() => { throw cause; });
     await frame(100, 1);
     expect(camera.status).toBe('STOPPED');
     expect(camera.error).toContain('추론');
+    expect(errorLog).toHaveBeenCalledWith('[Pose] frame processing failed', cause);
     expect(track.stop).toHaveBeenCalledOnce();
     expect(model.close).toHaveBeenCalledOnce();
     expect(frames.size).toBe(0);
@@ -300,5 +309,72 @@ describe('Pose camera lifecycle and measurement', () => {
     expect(getUserMedia).not.toHaveBeenCalled();
     expect(camera.error).toContain('localhost');
     expect(camera.status).toBe('STOPPED');
+  });
+
+  function startDataset() {
+    const context = camera.getRecordingContext();
+    expect(context).not.toBeNull();
+    recorder.start({
+      ...context!, version: 1, createdAt: '2026-09-20T00:00:00Z', model: 'pose_landmarker_full',
+      previewMirrored: true, timeOrigin: 0,
+    }, 200);
+  }
+
+  it('checks current raw pose availability independently of the throttled UI state', async () => {
+    expect(camera.getRecordingContext()).toBeNull();
+    await act(async () => camera.start());
+    expect(camera.getRecordingContext()).toBeNull();
+    await frame(100, 1);
+    expect(camera.metrics.detected).toBe(false);
+    expect(camera.getRecordingContext()).toEqual({ delegate: 'GPU', videoWidth: 1280, videoHeight: 720 });
+    result = { ...result, landmarks: [], worldLandmarks: [] };
+    await frame(200, 2);
+    expect(camera.getRecordingContext()).toBeNull();
+  });
+
+  it('records every inference without extra renders and closes every result while recording', async () => {
+    await act(async () => camera.start());
+    await frame(100, 1);
+    startDataset();
+    await frame(6210, 2);
+    const renders = renderCount;
+    for (let index = 1; index < 10; index++) await frame(6210 + index * 20, 2 + index);
+    expect(renderCount).toBe(renders);
+    expect(recorder.getView(now).totalSamples).toBe(10);
+    expect(result.close).toHaveBeenCalledTimes(11);
+    await act(async () => camera.stop());
+    expect(recorder.getView(now).status).toBe('INTERRUPTED');
+    expect(JSON.parse(recorder.exportJson()).samples).toHaveLength(10);
+    expect(camera.getRecordingContext()).toBeNull();
+  });
+
+  it('snapshots before result.close and safely interrupts recording on unmount', async () => {
+    await act(async () => camera.start());
+    await frame(100, 1);
+    startDataset();
+    vi.mocked(result.close).mockImplementationOnce(() => { result.landmarks[0][0].x = 999; });
+    await frame(6210, 2);
+    await act(async () => root.unmount());
+    expect(recorder.getView(now).status).toBe('INTERRUPTED');
+    expect(JSON.parse(recorder.exportJson()).samples[0].landmarks[0].x).toBe(0.5);
+    expect(result.close).toHaveBeenCalledTimes(2);
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(model.close).toHaveBeenCalledOnce();
+    expect(frames.size).toBe(0);
+  });
+
+  it('logs drawing failures, closes the result, and interrupts the recorder without losing its snapshot', async () => {
+    await act(async () => camera.start());
+    await frame(100, 1);
+    startDataset();
+    const cause = new Error('canvas failed');
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    drawing.drawConnectors.mockImplementationOnce(() => { throw cause; });
+    await frame(6210, 2);
+    expect(errorLog).toHaveBeenCalledWith('[Pose] frame processing failed', cause);
+    expect(result.close).toHaveBeenCalledTimes(2);
+    expect(camera.status).toBe('STOPPED');
+    expect(recorder.getView(now).status).toBe('INTERRUPTED');
+    expect(JSON.parse(recorder.exportJson()).samples).toHaveLength(1);
   });
 });

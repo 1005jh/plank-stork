@@ -2,6 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DrawingUtils, PoseLandmarker, type Landmark, type NormalizedLandmark } from '@mediapipe/tasks-vision';
 import { createPoseLandmarker, type PoseDelegate } from '../pose/createPoseLandmarker';
 import { INFERENCE_SAMPLE_COUNT, KEY_LANDMARKS, METRICS_INTERVAL_MS, SIGNAL_LANDMARKS } from '../pose/poseConstants';
+import type { PoseFrame, RecordingCameraContext } from '../recorder/poseRecorderTypes';
+
+interface CameraCallbacks {
+  /** Must consume the raw frame synchronously, before result.close(). */
+  onFrame?: (frame: PoseFrame) => void;
+  onCameraStopped?: () => void;
+}
 
 type CameraStatus = 'STOPPED' | 'STARTING' | 'RUNNING';
 interface SignalLandmark {
@@ -64,7 +71,9 @@ function cameraError(error: unknown): string {
   return '카메라 영상을 시작하지 못했습니다. 카메라 연결과 브라우저 권한을 확인하세요.';
 }
 
-export function usePoseCamera() {
+export function usePoseCamera(callbacks: CameraCallbacks = {}) {
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -75,6 +84,7 @@ export function usePoseCamera() {
   const countersRef = useRef(emptyCounters());
   const generationRef = useRef(0);
   const activeRef = useRef(false);
+  const readyDelegateRef = useRef<PoseDelegate | null>(null);
   const [status, setStatus] = useState<CameraStatus>('STOPPED');
   const [error, setError] = useState<string | null>(null);
   const [delegate, setDelegate] = useState<PoseDelegate | null>(null);
@@ -84,6 +94,8 @@ export function usePoseCamera() {
   const release = useCallback(() => {
     generationRef.current += 1;
     activeRef.current = false;
+    readyDelegateRef.current = null;
+    callbacksRef.current.onCameraStopped?.();
     if (animationFrameRef.current !== null) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -117,6 +129,15 @@ export function usePoseCamera() {
   }, [release]);
 
   useEffect(() => release, [release]);
+
+  const getRecordingContext = useCallback((): RecordingCameraContext | null => {
+    const video = videoRef.current;
+    const readyDelegate = readyDelegateRef.current;
+    if (!activeRef.current || !landmarkerRef.current || !readyDelegate ||
+        countersRef.current.landmarks.length === 0 || !video || video.readyState < 2 ||
+        video.videoWidth === 0 || video.videoHeight === 0) return null;
+    return { delegate: readyDelegate, videoWidth: video.videoWidth, videoHeight: video.videoHeight };
+  }, []);
 
   async function start() {
     // Guard rapid clicks even before React has disabled the button.
@@ -177,6 +198,7 @@ export function usePoseCamera() {
       const drawing = new DrawingUtils(context);
       drawingRef.current = drawing;
       countersRef.current.windowStarted = performance.now();
+      readyDelegateRef.current = readyDelegate;
       setDelegate(readyDelegate);
       setStatus('RUNNING');
 
@@ -204,6 +226,12 @@ export function usePoseCamera() {
               }
               counters.landmarks = result.landmarks[0] ?? [];
               counters.worldLandmarks = result.worldLandmarks[0] ?? [];
+              callbacksRef.current.onFrame?.({
+                timestamp: started,
+                videoTime: lastVideoTimeRef.current,
+                landmarks: counters.landmarks,
+                worldLandmarks: counters.worldLandmarks,
+              });
               context.clearRect(0, 0, canvas.width, canvas.height);
               drawing.drawConnectors(counters.landmarks, PoseLandmarker.POSE_CONNECTIONS, {
                 color: '#5eead4', lineWidth: 3,
@@ -253,7 +281,8 @@ export function usePoseCamera() {
             counters.inferences = 0;
           }
           animationFrameRef.current = requestAnimationFrame(frame);
-        } catch {
+        } catch (cause) {
+          console.error('[Pose] frame processing failed', cause);
           fail('Pose 추론 또는 그리기에 실패했습니다. 카메라를 다시 시작해 주세요.');
         }
       };
@@ -269,5 +298,5 @@ export function usePoseCamera() {
     }
   }
 
-  return { videoRef, canvasRef, status, error, delegate, metrics, start, stop };
+  return { videoRef, canvasRef, status, error, delegate, metrics, start, stop, getRecordingContext };
 }

@@ -2,11 +2,26 @@ import { useState } from 'react';
 import { usePoseCamera } from '../camera/usePoseCamera';
 import { DEFAULT_MIRROR_PREVIEW, KEY_LANDMARKS, SIGNAL_LANDMARKS } from '../pose/poseConstants';
 import './PoseCamera.css';
+import { usePoseRecorder } from '../recorder/usePoseRecorder';
+import { PoseRecorder } from './PoseRecorder';
+import { usePoseFeatures } from '../pose/features/usePoseFeatures';
+import { PoseFeatures } from './PoseFeatures';
 
 const SIGNAL_FIELDS = ['x', 'y', 'z', 'visibility', 'worldX', 'worldY', 'worldZ'] as const;
 
 export function PoseCamera() {
-  const { videoRef, canvasRef, status, error, delegate, metrics, start, stop } = usePoseCamera();
+  const recorder = usePoseRecorder();
+  const features = usePoseFeatures();
+  const { videoRef, canvasRef, status, error, delegate, metrics, start, stop, getRecordingContext } = usePoseCamera({
+    onFrame: (frame) => {
+      recorder.recordFrame(frame);
+      features.processFrame(frame.landmarks, frame.worldLandmarks, frame.timestamp);
+    },
+    onCameraStopped: () => {
+      recorder.interrupt();
+      features.reset();
+    },
+  });
   const [mirrored, setMirrored] = useState(DEFAULT_MIRROR_PREVIEW);
 
   return (
@@ -27,6 +42,11 @@ export function PoseCamera() {
       </div>
       {status === 'STARTING' && <p>카메라 권한을 확인하고 모델을 불러오는 중입니다…</p>}
       {error && <p className="camera-error" role="alert">{error}</p>}
+      <PoseRecorder
+        recorder={recorder}
+        canStart={status === 'RUNNING' && metrics.detected}
+        onStart={() => recorder.start(getRecordingContext(), mirrored)}
+      />
       <div className="pose-layout">
         <div>
           <div className={`pose-preview${mirrored ? ' is-mirrored' : ''}`}>
@@ -94,6 +114,11 @@ export function PoseCamera() {
           </table>
         </div>
       </section>
+      <PoseFeatures
+        features={features}
+        canCalibrate={status === 'RUNNING' && metrics.detected}
+        onCalibrate={() => features.calibrate(getRecordingContext() !== null)}
+      />
     </section>
   );
 }
