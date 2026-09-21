@@ -31,7 +31,13 @@ export function PoseFeatures({ features, canCalibrate, onCalibrate }: Props) {
         </div>
         <div>
           <h4>Neutral Calibration</h4>
-          <p role="status">Status: <strong>{view.status}</strong></p>
+          <p role="status">Status: <strong>{view.status}{view.collectionState === 'FINISHING' ? ' / FINISHING' : ''}</strong></p>
+          {view.collectionState === 'FINISHING' && (
+            <p role="status">HIP READY · Finalizing knee calibration... {(view.kneeGraceRemainingMs / 1000).toFixed(1)}s remaining · Neutral을 계속 유지하세요.</p>
+          )}
+          {view.collectionState === 'FROZEN' && (
+            <p>Calibration frozen — 기준값과 count가 고정되었습니다. 미완료 knee feature는 재보정 전까지 -로 유지됩니다.</p>
+          )}
           <table className="visibility-table" aria-label="Calibration readiness">
             <thead><tr><th scope="col">Group</th><th scope="col">Samples</th><th scope="col">Readiness</th></tr></thead>
             <tbody>{GROUP_LABELS.map(({ key, label }) => (
@@ -42,11 +48,11 @@ export function PoseFeatures({ features, canCalibrate, onCalibrate }: Props) {
               </tr>
             ))}</tbody>
           </table>
-          <button type="button" onClick={onCalibrate} disabled={!canCalibrate || view.status === 'CALIBRATING'}>
+          <button type="button" onClick={onCalibrate} disabled={!canCalibrate}>
             Calibrate Neutral
           </button>
           <p className="pose-note">기본 플랭크를 유지하고 누르세요. 최근 1초의 HIP X·Y·depth에 각각 유효 샘플 {CALIBRATION_MIN_SAMPLES}개가 모이면 CALIBRATED입니다.</p>
-          <p className="pose-note">Knee는 독립 수집합니다. PARTIAL인 knee 기준값을 완성하려면 Neutral을 계속 유지하세요. 준비된 기준값은 고정됩니다.</p>
+          <p className="pose-note">Knee는 HIP READY 이후 최대 1초만 추가 수집합니다. FINISHING 안내가 끝날 때까지 Neutral을 유지하세요. 이후에는 PARTIAL이어도 모든 기준값이 고정됩니다.</p>
           <p className="pose-note">Hip visibility ≥ {HIP_CALIBRATION_VISIBILITY}, knee visibility ≥ {KNEE_CALIBRATION_VISIBILITY}. world depth는 HIP 필수 항목입니다. 카메라 Stop 시 초기화됩니다.</p>
           <table className="visibility-table feature-baseline-table" aria-label="Neutral baseline and valid samples">
             <thead><tr><th scope="col">Feature</th><th scope="col">Baseline</th><th scope="col">Valid</th></tr></thead>

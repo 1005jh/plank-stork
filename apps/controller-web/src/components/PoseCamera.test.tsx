@@ -176,14 +176,42 @@ describe('Pose signal debug panel', () => {
     expect(readiness()).toContain('LEFT KNEE0 / 20PARTIAL');
     expect(readiness()).toContain('RIGHT KNEE20 / 20READY');
     expect(container.querySelector('.feature-delta-table')!.textContent).toContain('deltaLeftKneeRelativeX--');
+    expect(container.textContent).toContain('Status: CALIBRATED / FINISHING');
+    expect(container.textContent).toContain('Finalizing knee calibration...');
     for (let index = 0; index < 8; index++) { await advance(50); sendFrame(0, false, 0.5); }
     await advance(100);
     expect(readiness()).toContain('LEFT KNEE8 / 20PARTIAL');
     expect(container.textContent).toContain('Neutral을 계속 유지');
-    for (let index = 0; index < 12; index++) { await advance(30); sendFrame(0, false, 0.5); }
-    await advance(140);
+    for (let index = 0; index < 12; index++) { await advance(15); sendFrame(0, false, 0.5); }
+    await advance(70);
     expect(readiness()).toContain('LEFT KNEE20 / 20READY');
     expect(container.querySelector('.feature-delta-table')!.textContent).toContain('deltaLeftKneeRelativeX0.0000.000');
+    expect(container.textContent).toContain('Calibration frozen');
+    expect(container.textContent).not.toContain('Finalizing knee calibration...');
+  });
+
+  it('shows frozen PARTIAL knees after the deadline and restarts calibration with the button', async () => {
+    vi.mocked(camera.getRecordingContext).mockReturnValue({ delegate: 'CPU', videoWidth: 1280, videoHeight: 720 });
+    await act(async () => button('Calibrate Neutral').click());
+    for (let index = 0; index < 20; index++) { await advance(50); sendFrame(0, false, 0.49); }
+    await advance(250);
+    expect(container.textContent).toContain('Finalizing knee calibration... 0.8s remaining');
+    for (let index = 0; index < 8; index++) { await advance(50); sendFrame(); }
+    await advance(350);
+    expect(container.textContent).toContain('Calibration frozen');
+    expect(container.textContent).not.toContain('Status: CALIBRATED / FINISHING');
+    expect(container.querySelector('[aria-label="Calibration readiness"]')?.textContent).toContain('LEFT KNEE8 / 20PARTIAL');
+    const frozen = container.querySelector('.feature-baseline-table')!.textContent;
+    for (let index = 0; index < 20; index++) { await advance(50); sendFrame(0.3); }
+    await advance(250);
+    expect(container.querySelector('.feature-baseline-table')!.textContent).toBe(frozen);
+    expect(container.querySelector('.feature-delta-table')!.textContent).toContain('deltaLeftKneeRelativeX--');
+    await act(async () => button('Calibrate Neutral').click());
+    expect(container.textContent).toContain('Status: CALIBRATING');
+    expect(container.textContent).not.toContain('Calibration frozen');
+    expect(container.textContent).toContain('Smoothed: UNAVAILABLE');
+    expect(container.querySelector('[aria-label="Calibration readiness"]')?.textContent).toContain('HIP0 / 20PARTIAL');
+    expect(container.querySelector('.feature-baseline-table')?.textContent).toContain('hipCenterX-0');
   });
 
   it('stops active calibration and recording together on camera release, with no baseline reused after restart', async () => {

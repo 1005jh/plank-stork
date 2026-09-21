@@ -7,6 +7,7 @@ import {
 
 export const CALIBRATION_WINDOW_MS = 1000;
 export const CALIBRATION_MIN_SAMPLES = 20;
+export const KNEE_CALIBRATION_GRACE_MS = 1000;
 export const HIP_CALIBRATION_VISIBILITY = 0.7;
 export const KNEE_CALIBRATION_VISIBILITY = 0.5;
 export const SMOOTHING_WINDOW_MS = 400;
@@ -68,6 +69,8 @@ export class PoseFeatureAnalysis {
   private raw = extractPoseFeatures([]);
   private lastFrameAt: number | null = null;
   private status: PoseFeatureView['status'] = 'NOT CALIBRATED';
+  private collectionState: PoseFeatureView['collectionState'] = 'IDLE';
+  private hipReadyAt: number | null = null;
   private baseline: NeutralCalibration | null = null;
   private calibrationStartedAt = 0;
   private calibrationSamples: { timestamp: number; features: PoseFeatures }[] = [];
@@ -77,6 +80,8 @@ export class PoseFeatureAnalysis {
 
   startCalibration(now: number): void {
     this.status = 'CALIBRATING';
+    this.collectionState = 'HIP';
+    this.hipReadyAt = null;
     this.baseline = null;
     this.calibrationStartedAt = now;
     this.calibrationSamples = [];
@@ -86,6 +91,8 @@ export class PoseFeatureAnalysis {
   }
 
   processFrame(landmarks: FeatureLandmarks, worldLandmarks: FeatureLandmarks, timestamp: number): void {
+    // Close the collection window before admitting a frame at or beyond the deadline.
+    this.finishExpiredGrace(timestamp);
     this.raw = extractPoseFeatures(landmarks, worldLandmarks);
     this.lastFrameAt = timestamp;
     const valid = validFeatures(this.raw);
@@ -93,15 +100,18 @@ export class PoseFeatureAnalysis {
       this.calibrationSamples.push({ timestamp, features: valid });
       this.pruneCalibration(timestamp);
       if (timestamp - this.calibrationStartedAt >= CALIBRATION_WINDOW_MS) {
-        // Freeze each baseline once ready. Pending knees keep collecting after HIP is ready.
-        // The user must continue holding Neutral while those samples are collected.
+        // Freeze each baseline once ready. Pending knees get a bounded Neutral grace period.
         for (const { raw } of CALIBRATION_FEATURES) {
           if (this.baseline?.[raw] != null || this.sampleCounts[raw] < CALIBRATION_MIN_SAMPLES) continue;
           this.baseline ??= Object.fromEntries(CALIBRATION_FEATURES.map(({ raw }) => [raw, null])) as NeutralCalibration;
           this.baseline[raw] = median(this.calibrationSamples.flatMap(({ features }) => features[raw] === null ? [] : [features[raw]]));
         }
-        if (this.groupReadiness('hips').ready) this.status = 'CALIBRATED';
-        if (!this.isCollecting()) this.calibrationSamples = [];
+        if (this.hipReadyAt === null && this.groupReadiness('hips').ready) {
+          this.status = 'CALIBRATED';
+          this.hipReadyAt = timestamp;
+          this.collectionState = 'FINISHING';
+        }
+        if (CALIBRATION_FEATURES.every(({ raw }) => this.baseline?.[raw] != null)) this.freezeCalibration();
       }
     }
     this.expireSmoothing(timestamp);
@@ -113,7 +123,21 @@ export class PoseFeatureAnalysis {
   }
 
   private isCollecting(): boolean {
-    return this.status !== 'NOT CALIBRATED' && CALIBRATION_FEATURES.some(({ raw }) => this.baseline?.[raw] == null);
+    return this.collectionState === 'HIP' || this.collectionState === 'FINISHING';
+  }
+
+  private freezeCalibration(): void {
+    this.collectionState = 'FROZEN';
+    this.calibrationSamples = [];
+  }
+
+  private finishExpiredGrace(now: number): void {
+    if (this.collectionState !== 'FINISHING' || this.hipReadyAt === null) return;
+    const deadline = this.hipReadyAt + KNEE_CALIBRATION_GRACE_MS;
+    if (now < deadline) return;
+    // Freeze counts at the deadline, even when a UI tick or the next frame arrives late.
+    this.pruneCalibration(deadline);
+    this.freezeCalibration();
   }
 
   private pruneCalibration(now: number) {
@@ -144,6 +168,7 @@ export class PoseFeatureAnalysis {
   }
 
   getView(now: number): PoseFeatureView {
+    this.finishExpiredGrace(now);
     if (this.isCollecting()) this.pruneCalibration(now);
     // Also expire the displayed raw/delta values if video delivery stalls entirely.
     const raw = this.lastFrameAt !== null && now - this.lastFrameAt < CALIBRATION_WINDOW_MS
@@ -161,6 +186,9 @@ export class PoseFeatureAnalysis {
     };
     return {
       raw, status: this.status, sampleCount: readiness.hips.sampleCount, readiness,
+      collectionState: this.collectionState, hipReadyAt: this.hipReadyAt,
+      kneeGraceRemainingMs: this.collectionState === 'FINISHING' && this.hipReadyAt !== null
+        ? Math.max(0, this.hipReadyAt + KNEE_CALIBRATION_GRACE_MS - now) : 0,
       sampleCounts: { ...this.sampleCounts },
       baseline: this.baseline ? { ...this.baseline } : null,
       calibrated: calibratePoseFeatures(raw, this.baseline),
@@ -172,6 +200,8 @@ export class PoseFeatureAnalysis {
     this.raw = extractPoseFeatures([]);
     this.lastFrameAt = null;
     this.status = 'NOT CALIBRATED';
+    this.collectionState = 'IDLE';
+    this.hipReadyAt = null;
     this.baseline = null;
     this.calibrationStartedAt = 0;
     this.calibrationSamples = [];

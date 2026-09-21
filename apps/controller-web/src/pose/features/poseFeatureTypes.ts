@@ -57,6 +57,9 @@ export interface SmoothedPoseFeatures {
 export interface PoseFeatureView {
   raw: PoseFeatures;
   status: 'NOT CALIBRATED' | 'CALIBRATING' | 'CALIBRATED';
+  collectionState: 'IDLE' | 'HIP' | 'FINISHING' | 'FROZEN';
+  hipReadyAt: number | null;
+  kneeGraceRemainingMs: number;
   sampleCount: number;
   sampleCounts: CalibrationSampleCounts;
   readiness: Record<CalibrationGroup, CalibrationReadiness>;

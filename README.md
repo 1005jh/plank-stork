@@ -182,9 +182,11 @@ Recorder의 raw 좌표에는 아래 STEP 4A의 visibility 조건, calibration, s
 
 - **Calibrate Neutral**을 누른 뒤 최소 1초 동안 Neutral을 유지합니다. 최근 `(현재 시각 − 1000ms, 현재 시각]`의 유효 값으로 각 baseline의 **중앙값(median)**을 구합니다. 각 feature는 유효 값 최소 20개가 모이면 기준값과 당시 count를 고정합니다.
 - 전체 완료의 필수 항목은 **hipCenterX, hipCenterY, hipDepthDifference**입니다. 이 세 항목이 준비되면 `CALIBRATED`로 전환합니다. world depth도 필수이므로 world 좌표가 없으면 HIP은 `PARTIAL`입니다.
-- 양쪽 knee X/Y baseline은 각각 독립적으로 수집합니다. knee sample이 0개여도 HIP 완료를 막지 않으며, `CALIBRATED` 이후에도 미완료 knee만 계속 수집합니다. baseline이 없는 delta는 `null`로 유지하며 0이나 다른 값으로 대체하지 않습니다.
-- UI는 **HIP / LEFT KNEE / RIGHT KNEE**별 `N / 20 READY 또는 PARTIAL`을 표시합니다. 그룹 count는 해당 feature들의 유효 count 중 최솟값입니다. 준비되지 않은 값은 최근 1초의 count이며, 오래된 sample은 계속 누적하지 않습니다. 완료된 baseline/count는 pose가 없어져도 유지됩니다.
-- **PARTIAL인 knee를 완성하려면 Neutral을 계속 유지하세요.** 자동으로 Neutral 자세인지 판정하지 않습니다. HIP 완료 후 동작을 시작하면 미완료 knee에 그 동작의 값이 수집될 수 있으므로, 필요한 knee가 READY가 된 뒤 동작을 비교합니다. 다시 기준을 잡으려면 Neutral에서 Calibrate Neutral을 누릅니다.
+- 양쪽 knee X/Y baseline은 각각 독립적으로 수집합니다. knee sample이 0개여도 HIP 완료를 막지 않습니다. **HIP이 처음 READY가 된 frame의 시각(`hipReadyAt`)부터 최대 1000ms** 동안만 미완료 knee를 추가 수집합니다(`KNEE_CALIBRATION_GRACE_MS = 1000`). baseline이 없는 delta는 `null`로 유지하며 0이나 다른 값으로 대체하지 않습니다.
+- UI는 **HIP / LEFT KNEE / RIGHT KNEE**별 `N / 20 READY 또는 PARTIAL`을 표시합니다. 그룹 count는 해당 feature들의 유효 count 중 최솟값입니다. 수집 중인 값은 최근 1초의 count이며, 오래된 sample은 계속 누적하지 않습니다. 준비된 baseline/count는 즉시 고정됩니다. Grace 종료 시 미완료 feature도 종료 시각 기준 최근 1초의 count와 `null` baseline으로 고정됩니다.
+- **상태 순서**: `CALIBRATING`(HIP 수집) → `CALIBRATED / FINISHING`(HIP READY, knee 추가 수집 최대 1초) → `CALIBRATED` + `Calibration frozen`(모든 수집 종료). FINISHING에서는 `HIP READY · Finalizing knee calibration...`와 남은 시간을 표시합니다. 모든 knee가 먼저 준비되면 즉시 고정하므로 FINISHING을 일찍 마치거나 건너뛸 수 있습니다.
+- **FINISHING 안내가 끝날 때까지 Neutral을 유지하세요.** 자동으로 Neutral 자세인지 판정하지 않습니다. Grace 마감 시각과 같거나 이후인 frame은 calibration에 넣지 않습니다. UI 갱신이 늦거나 추론 frame이 끊겨도 마감 시각은 연장되지 않습니다.
+- `Calibration frozen` 이후에는 PARTIAL knee가 있어도 정상 종료입니다. 더 이상 sample을 수집하지 않으며 Twist/Knee 동작이나 pose loss로 baseline/count가 변경되지 않습니다. 미완료 knee feature의 delta는 계속 `null`입니다. 다시 수집하려면 **Calibrate Neutral**을 누릅니다. 진행 중/고정 후 모두 기존 baseline·count·grace 시각·smoothing을 비우고 처음부터 시작합니다.
 - `poseFeatureAnalysis.ts`의 **HIP_CALIBRATION_VISIBILITY = 0.7**, **KNEE_CALIBRATION_VISIBILITY = 0.5**를 사용합니다. HIP feature에는 양쪽 hip이 각각 0.7 이상, knee feature에는 해당 hip이 0.7 이상이고 해당 knee가 0.5 이상인 sample만 넣습니다. 값/visibility가 없으면 제외합니다.
 - 분리 이유: 실측에서 hip visibility는 안정적으로 **0.9~1.0** 수준이지만, knee는 카메라 각도·가림 때문에 더 낮을 수 있었습니다. Knee 0.5는 초기 실험 기준이며 **향후 추가 데이터에 따라 조정 가능한 상수**입니다. 이는 calibration/smoothing의 측정 품질 조건으로, 동작 classification threshold가 아닙니다. Raw feature와 Recorder에는 적용하지 않습니다.
 - `Calibrated`는 7개 feature의 **현재 raw 값 − 해당 Neutral baseline**입니다. 어느 한쪽이 없으면 `null`입니다. `Smoothed`는 위 visibility 조건을 만족한 **최근 400ms delta의 중앙값**으로 각 feature를 독립 처리합니다.
@@ -196,18 +198,18 @@ Recorder의 raw 좌표에는 아래 STEP 4A의 visibility 조건, calibration, s
 **실제 테스트 순서**
 
 1. `pnpm dev` 후 노트북의 `http://localhost:5173`에서 Start Camera를 누릅니다. 카메라는 위 STEP 3B의 발쪽→머리 방향 baseline 위치에 고정합니다.
-2. Neutral plank를 유지하며 **Calibrate Neutral**을 누르고 `CALIBRATING → CALIBRATED`, HIP READY와 knee별 READY/PARTIAL을 확인합니다. Knee visibility가 낮아도 HIP 완료를 막지 않는지 확인하고, PARTIAL knee가 있으면 Neutral을 더 유지하며 count가 쌓이는지 관찰합니다. 화면상 작은 좌표 변화는 그대로 기록되며 앱이 Neutral 여부를 판정하지는 않습니다.
+2. Neutral plank를 유지하며 **Calibrate Neutral**을 누르고 `CALIBRATING → CALIBRATED / FINISHING → CALIBRATED`, HIP READY와 knee별 READY/PARTIAL을 확인합니다. Knee visibility가 낮아도 HIP 완료를 막지 않는지 확인하고, FINISHING 동안 최대 1초 더 Neutral을 유지합니다. `Calibration frozen` 이후 PARTIAL이어도 정상이며, 계속 움직여도 baseline과 count는 고정되어야 합니다. 화면상 작은 좌표 변화는 그대로 기록되며 앱이 Neutral 여부를 판정하지는 않습니다.
 3. Neutral에서 delta가 기준값 근처인지 관찰합니다. **Twist left → Neutral → Twist right → Neutral → Knee left → Neutral → Knee right**를 각 3~5초 유지하며 raw/calibrated/smoothed와 hip/knee visibility를 비교합니다.
 4. 특히 `deltaHipCenterX`, `deltaHipDepthDifference`, 같은 쪽 knee X/Y 변화를 비교합니다. 지표는 신호 관찰용이며 자세명/성공 판정을 출력하지 않습니다. Pose FPS, inference ms, GPU/CPU 표시도 확인합니다.
 5. Mirror ON/OFF를 바꿔도 baseline이 유지되고 좌표·delta·신체 기준 좌우가 바뀌지 않는지 확인합니다. 사람 없이 있을 때 다음 UI 갱신에서 smoothed가 STALE / `-`가 되는지 확인합니다. 400ms 이내의 짧은 가림 후에는 smoothing이 재개되는지, 400ms 넘게 화면에서 벗어났다가 돌아오면 새 sample만 사용하는지 비교합니다. Knee만 가려지면 HIP은 유효하고 해당 knee 값만 `-`인지도 확인합니다.
-6. calibration 도중 Stop 후 재시작하여 `NOT CALIBRATED`와 비어 있는 baseline을 확인합니다. 새 Neutral 기준을 만들고 반복합니다.
+6. Calibrate Neutral을 다시 눌러 기존 기준값과 pending/grace/smoothing이 초기화되고 새 기준으로 수집되는지 확인합니다. Calibration 도중 Stop 후 재시작하면 `NOT CALIBRATED`와 비어 있는 baseline으로 돌아와야 합니다.
 7. **Start Guided Recording**으로 33초 sequence도 실행해 `STABILIZE`에서는 Samples/Dropped가 증가하지 않는지, 완료 후 label별 dropped의 합이 전체 dropped와 같은지 확인하고 JSON을 내려받습니다. Feature 분석 여부와 관계없이 raw sample 수집은 유지됩니다.
 
 **코드 재사용**
 
 - `src/pose/features/extractPoseFeatures.ts`: MediaPipe와 Recorder에 의존하지 않는 pure extractor. MediaPipe 인덱스 순서의 두 배열을 받습니다.
 - `calibratePoseFeatures.ts`: pure `current − baseline` 계산.
-- `poseFeatureAnalysis.ts`: HIP readiness·독립 knee calibration, 1초 sample 버퍼, 400ms median buffer와 현재 유효성/pose loss 처리. `usePoseFeatures.ts`는 객체 수명과 250ms UI 갱신만 담당합니다.
+- `poseFeatureAnalysis.ts`: HIP readiness·최대 1초 knee grace·최종 freeze, 1초 sample 버퍼, 400ms median buffer와 현재 유효성/pose loss 처리. `collectionState`는 IDLE/HIP/FINISHING/FROZEN이며 `kneeGraceRemainingMs`로 남은 시간을 제공합니다. `usePoseFeatures.ts`는 객체 수명과 250ms UI 갱신만 담당합니다.
 
 기존 JSON sample도 같은 함수를 그대로 사용할 수 있습니다. `index` 순서가 변경된 외부 데이터는 먼저 MediaPipe 인덱스에 맞춰 배열을 구성합니다.
 
@@ -225,7 +227,7 @@ pnpm --filter @plank-stork/controller-web test
 curl http://localhost:3000/health
 ```
 
-자동 테스트는 초기화/fallback, 프레임 중복 방지, 지표/좌표 갱신, Mirror 독립성, raw snapshot·STABILIZE·sequence·label별 count/dropped·reset·JSON, 음성 실패, feature 수식·null 처리·중앙값 calibration·HIP readiness·독립 knee 완성·delta·시간 기반 smoothing·pose loss 즉시 무효화/복귀·visibility 경계값, result/camera/unmount lifecycle을 검증합니다. 실제 웹캠의 추적 품질과 수집 데이터는 위 STEP 2·3A·3B·4A 순서로 별도 확인합니다.
+자동 테스트는 초기화/fallback, 프레임 중복 방지, 지표/좌표 갱신, Mirror 독립성, raw snapshot·STABILIZE·sequence·label별 count/dropped·reset·JSON, 음성 실패, feature 수식·null 처리·중앙값 calibration·HIP readiness·독립 knee 완성·grace 경계/고정/재보정·delta·시간 기반 smoothing·pose loss 즉시 무효화/복귀·visibility 경계값, result/camera/unmount lifecycle을 검증합니다. 실제 웹캠의 추적 품질과 수집 데이터는 위 STEP 2·3A·3B·4A 순서로 별도 확인합니다.
 
 빌드 결과는 각 패키지의 `dist/`에 생성됩니다. 빌드한 서버는 `pnpm --filter @plank-stork/server start`로 실행합니다. 웹 빌드는 `pnpm --filter @plank-stork/controller-web preview` 또는 `pnpm --filter @plank-stork/mobile preview`로 확인할 수 있습니다.
 

@@ -76,7 +76,7 @@ describe('Neutral calibration and live analysis', () => {
     for (let index = 21; index <= 28; index++) analysis.processFrame(pose, pose, index * 50);
     expect(analysis.getView(1400)).toMatchObject({ status: 'CALIBRATED',
       readiness: { leftKnee: { ready: false, sampleCount: 8 } }, calibrated: { deltaLeftKneeRelativeX: null } });
-    for (let index = 29; index <= 40; index++) analysis.processFrame(pose, pose, index * 50);
+    for (let index = 29; index <= 40; index++) analysis.processFrame(pose, pose, 1400 + (index - 28) * 40);
     const complete = analysis.getView(2000);
     expect(complete.readiness.leftKnee).toEqual({ ready: true, sampleCount: 20 });
     expect(complete.baseline?.leftKneeRelativeX).toBeCloseTo(0.2);
@@ -136,7 +136,7 @@ describe('Neutral calibration and live analysis', () => {
     });
   });
 
-  it('collects missing knee axes independently and expires only pending calibration samples', () => {
+  it('collects missing knee axes independently and freezes the remaining partial axis at the grace deadline', () => {
     const analysis = new PoseFeatureAnalysis();
     analysis.startCalibration(0);
     const pose = points();
@@ -150,12 +150,13 @@ describe('Neutral calibration and live analysis', () => {
     for (let index = 21; index <= 28; index++) analysis.processFrame(pose, pose, index * 50);
     expect(analysis.getView(1400).readiness.leftKnee.sampleCount).toBe(8);
     expect(analysis.getView(2500)).toMatchObject({ status: 'CALIBRATED',
-      readiness: { leftKnee: { ready: false, sampleCount: 0 }, hips: { ready: true, sampleCount: 20 } },
+      collectionState: 'FROZEN',
+      readiness: { leftKnee: { ready: false, sampleCount: 8 }, hips: { ready: true, sampleCount: 20 } },
       baseline: { leftKneeRelativeX: 0, leftKneeRelativeY: null },
     });
     for (let index = 1; index <= 20; index++) analysis.processFrame(pose, pose, 2500 + index * 50);
-    expect(analysis.getView(3500).readiness.leftKnee.ready).toBe(true);
-    expect(analysis.getView(3500).baseline?.leftKneeRelativeY).toBeCloseTo(0.2);
+    expect(analysis.getView(3500).readiness.leftKnee).toEqual({ ready: false, sampleCount: 8 });
+    expect(analysis.getView(3500).baseline?.leftKneeRelativeY).toBeNull();
   });
 
   it('keeps hip smoothing available when only a knee is occluded and expires stale values', () => {
@@ -237,6 +238,107 @@ describe('Neutral calibration and live analysis', () => {
     expect(Object.values(analysis.getView(1400).smoothed.values)).toEqual(Array(7).fill(null));
     analysis.processFrame(points(0.4), points(), 1500);
     expect(analysis.getView(1500).smoothed.values.deltaHipCenterX).toBeCloseTo(0.4);
+  });
+});
+
+describe('bounded knee calibration grace period', () => {
+  function hipReady() {
+    const analysis = new PoseFeatureAnalysis();
+    analysis.startCalibration(0);
+    const pose = points();
+    pose[25].visibility = 0;
+    pose[26].visibility = 0;
+    for (let index = 1; index <= 20; index++) analysis.processFrame(pose, pose, index * 50);
+    return analysis;
+  }
+
+  it('collects pending knees only before the deadline and never changes baselines/counts from later motion', () => {
+    const analysis = hipReady();
+    expect(analysis.getView(1000)).toMatchObject({ status: 'CALIBRATED', collectionState: 'FINISHING', hipReadyAt: 1000, kneeGraceRemainingMs: 1000 });
+    for (let index = 1; index <= 19; index++) analysis.processFrame(points(), points(), 1000 + index * 50);
+    expect(analysis.getView(1999)).toMatchObject({ collectionState: 'FINISHING', kneeGraceRemainingMs: 1,
+      readiness: { leftKnee: { ready: false, sampleCount: 19 }, rightKnee: { ready: false, sampleCount: 19 } } });
+    // This would be sample 20; the deadline frame must not enter calibration.
+    analysis.processFrame(points(0.5), points(), 2000);
+    const frozen = analysis.getView(2000);
+    expect(frozen).toMatchObject({ status: 'CALIBRATED', collectionState: 'FROZEN', hipReadyAt: 1000, kneeGraceRemainingMs: 0,
+      baseline: { leftKneeRelativeX: null, leftKneeRelativeY: null, rightKneeRelativeX: null, rightKneeRelativeY: null },
+      calibrated: { deltaLeftKneeRelativeX: null, deltaRightKneeRelativeX: null } });
+    for (let index = 1; index <= 60; index++) {
+      const moving = points(index);
+      moving[25].x = -index;
+      moving[26].y = index;
+      analysis.processFrame(moving, moving, 2000 + index * 50);
+    }
+    const later = analysis.getView(10000);
+    expect(later.baseline).toEqual(frozen.baseline);
+    expect(later.sampleCounts).toEqual(frozen.sampleCounts);
+    expect(later.readiness).toEqual(frozen.readiness);
+    expect(later.readiness.leftKnee.sampleCount).toBe(19);
+  });
+
+  it('freezes at the same deadline without new frames or timely UI polling', () => {
+    const analysis = hipReady();
+    for (let index = 1; index <= 8; index++) analysis.processFrame(points(), points(), 1000 + index * 50);
+    expect(analysis.getView(1400)).toMatchObject({ collectionState: 'FINISHING', kneeGraceRemainingMs: 600 });
+    const frozen = analysis.getView(10000);
+    expect(frozen).toMatchObject({ collectionState: 'FROZEN', kneeGraceRemainingMs: 0,
+      readiness: { leftKnee: { ready: false, sampleCount: 8 }, rightKnee: { ready: false, sampleCount: 8 } } });
+    analysis.processFrame(points(), points(), 10050);
+    expect(analysis.getView(10050).sampleCounts).toEqual(frozen.sampleCounts);
+    expect(analysis.getView(10050).baseline).toEqual(frozen.baseline);
+  });
+
+  it('freezes early when both knees obtain 20 valid samples within the grace period', () => {
+    const analysis = hipReady();
+    const pose = points();
+    pose[25].x = 0.7;
+    pose[26].x = 0.8;
+    for (let index = 1; index <= 20; index++) analysis.processFrame(pose, pose, 1000 + index * 30);
+    const ready = analysis.getView(1600);
+    expect(ready).toMatchObject({ collectionState: 'FROZEN', kneeGraceRemainingMs: 0, hipReadyAt: 1000,
+      readiness: { leftKnee: { ready: true, sampleCount: 20 }, rightKnee: { ready: true, sampleCount: 20 } } });
+    expect(ready.baseline?.leftKneeRelativeX).toBeCloseTo(0.2);
+    expect(ready.baseline?.rightKneeRelativeX).toBeCloseTo(0.3);
+    analysis.processFrame(points(99), points(99), 1700);
+    expect(analysis.getView(1700).baseline).toEqual(ready.baseline);
+    expect(analysis.getView(1700).sampleCounts).toEqual(ready.sampleCounts);
+  });
+
+  it('starts the grace clock at the first HIP READY frame, not at the calibration button click', () => {
+    const analysis = new PoseFeatureAnalysis();
+    analysis.startCalibration(0);
+    const pose = points();
+    pose[25].visibility = 0;
+    pose[26].visibility = 0;
+    for (let index = 1; index <= 20; index++) analysis.processFrame(pose, [], index * 50);
+    expect(analysis.getView(1000)).toMatchObject({ collectionState: 'HIP', hipReadyAt: null });
+    for (let index = 21; index <= 40; index++) analysis.processFrame(pose, pose, index * 50);
+    expect(analysis.getView(2000)).toMatchObject({ collectionState: 'FINISHING', hipReadyAt: 2000, kneeGraceRemainingMs: 1000 });
+    analysis.processFrame(pose, pose, 2500);
+    expect(analysis.getView(2999)).toMatchObject({ collectionState: 'FINISHING', hipReadyAt: 2000, kneeGraceRemainingMs: 1 });
+    expect(analysis.getView(3000).collectionState).toBe('FROZEN');
+  });
+
+  it.each(['FINISHING', 'FROZEN'])('recalibration resets baselines, buffers and the grace clock from %s', (state) => {
+    const analysis = hipReady();
+    if (state === 'FROZEN') analysis.getView(2000);
+    analysis.startCalibration(3000);
+    const restarted = analysis.getView(3000);
+    expect(restarted).toMatchObject({ status: 'CALIBRATING', collectionState: 'HIP', hipReadyAt: null,
+      kneeGraceRemainingMs: 0, baseline: null, sampleCount: 0, smoothed: { validNow: false, lastValidAt: null } });
+    expect(Object.values(restarted.sampleCounts)).toEqual(Array(7).fill(0));
+    expect(Object.values(restarted.smoothed.values)).toEqual(Array(7).fill(null));
+    const pose = points(0.3);
+    pose[25].visibility = 0;
+    for (let index = 1; index <= 20; index++) analysis.processFrame(pose, pose, 3000 + index * 50);
+    expect(analysis.getView(4000)).toMatchObject({ status: 'CALIBRATED', collectionState: 'FINISHING', hipReadyAt: 4000, kneeGraceRemainingMs: 1000 });
+    expect(analysis.getView(4000).baseline?.hipCenterX).toBeCloseTo(0.8);
+    pose[25].visibility = 0.9;
+    for (let index = 1; index <= 20; index++) analysis.processFrame(pose, pose, 4000 + index * 20);
+    expect(analysis.getView(4400)).toMatchObject({ collectionState: 'FROZEN', readiness: { leftKnee: { ready: true } } });
+    analysis.reset();
+    expect(analysis.getView(4400)).toMatchObject({ status: 'NOT CALIBRATED', collectionState: 'IDLE', hipReadyAt: null, kneeGraceRemainingMs: 0 });
   });
 });
 
