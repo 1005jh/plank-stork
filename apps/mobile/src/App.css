@@ -1,0 +1,30 @@
+:root { font-family: system-ui, sans-serif; color: #172a3a; background: #eef3f6; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 700px; margin: auto; padding: 20px 16px 48px; }
+h1 { margin-bottom: 4px; font-size: 1.7rem; }
+h2 { font-size: 1.5rem; margin-top: 28px; }
+h3 { margin-top: 0; font-size: 1.3rem; }
+p { line-height: 1.5; }
+button { width: 100%; min-height: 56px; padding: 14px; margin: 6px 0; border: 0; border-radius: 12px; background: #126452; color: white; font: inherit; font-size: 1.15rem; font-weight: 700; cursor: pointer; }
+button:disabled { background: #dbe2e7; color: #61717b; cursor: default; }
+button.secondary { background: #e7efed; color: #184c42; }
+button:focus-visible, summary:focus-visible { outline: 3px solid #247ab8; outline-offset: 3px; }
+.calibration-card { background: white; border: 1px solid #dbe4e8; border-radius: 18px; margin: 16px 0; padding: 20px; }
+.device-status { display: flex; flex-wrap: wrap; gap: 4px 24px; }
+.device-status p { margin: 4px 0; }
+.device-status strong { display: block; }
+.action-guide { margin-top: 16px; padding: 18px 12px; border-radius: 14px; text-align: center; background: #e9f6f0; }
+.major-instruction { font-size: clamp(1.5rem, 6vw, 2.15rem); line-height: 1.3; font-weight: 800; overflow-wrap: anywhere; }
+.countdown { font-size: 3.25rem; font-weight: 800; margin: 14px 0; font-variant-numeric: tabular-nums; }
+.phase { font-weight: 700; letter-spacing: .06em; }
+.success { color: #126452; font-weight: 700; font-size: 1.2rem; }
+.readiness { list-style: none; padding: 0; }
+.readiness li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #e4ebee; padding: 12px 0; }
+.classification-debug { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; overflow-wrap: anywhere; }
+.classification-debug dd { margin: 0; font-variant-numeric: tabular-nums; }
+.distance-row { display: contents; }
+summary { padding: 12px 0; cursor: pointer; }
+code { overflow-wrap: anywhere; }
+[role="alert"] { color: #a42828; }
+.socket-test { margin-top: 28px; }

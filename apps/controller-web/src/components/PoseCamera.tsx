@@ -6,23 +6,43 @@ import { usePoseRecorder } from '../recorder/usePoseRecorder';
 import { PoseRecorder } from './PoseRecorder';
 import { usePoseFeatures } from '../pose/features/usePoseFeatures';
 import { PoseFeatures } from './PoseFeatures';
+import { usePoseActions } from '../pose/actions/usePoseActions';
+import { PoseActions } from './PoseActions';
+import { useCalibrationRemote, type CalibrationSocket } from '../remote/useCalibrationRemote';
 
 const SIGNAL_FIELDS = ['x', 'y', 'z', 'visibility', 'worldX', 'worldY', 'worldZ'] as const;
 
-export function PoseCamera() {
+export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
   const recorder = usePoseRecorder();
   const features = usePoseFeatures();
+  const actions = usePoseActions(features.getCurrent);
   const { videoRef, canvasRef, status, error, delegate, metrics, start, stop, getRecordingContext } = usePoseCamera({
     onFrame: (frame) => {
       recorder.recordFrame(frame);
-      features.processFrame(frame.landmarks, frame.worldLandmarks, frame.timestamp);
+      const currentFeatures = features.processFrame(frame.landmarks, frame.worldLandmarks, frame.timestamp);
+      actions.processFrame(currentFeatures, frame.timestamp);
     },
     onCameraStopped: () => {
       recorder.interrupt();
       features.reset();
+      actions.reset();
+      remote.publishStopped();
     },
   });
   const [mirrored, setMirrored] = useState(DEFAULT_MIRROR_PREVIEW);
+  function calibrateNeutral() {
+    if (status !== 'RUNNING' || getRecordingContext() === null) return;
+    actions.resetCalibration();
+    features.calibrate(true);
+  }
+  const remote = useCalibrationRemote(socket, {
+    getCamera: () => ({ cameraRunning: status === 'RUNNING', poseDetected: status === 'RUNNING' && getRecordingContext() !== null }),
+    getNeutral: features.getCurrent,
+    getActions: actions.getCurrent,
+    startNeutral: calibrateNeutral,
+    startAction: actions.start,
+    resetAction: actions.resetCalibration,
+  });
 
   return (
     <section className="pose-panel" aria-labelledby="pose-title">
@@ -117,8 +137,9 @@ export function PoseCamera() {
       <PoseFeatures
         features={features}
         canCalibrate={status === 'RUNNING' && metrics.detected}
-        onCalibrate={() => features.calibrate(getRecordingContext() !== null)}
+        onCalibrate={calibrateNeutral}
       />
+      <PoseActions actions={actions} />
     </section>
   );
 }

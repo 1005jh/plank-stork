@@ -12,6 +12,7 @@ const socketServerUrl = `http://${window.location.hostname}:3000`;
 
 export default function App() {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
+  const [socket, setSocket] = useState<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
   const [connected, setConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<TestControlEvent | null>(null);
 
@@ -20,6 +21,7 @@ export default function App() {
       autoConnect: false,
     });
     socketRef.current = socket;
+    setSocket(socket);
 
     const onConnect = () => setConnected(true);
     const onDisconnect = () => setConnected(false);
@@ -51,7 +53,7 @@ export default function App() {
   return (
     <main>
       <h1>Plank Stork Controller</h1>
-      <PoseCamera />
+      <PoseCamera socket={socket} />
       <h2>Socket test</h2>
       <p role="status">Socket: {connected ? 'CONNECTED' : 'DISCONNECTED'}</p>
       <p>Socket server: <code>{socketServerUrl}</code></p>

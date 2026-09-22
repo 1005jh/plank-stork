@@ -10,7 +10,9 @@ export function usePoseFeatures() {
 
   const processFrame = useCallback((landmarks: FeatureLandmarks, worldLandmarks: FeatureLandmarks, timestamp: number) => {
     analysis.processFrame(landmarks, worldLandmarks, timestamp);
+    return analysis.getView(timestamp);
   }, [analysis]);
+  const getCurrent = useCallback(() => analysis.getView(performance.now()), [analysis]);
   // Safe for camera release and unmount: no React update is scheduled here.
   const reset = useCallback(() => analysis.reset(), [analysis]);
 
@@ -25,5 +27,5 @@ export function usePoseFeatures() {
     setView(analysis.getView(performance.now()));
   }
 
-  return { view, processFrame, reset, calibrate };
+  return { view, processFrame, getCurrent, reset, calibrate };
 }

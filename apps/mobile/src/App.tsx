@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { CalibrationPanel } from './calibration/CalibrationPanel';
+import { useCalibrationRemote } from './calibration/useCalibrationRemote';
+import './App.css';
 import type {
   ClientToServerEvents,
   ControlDirection,
@@ -11,14 +14,17 @@ const socketServerUrl = `http://${window.location.hostname}:3000`;
 
 export default function App() {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
+  const [socket, setSocket] = useState<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
   const [connected, setConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<TestControlEvent | null>(null);
+  const remote = useCalibrationRemote(socket);
 
   useEffect(() => {
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(socketServerUrl, {
       autoConnect: false,
     });
     socketRef.current = socket;
+    setSocket(socket);
 
     const onConnect = () => setConnected(true);
     const onDisconnect = () => setConnected(false);
@@ -53,6 +59,8 @@ export default function App() {
       <p>Mobile Game</p>
       <p role="status">Socket: {connected ? 'CONNECTED' : 'DISCONNECTED'}</p>
       <p>Socket server: <code>{socketServerUrl}</code></p>
+      <CalibrationPanel state={remote.state} connected={connected} send={remote.send} />
+      <details className="socket-test"><summary>STEP 1 · Socket test</summary>
       <div>
         <button type="button" disabled={!connected} onClick={() => sendControl('LEFT')}>
           LEFT
@@ -67,6 +75,7 @@ export default function App() {
         <dt>Last timestamp (Unix ms)</dt>
         <dd>{lastEvent?.timestamp ?? '—'}</dd>
       </dl>
+      </details>
     </main>
   );
 }
