@@ -1,6 +1,6 @@
 # Plank Stork
 
-STEP 4B-2: 폰에서 Neutral/Action 보정을 시작하고 단계 안내와 Live Classification을 확인합니다. controller-web이 Pose 측정과 보정/classifier 계산을 담당하며 NestJS Socket.IO가 요청과 상태 snapshot을 중계합니다. STEP 3B의 로컬 Dataset Recorder, STEP 3A의 좌표 패널, STEP 2의 성능 지표와 STEP 1의 Socket.IO 테스트도 유지합니다. Raw Pose는 전송하지 않으며 게임 입력으로 변환하지 않습니다.
+STEP 4C: 폰에서 Neutral/Action 보정 후 Action Signal Validation을 수행하고, 노트북에서 full raw Pose·feature·classifier 결과를 JSON으로 내려받아 반복 재현성을 측정합니다. STEP 4B-2의 단계 안내와 Live Classification도 유지합니다. controller-web이 Pose 측정과 보정/classifier 계산을 담당하며 NestJS Socket.IO가 요청과 상태 snapshot을 중계합니다. STEP 3B의 로컬 Dataset Recorder, STEP 3A의 좌표 패널, STEP 2의 성능 지표와 STEP 1의 Socket.IO 테스트도 유지합니다. Raw Pose는 전송하지 않으며 게임 입력으로 변환하지 않습니다.
 
 ```text
 apps/
@@ -342,6 +342,104 @@ HIP만 있는 경우 Twist/Knee가 서로 겹칠 수 있습니다. 가까운 두
 9. 폰 Neutral 다시 보정 → Action 보정 필요, Action 초기화 → Neutral 유지, 노트북 Stop Camera → 카메라 준비 필요를 각각 확인합니다. Mirror를 바꿔도 폰 안내/신체 좌우/prototype이 바뀌지 않아야 합니다.
 10. 폰 아래 **STEP 1 · Socket test**를 펼쳐 수동 LEFT/RIGHT 양방향 통신도 확인합니다. Pose action은 게임/control:test 입력으로 변환하지 않습니다.
 
+## STEP 4C: Action Signal Adequacy Validation
+
+**Action Signal Validation은 classifier 성능을 개선하는 기능이 아니라, 현재 Pose signal과 feature representation이 실제 반복 동작에서 충분히 재현 가능한지를 측정하기 위한 실험 도구다.**
+
+STEP 4B v1의 feature 선택, scale/threshold, RMS 거리, Neutral 규칙, prototype 중앙값, enter/release timing은 그대로 유지합니다. 데이터로 다음 가능성을 구분하기 위한 단계입니다: (A) 신호는 충분하지만 현재 거리 기반 표현/판정이 부적절한지, (B) 같은 동작의 feature가 보정 때와 다르게 재현되는지, (C) 현재 7개 feature 밖의 raw 33 landmark에 더 좋은 신호가 있는지. 자동 PASS/FAIL이나 해결책 선택은 하지 않습니다.
+
+**독립 Validation sequence — 총 21.5초**
+
+Controller의 `performance.now()`가 유일한 시간 기준입니다. Camera RUNNING, Neutral FROZEN, Action Calibration READY와 네 prototype이 모두 있어야 시작합니다. Pose가 잠시 보이지 않더라도 이 조건이 준비되어 있으면 시작할 수 있으며, 이후 실제 invalid inference도 진단용으로 기록합니다.
+
+| 시작~종료 (초) | 단계 / expectedAction | 기록 |
+| --- | --- | --- |
+| 0~2 | PREPARE / NONE | X |
+| 2~3.5 | RECORD_NEUTRAL / NONE | O |
+| 3.5~4.5 | MOVE / TWIST_LEFT | X |
+| 4.5~6 | RECORD_ACTION / TWIST_LEFT | O |
+| 6~7 | RETURN_NEUTRAL / NONE | X |
+| 7~8 | RECORD_NEUTRAL / NONE | O |
+| 8~9 | MOVE / TWIST_RIGHT | X |
+| 9~10.5 | RECORD_ACTION / TWIST_RIGHT | O |
+| 10.5~11.5 | RETURN_NEUTRAL / NONE | X |
+| 11.5~12.5 | RECORD_NEUTRAL / NONE | O |
+| 12.5~13.5 | MOVE / KNEE_LEFT | X |
+| 13.5~15 | RECORD_ACTION / KNEE_LEFT | O |
+| 15~16 | RETURN_NEUTRAL / NONE | X |
+| 16~17 | RECORD_NEUTRAL / NONE | O |
+| 17~18 | MOVE / KNEE_RIGHT | X |
+| 18~19.5 | RECORD_ACTION / KNEE_RIGHT | O |
+| 19.5~20.5 | RETURN_NEUTRAL / NONE | X |
+| 20.5~21.5 | RECORD_NEUTRAL / NONE | O |
+
+구간은 시작 시각 포함, 종료 시각 제외입니다. 총 기록 시간은 11.5초이므로 30 inference FPS라면 약 345 samples가 예상되지만 실제 count는 추론 속도에 따라 달라집니다. UI timer로 sample을 만들지 않고 중복 inference timestamp도 제외합니다. 추론 자체가 멈추면 새 sample은 없으며, 반환된 pose-missing frame은 빈 landmark 배열과 `poseValid: false`로 남습니다.
+
+**저장과 JSON 구조**
+
+`src/pose/validation/actionValidation.ts`는 상태와 sample buffer, `validationAnalyzer.ts`는 pure summary 계산, `useActionValidation.ts`는 250ms 표시/다운로드/lifecycle을 담당합니다. 기존 STEP 3B Recorder와 별개입니다.
+
+```text
+version: 1, status: COMPLETED
+createdAt, model, delegate, videoWidth, videoHeight, previewMirrored
+startedAt, timeOrigin
+neutralBaseline
+actionPrototypes
+actionCalibrationSampleCounts
+classifierConfig:
+  featureScales, neutralExitScore, neutralEnterScore
+  maxDistance, minMargin, minConfidence, enterMs, releaseMs
+  maxFrameGapMs, smoothingWindowMs, actionMinSamples
+  hipCalibrationVisibility, kneeCalibrationVisibility
+sequence: [{ phase, expectedAction, durationMs }, ...]
+summary: { actions: { TWIST_LEFT: ..., ... }, neutral: ... }
+samples: [{
+  timestamp, videoTime, stageIndex, expectedAction, poseValid,
+  landmarks: [{ index, x, y, z, visibility }, ...],
+  worldLandmarks: [{ index, x, y, z, visibility }, ...],
+  rawFeatures,
+  calibratedFeatures,
+  smoothedFeatures: { values, validNow, lastValidAt },
+  classification: {
+    rawAction, stableAction, confidence, valid, reason,
+    neutralMovementScore, bestDistance, secondBestDistance, actionDistances
+  }
+}, ...]
+```
+
+- `timestamp`/`startedAt`/`lastValidAt`은 Controller의 monotonic milliseconds, `videoTime`은 영상의 초 단위 시간입니다. `timeOrigin + timestamp`로 Unix ms를 복원할 수 있습니다. `stageIndex`로 최초 Neutral과 각 동작 뒤 Neutral 구간을 따로 분석할 수 있습니다.
+- 매 inference callback에서 features를 처리한 뒤 `actions.processFrame()`이 **동일 timestamp의 PoseActionView**를 반환합니다. 이 값을 즉시 복사하며 250ms React state나 remote snapshot을 읽어 sample을 만들지 않습니다.
+- image/world 좌표는 제공된 전체 배열(보통 각 33개)을 `result.close()` **전에** primitive object로 복사합니다. 없는 visibility는 `null`입니다. Raw feature 14개, calibrated delta 7개, smoothed delta 7개와 validity, classifier 결과/거리도 각각 복사합니다. MediaPipe result나 배열 reference, 영상/이미지는 저장하지 않습니다.
+- 시작 시 Neutral baseline, 네 prototype, feature별 calibration sample count와 실제 classifier 설정을 깊이 복사합니다. Mirror는 `previewMirrored` metadata만 기록하며 좌표/expected label/feature/판정을 변환하지 않습니다.
+
+**Summary 해석**
+
+- Action별 totalRecordedFrames / validPoseFrames / staleFrames, rawCorrectRate / stableCorrectRate, ownPrototypeNearestRate, median confidence / own distance / closest-other distance / margin을 제공합니다.
+- `poseValid`는 raw pose가 있고 현재 required HIP smoothing이 유효한 경우입니다. `staleFrames = totalRecordedFrames - validPoseFrames`로 invalid/HIP 품질 부족도 포함합니다. **Raw/stable 정답률의 분모는 validPoseFrames**입니다. Pose loss에서 나온 NONE을 Neutral 정답으로 세지 않도록 했습니다. 전체 프레임 중 invalid 비율은 별도로 함께 확인해야 합니다.
+- Own nearest의 분모 `distanceComparableFrames`는 유효 pose 중 네 거리가 모두 finite인 frame 수입니다. Own distance가 다른 세 거리의 최솟값보다 **엄격히 작을 때만** 단독 최단으로 계산하고 동률은 제외합니다. 거리 중앙값들도 동일한 비교 가능 frame을 사용합니다.
+- `medianMargin`은 각 frame의 `closestOtherDistance - ownDistance`를 구한 뒤 중앙값을 취합니다. 두 중앙값의 차이가 아닙니다.
+- Neutral은 유효 frame의 raw/stable NONE 비율과 neutralMovementScore median/p90을 제공합니다. `scoreFrames`는 finite score 개수이며 p90은 오름차순 **nearest rank `ceil(0.9 × N)`**를 사용합니다.
+- 7개 feature별 유효 smoothed sample 수, prototype, validation median, **signed difference = validation median − prototype**, **normalizedDrift = abs(difference) / 시작 시 저장한 scale**를 제공합니다. 선택 knee가 누락되어도 0으로 채우지 않습니다. 분모/sample/prototype이 없으면 해당 통계는 `null`이고 UI에서는 `-`입니다.
+- Summary는 수집 종료 시 한 번 계산하며 JSON에도 포함됩니다. Expected label은 안내한 자세이지 실제 수행을 독립 확인한 정답이 아니므로, 안내와 실제 동작이 맞았는지도 실측 시 확인해야 합니다.
+
+**Remote와 lifecycle**
+
+기존 relay에 `validation:start → validation:start:requested`, `validation:reset → validation:reset:requested`를 추가합니다. Request payload/중복 차단은 기존 `requestId` 방식을 재사용하며 ACTIVE 중 start 반복으로 시계가 재시작되지 않습니다. 서버는 sample/timer/state를 저장하지 않습니다.
+
+기존 `calibration:state`에는 `validation: { status, phase, expectedAction, remainingMs, recordedFrames }`만 추가됩니다. Phone은 이 상태를 표시하며 자체 sequence/countdown을 진행하지 않습니다. Raw landmark, features, dataset, summary 전체는 Socket으로 전송하지 않습니다. 재접속 sync/1.5초 연결 만료 정책도 그대로 적용합니다.
+
+Neutral 재보정, Action 재보정/reset, Camera Stop/해제/추론 오류, unmount는 **Validation dataset과 summary도 초기화**합니다. 기록 중 보정 기준이 달라진 frame이 들어오면 방어적으로 초기화해 서로 다른 기준을 섞지 않습니다. 검증 완료 후에는 보정/정지/초기화 전에 JSON을 다운로드하세요. 명시적으로 다시 검증을 시작하면 이전 validation을 새 데이터로 교체합니다.
+
+**실제 테스트**
+
+1. `pnpm dev` 후 노트북 `http://localhost:5173`에서 **Start Camera**를 누릅니다. 발쪽→머리 방향의 기존 카메라 baseline을 유지합니다.
+2. 폰에서 `http://<LAPTOP_LAN_IP>:3000/health` 확인 후 `:5174`에 접속합니다. **Neutral 보정 시작**을 누르고 FROZEN까지 기본 자세를 유지합니다.
+3. 폰에서 **동작 보정 시작**을 누르고 네 Action prototype READY를 확인합니다.
+4. 폰의 **동작 검증 시작**을 누릅니다. 약 **21.5초** 동안 폰의 큰 글씨와 countdown만 따라 수행합니다. 각 동작 후 Neutral 복귀에 이어 기본 자세를 유지하는 기록 구간도 있습니다.
+5. 완료 후 노트북으로 이동해 **STEP 4C — Action Signal Validation**의 summary와 feature repeatability 표를 확인하고 **Download Validation JSON**을 누릅니다. 다운로드 전 Camera Stop/재보정을 누르면 dataset이 초기화됩니다.
+6. JSON에서 expected/raw/stable을 비교하고 invalid 비율, own/other 거리와 margin, 7개 feature의 normalized drift, 동작별로 나뉜 Neutral score를 살펴봅니다. 필요하면 저장된 33개 raw/world 좌표로 다른 신호 후보를 다음 분석 단계에서 검토합니다. 현재 앱은 새 classifier나 threshold를 적용하지 않습니다.
+7. Reset Validation과 각 재보정/Camera Stop, Mirror ON/OFF, Pose loss 및 폰 재접속도 확인합니다. 완료/부분 기록을 성공/실패로 자동 판정하지 않습니다.
+
 ## 검증 및 빌드
 
 ```sh
@@ -351,8 +449,8 @@ pnpm --filter @plank-stork/controller-web test
 curl http://localhost:3000/health
 ```
 
-자동 테스트는 초기화/fallback, 프레임 중복 방지, 지표/좌표 갱신, Mirror 독립성, raw snapshot·STABILIZE·sequence·label별 count/dropped·reset·JSON, 음성 실패, feature 수식·null 처리·중앙값 calibration·HIP readiness·독립 knee 완성·grace 경계/고정/재보정·delta·시간 기반 smoothing·pose loss 즉시 무효화/복귀·visibility 경계값, result/camera/unmount lifecycle을 검증합니다. 추가로 Action 보정 sequence·중앙값·필수 HIP/선택 knee, 정규화 거리·NONE·confidence·hysteresis·enter/release·pose stale·Mirror·재보정/Stop/unmount를 검증합니다. STEP 4B-2는 실제 NestJS 서버를 임시 loopback 포트에서 실행해 5개 relay 이벤트와 기존 LEFT/RIGHT, health를 검증하고, Controller 요청/중복/reset/주기/cleanup 및 Mobile 화면/sync/stale/연결 만료를 기존 controller-web Vitest 환경에서 함께 검증합니다. Mobile/Server 전용 테스트 stack이나 별도 test script는 추가하지 않았습니다. 실제 웹캠의 추적 품질과 분류 품질은 위 STEP 2·3A·3B·4A·4B 순서로 별도 확인합니다.
+자동 테스트는 초기화/fallback, 프레임 중복 방지, 지표/좌표 갱신, Mirror 독립성, raw snapshot·STABILIZE·sequence·label별 count/dropped·reset·JSON, 음성 실패, feature 수식·null 처리·중앙값 calibration·HIP readiness·독립 knee 완성·grace 경계/고정/재보정·delta·시간 기반 smoothing·pose loss 즉시 무효화/복귀·visibility 경계값, result/camera/unmount lifecycle을 검증합니다. 추가로 Action Validation의 21.5초 경계·수집 구간·primitive snapshot·invalid frame·summary/feature drift·JSON·remote/reset/lifecycle과 Action 보정 sequence·중앙값·필수 HIP/선택 knee, 정규화 거리·NONE·confidence·hysteresis·enter/release·pose stale·Mirror·재보정/Stop/unmount를 검증합니다. STEP 4B-2는 실제 NestJS 서버를 임시 loopback 포트에서 실행해 5개 relay 이벤트와 기존 LEFT/RIGHT, health를 검증하고, Controller 요청/중복/reset/주기/cleanup 및 Mobile 화면/sync/stale/연결 만료를 기존 controller-web Vitest 환경에서 함께 검증합니다. Mobile/Server 전용 테스트 stack이나 별도 test script는 추가하지 않았습니다. 실제 웹캠의 추적 품질과 분류 품질은 위 STEP 2·3A·3B·4A·4B 순서로 별도 확인합니다.
 
 빌드 결과는 각 패키지의 `dist/`에 생성됩니다. 빌드한 서버는 `pnpm --filter @plank-stork/server start`로 실행합니다. 웹 빌드는 `pnpm --filter @plank-stork/controller-web preview` 또는 `pnpm --filter @plank-stork/mobile preview`로 확인할 수 있습니다.
 
-`packages/protocol`에는 STEP 1 Socket 테스트 타입과 STEP 4B-2 calibration 요청/debug snapshot wire 타입이 있습니다. Raw Pose나 classifier 내부 계산 타입은 포함하지 않습니다. Web Worker, 사용자 독립 최종 threshold, cooldown, control strength, Pose → game control 변환, Room/Session, 로그인/인증, DB, Redis, Phaser/게임 로직, Capacitor/모바일 네이티브 기능, WebRTC, custom ML model은 구현하지 않습니다.
+`packages/protocol`에는 STEP 1 Socket 테스트 타입과 STEP 4B-2/4C calibration·validation 요청/debug snapshot wire 타입이 있습니다. Raw Pose나 classifier 내부 계산 타입은 포함하지 않습니다. Web Worker, 사용자 독립 최종 threshold, cooldown, control strength, Pose → game control 변환, Room/Session, 로그인/인증, DB, Redis, Phaser/게임 로직, Capacitor/모바일 네이티브 기능, WebRTC, custom ML model은 구현하지 않습니다.

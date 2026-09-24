@@ -1,6 +1,7 @@
 import type { CalibrationControllerStatus, CalibrationRemoteState, CalibrationRequest } from '@plank-stork/protocol';
 import type { PoseFeatureView } from '../pose/features/poseFeatureTypes';
 import { POSE_ACTIONS, type PoseActionView } from '../pose/actions/poseActionTypes';
+import type { ValidationView } from '../pose/validation/validationTypes';
 
 export interface CalibrationPorts {
   getCamera: () => CalibrationControllerStatus;
@@ -9,8 +10,11 @@ export interface CalibrationPorts {
   startNeutral: () => void;
   startAction: () => void;
   resetAction: () => void;
+  getValidation: () => ValidationView;
+  startValidation: () => boolean;
+  resetValidation: () => void;
 }
-export type RemoteCommand = 'neutral:start' | 'action:start' | 'action:reset';
+export type RemoteCommand = 'neutral:start' | 'action:start' | 'action:reset' | 'validation:start' | 'validation:reset';
 
 /** Adapts existing local engines to wire types; owns no calibration timing or samples. */
 export class CalibrationRemoteController {
@@ -31,6 +35,8 @@ export class CalibrationRemoteController {
     const action = ports.getActions();
     this.lastCommandError = null;
     if (command === 'action:reset') { ports.resetAction(); return; }
+    if (command === 'validation:reset') { ports.resetValidation(); return; }
+    if (command === 'validation:start' && ports.getValidation().status === 'ACTIVE') return;
     if (command === 'neutral:start' && ['HIP', 'FINISHING'].includes(neutral.collectionState)) return;
     if (command === 'action:start' && action.calibration.status === 'RUNNING') return;
     const camera = ports.getCamera();
@@ -41,6 +47,10 @@ export class CalibrationRemoteController {
       ports.startNeutral();
     } else if (neutral.collectionState !== 'FROZEN') {
       this.lastCommandError = 'NEUTRAL_NOT_FROZEN';
+    } else if (command === 'validation:start') {
+      if (action.calibration.status !== 'READY' || !POSE_ACTIONS.every((key) => action.calibration.prototypes[key]) || !ports.startValidation()) {
+        this.lastCommandError = 'ACTION_NOT_READY';
+      }
     } else ports.startAction();
   }
 
@@ -51,6 +61,7 @@ export class CalibrationRemoteController {
     const stage = calibration.stage;
     const active = calibration.status === 'RUNNING';
     const completed = calibration.status === 'READY' || calibration.status === 'PARTIAL';
+    const validation = ports.getValidation();
     return {
       timestamp: Date.now(),
       controller: controllerOverride ?? ports.getCamera(),
@@ -74,6 +85,11 @@ export class CalibrationRemoteController {
         readiness: Object.fromEntries(POSE_ACTIONS.map((action) => [action, calibration.prototypes[action] !== null])) as Record<typeof POSE_ACTIONS[number], boolean>,
       },
       classification: { ...classification, actionDistances: { ...classification.actionDistances } },
+      // Explicit allow-list: no samples, feature summaries, baselines or prototypes over Socket.
+      validation: {
+        status: validation.status, phase: validation.phase, expectedAction: validation.expectedAction,
+        remainingMs: validation.remainingMs, recordedFrames: validation.recordedFrames,
+      },
       lastCommandError: this.lastCommandError,
     };
   }

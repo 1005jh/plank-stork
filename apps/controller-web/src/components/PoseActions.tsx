@@ -4,7 +4,9 @@ import type { usePoseActions } from '../pose/actions/usePoseActions';
 
 const format = (value: number | null) => value?.toFixed(3) ?? '-';
 
-export function PoseActions({ actions }: { actions: ReturnType<typeof usePoseActions> }) {
+export function PoseActions({ actions, onStart = actions.start, onReset = actions.resetCalibration }: {
+  actions: ReturnType<typeof usePoseActions>; onStart?: () => void; onReset?: () => void;
+}) {
   const { view } = actions;
   const { calibration, classification } = view;
   const stage = calibration.stage;
@@ -13,8 +15,8 @@ export function PoseActions({ actions }: { actions: ReturnType<typeof usePoseAct
       <h3 id="pose-actions-title">STEP 4B — Pose Action Classifier</h3>
       {!view.neutralFrozen && <p>Action calibration requires frozen Neutral calibration.</p>}
       <div className="camera-controls">
-        <button type="button" onClick={actions.start} disabled={!view.neutralFrozen || calibration.status === 'RUNNING'}>Start Action Calibration</button>
-        <button type="button" onClick={actions.resetCalibration}>Reset Action Calibration</button>
+        <button type="button" onClick={onStart} disabled={!view.neutralFrozen || calibration.status === 'RUNNING'}>Start Action Calibration</button>
+        <button type="button" onClick={onReset}>Reset Action Calibration</button>
       </div>
       {actions.error && <p role="alert" className="camera-error">{actions.error}</p>}
       <p className="pose-note">15초 전용 보정 · 준비 2초 → MOVE 1초 → HOLD 1.5초 · 동작 사이 Neutral 1초. 좌우는 본인의 신체 기준입니다. Mirror는 판정에 영향을 주지 않습니다.</p>

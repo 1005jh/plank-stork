@@ -32,6 +32,13 @@ export interface RemoteClassificationState {
   secondBestDistance: number | null;
   actionDistances: Partial<Record<CalibrationAction, number | null>>;
 }
+export interface RemoteValidationState {
+  status: 'IDLE' | 'ACTIVE' | 'COMPLETED';
+  phase: 'IDLE' | 'PREPARE' | 'RECORD_NEUTRAL' | 'MOVE' | 'RECORD_ACTION' | 'RETURN_NEUTRAL' | 'COMPLETED';
+  expectedAction: RemoteActionState | null;
+  remainingMs: number;
+  recordedFrames: number;
+}
 export interface CalibrationRemoteState {
   /** Controller wall clock, for display only; mobile freshness uses local receipt time. */
   timestamp: number;
@@ -39,5 +46,6 @@ export interface CalibrationRemoteState {
   neutral: RemoteNeutralCalibrationState;
   actionCalibration: RemoteActionCalibrationState;
   classification: RemoteClassificationState | null;
-  lastCommandError: 'CAMERA_NOT_READY' | 'POSE_NOT_DETECTED' | 'NEUTRAL_NOT_FROZEN' | null;
+  validation: RemoteValidationState;
+  lastCommandError: 'CAMERA_NOT_READY' | 'POSE_NOT_DETECTED' | 'NEUTRAL_NOT_FROZEN' | 'ACTION_NOT_READY' | null;
 }

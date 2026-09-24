@@ -31,11 +31,15 @@ export function useCalibrationRemote(socket: CalibrationSocket | null | undefine
     const neutral = command('neutral:start');
     const action = command('action:start');
     const reset = command('action:reset');
+    const validationStart = command('validation:start');
+    const validationReset = command('validation:reset');
     socket.on('connect', publish);
     socket.on('calibration:sync:requested', publish);
     socket.on('calibration:neutral:start:requested', neutral);
     socket.on('calibration:action:start:requested', action);
     socket.on('calibration:action:reset:requested', reset);
+    socket.on('validation:start:requested', validationStart);
+    socket.on('validation:reset:requested', validationReset);
     publish();
     // Never called from the inference callback; only compact debug snapshots cross the wire.
     const timer = window.setInterval(publish, REMOTE_PUBLISH_INTERVAL_MS);
@@ -46,6 +50,8 @@ export function useCalibrationRemote(socket: CalibrationSocket | null | undefine
       socket.off('calibration:neutral:start:requested', neutral);
       socket.off('calibration:action:start:requested', action);
       socket.off('calibration:action:reset:requested', reset);
+      socket.off('validation:start:requested', validationStart);
+      socket.off('validation:reset:requested', validationReset);
     };
   }, [socket, remote, publish]);
 

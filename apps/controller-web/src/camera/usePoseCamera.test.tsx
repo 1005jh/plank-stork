@@ -5,6 +5,9 @@ import type { PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-visi
 import { createPoseLandmarker } from '../pose/createPoseLandmarker';
 import { usePoseCamera } from './usePoseCamera';
 import { PoseDatasetRecorder } from '../recorder/poseDatasetRecorder';
+import { ActionValidation } from '../pose/validation/actionValidation';
+import { validationContext } from '../pose/validation/testFixtures';
+import type { PoseFrame } from '../recorder/poseRecorderTypes';
 
 const drawing = vi.hoisted(() => ({
   drawConnectors: vi.fn(), drawLandmarks: vi.fn(), close: vi.fn(),
@@ -41,10 +44,11 @@ describe('Pose camera lifecycle and measurement', () => {
   let result: Pick<PoseLandmarkerResult, 'landmarks' | 'worldLandmarks' | 'close'>;
   let clearRect: ReturnType<typeof vi.fn>;
   let recorder: PoseDatasetRecorder;
+  let onValidationFrame: ((frame: PoseFrame) => void) | undefined;
 
   function Probe() {
     camera = usePoseCamera({
-      onFrame: (frame) => recorder.recordFrame(frame),
+      onFrame: (frame) => { recorder.recordFrame(frame); onValidationFrame?.(frame); },
       onCameraStopped: () => recorder.interrupt(),
     });
     renderCount++;
@@ -70,6 +74,7 @@ describe('Pose camera lifecycle and measurement', () => {
     frameId = 0;
     frames = new Map();
     recorder = new PoseDatasetRecorder();
+    onValidationFrame = undefined;
     vi.spyOn(performance, 'now').mockImplementation(() => now);
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frames.set(++frameId, callback);
@@ -181,6 +186,22 @@ describe('Pose camera lifecycle and measurement', () => {
     inferenceMs = 10;
     for (let index = 2; index <= 31; index++) await frame(index * 500, index);
     expect(camera.metrics.averageInferenceMs).toBe(10);
+  });
+
+  it('snapshots validation primitives before MediaPipe result.close releases the source data', async () => {
+    const context = validationContext(); const validation = new ActionValidation(); validation.start(context, 0);
+    onValidationFrame = (frame) => validation.recordFrame(frame, context.features, context.actions);
+    const close = vi.fn(() => { result.landmarks[0][23].x = 999; result.worldLandmarks[0][25].y = 999; });
+    result.close = close;
+    await act(async () => camera.start());
+    await frame(4500, 4.5);
+    expect(close).toHaveBeenCalledOnce();
+    validation.getView(21500);
+    const sample = JSON.parse(validation.exportJson()).samples[0];
+    expect(sample.landmarks[23].x).toBe(0.5);
+    expect(sample.worldLandmarks[25].y).toBe(-2.5);
+    expect(sample.timestamp).toBe(4500);
+    expect(camera.status).toBe('RUNNING');
   });
 
   it('stops every resource and ignores stale scheduled frames, then starts again', async () => {

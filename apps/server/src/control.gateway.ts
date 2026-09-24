@@ -66,4 +66,14 @@ export class ControlGateway implements OnGatewayConnection, OnGatewayDisconnect 
   handleCalibrationState(@MessageBody() state: CalibrationRemoteState): void {
     this.server.emit('calibration:state', state);
   }
+
+  @SubscribeMessage('validation:start')
+  handleValidationStart(@MessageBody() request: CalibrationRequest): void {
+    this.server.emit('validation:start:requested', request);
+  }
+
+  @SubscribeMessage('validation:reset')
+  handleValidationReset(@MessageBody() request: CalibrationRequest): void {
+    this.server.emit('validation:reset:requested', request);
+  }
 }

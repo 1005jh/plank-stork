@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { ActionValidation } from '../pose/validation/actionValidation';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
@@ -38,6 +39,8 @@ describe('real NestJS Socket.IO relay', () => {
 
   const cases = [
     ['calibration:sync:request', 'calibration:sync:requested'],
+    ['validation:start', 'validation:start:requested'],
+    ['validation:reset', 'validation:reset:requested'],
     ['calibration:neutral:start', 'calibration:neutral:start:requested'],
     ['calibration:action:start', 'calibration:action:start:requested'],
     ['calibration:action:reset', 'calibration:action:reset:requested'],
@@ -55,6 +58,7 @@ describe('real NestJS Socket.IO relay', () => {
     const snapshot = new CalibrationRemoteController(() => ({
       getCamera: () => ({ cameraRunning: false, poseDetected: false }), getNeutral: () => neutral.getView(0),
       getActions: () => actions.getView(neutral.getView(0), 0), startNeutral() {}, startAction() {}, resetAction() {},
+      getValidation: () => new ActionValidation().getView(0), startValidation: () => false, resetValidation() {},
     })).snapshot();
     const received = clients.map((client) => new Promise((resolve) => client.once('calibration:state', resolve)));
     clients[0].emit('calibration:state:publish', snapshot);

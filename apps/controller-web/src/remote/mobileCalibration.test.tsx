@@ -16,6 +16,7 @@ function initialSnapshot(): CalibrationRemoteState {
     actionCalibration: { status: 'IDLE', phase: 'IDLE', action: null, remainingMs: 0,
       readiness: { TWIST_LEFT: false, TWIST_RIGHT: false, KNEE_LEFT: false, KNEE_RIGHT: false } },
     classification: null, lastCommandError: null,
+    validation: { status: 'IDLE', phase: 'IDLE', expectedAction: null, remainingMs: 0, recordedFrames: 0 },
   };
 }
 function completedSnapshot(): CalibrationRemoteState {
@@ -163,5 +164,54 @@ describe('phone calibration remote UI and connection lifecycle', () => {
     await act(async () => root.unmount());
     for (const event of ['connect', 'disconnect', 'connect_error', 'calibration:state']) expect(socket.listenerCount(event)).toBe(0);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('enables validation only after all prototypes are ready and sends start/reset requests', async () => {
+    await receive(initialSnapshot());
+    expect(button('동작 검증 시작').disabled).toBe(true);
+    const state = completedSnapshot(); state.actionCalibration.readiness.KNEE_LEFT = false;
+    await receive(state);
+    expect(button('동작 검증 시작').disabled).toBe(true);
+    state.actionCalibration.readiness.KNEE_LEFT = true;
+    await receive({ ...state });
+    expect(button('동작 검증 시작').disabled).toBe(false);
+    await act(async () => button('동작 검증 시작').click());
+    expect(socket.emit).toHaveBeenLastCalledWith('validation:start', expect.objectContaining({ requestId: expect.any(String) }));
+    state.validation = { status: 'ACTIVE', phase: 'PREPARE', expectedAction: 'NONE', remainingMs: 2000, recordedFrames: 0 };
+    await receive({ ...state });
+    expect(button('동작 검증 시작').disabled).toBe(true);
+    await act(async () => button('검증 초기화').click());
+    expect(socket.emit).toHaveBeenLastCalledWith('validation:reset', expect.any(Object));
+  });
+
+  it.each([
+    ['PREPARE', 'NONE', '동작 검증을 시작합니다'],
+    ['RECORD_NEUTRAL', 'NONE', '기본 자세를 유지하세요'],
+    ['MOVE', 'TWIST_LEFT', '← 왼쪽 트위스트'],
+    ['RECORD_ACTION', 'KNEE_RIGHT', '그대로 유지하세요'],
+    ['RETURN_NEUTRAL', 'NONE', '기본 플랭크 자세로 돌아오세요'],
+  ] as const)('shows validation %s from the controller without advancing its countdown', async (phase, expectedAction, text) => {
+    const state = completedSnapshot();
+    state.validation = { status: 'ACTIVE', phase, expectedAction, remainingMs: 620, recordedFrames: 42 };
+    await receive(state);
+    const guide = container.querySelector('.validation-guide')!;
+    expect(guide.textContent).toContain(text); expect(guide.textContent).toContain('42');
+    expect(guide.querySelector('.countdown')!.textContent).toBe('0.6초');
+    await advance(500);
+    expect(guide.querySelector('.countdown')!.textContent).toBe('0.6초');
+    await advance(1000);
+    expect(container.querySelector('.validation-guide')).toBeNull();
+    expect(container.textContent).toContain('연결 대기');
+  });
+
+  it('shows completed recording count and directs JSON download to the laptop', async () => {
+    const state = completedSnapshot();
+    state.validation = { status: 'COMPLETED', phase: 'COMPLETED', expectedAction: null, remainingMs: 0, recordedFrames: 345 };
+    await receive(state);
+    const panel = container.querySelector('[aria-labelledby="mobile-validation-title"]')!;
+    expect(panel.textContent).toContain('동작 검증 기록 완료');
+    expect(panel.textContent).toContain('345 frames');
+    expect(panel.textContent).toContain('Laptop');
+    expect(button('다시 검증').disabled).toBe(false);
   });
 });

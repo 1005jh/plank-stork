@@ -15,6 +15,8 @@ export interface ClientToServerEvents {
   'calibration:action:start': (request: CalibrationRequest) => void;
   'calibration:action:reset': (request: CalibrationRequest) => void;
   'calibration:state:publish': (state: CalibrationRemoteState) => void;
+  'validation:start': (request: CalibrationRequest) => void;
+  'validation:reset': (request: CalibrationRequest) => void;
 }
 
 export interface ServerToClientEvents {
@@ -24,4 +26,6 @@ export interface ServerToClientEvents {
   'calibration:action:start:requested': (request: CalibrationRequest) => void;
   'calibration:action:reset:requested': (request: CalibrationRequest) => void;
   'calibration:state': (state: CalibrationRemoteState) => void;
+  'validation:start:requested': (request: CalibrationRequest) => void;
+  'validation:reset:requested': (request: CalibrationRequest) => void;
 }

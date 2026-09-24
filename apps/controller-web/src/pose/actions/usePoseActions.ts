@@ -11,6 +11,8 @@ export function usePoseActions(getFeatures: () => ActionInput) {
   const [error, setError] = useState<string | null>(null);
   const processFrame = useCallback((input: ActionInput, timestamp: number) => {
     analysis.processFrame(input, timestamp);
+    // Same inference input/time, after stabilization; never read the throttled React view.
+    return analysis.getView(input, timestamp);
   }, [analysis]);
   // Called by camera release/unmount, without scheduling React updates.
   const reset = useCallback(() => analysis.reset(), [analysis]);

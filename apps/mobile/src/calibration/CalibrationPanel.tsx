@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { CalibrationAction, CalibrationRemoteState } from '@plank-stork/protocol';
 import type { CalibrationCommand } from './useCalibrationRemote';
+import { ValidationPanel } from './ValidationPanel';
 
 const ACTIONS: CalibrationAction[] = ['TWIST_LEFT', 'TWIST_RIGHT', 'KNEE_LEFT', 'KNEE_RIGHT'];
 const LABELS: Record<CalibrationAction, string> = {
@@ -11,6 +12,7 @@ const ERRORS = {
   CAMERA_NOT_READY: '카메라 준비 필요 — 노트북에서 Start Camera를 눌러주세요.',
   POSE_NOT_DETECTED: 'Pose not detected — 몸 전체가 카메라에 보이도록 이동하세요.',
   NEUTRAL_NOT_FROZEN: '기본 자세 보정을 먼저 완료하세요.',
+  ACTION_NOT_READY: '네 동작 prototype READY 후 검증을 시작하세요.',
 };
 const number = (value: number | null | undefined) => value?.toFixed(3) ?? '-';
 
@@ -31,6 +33,7 @@ export function CalibrationPanel({ state, connected, send }: {
       <p>노트북의 controller-web과 Socket 연결을 확인하세요.</p>
       <button disabled>Neutral 보정 시작</button>
       <button disabled>동작 보정 시작</button>
+      <button disabled>동작 검증 시작</button>
     </section>
   );
 
@@ -102,6 +105,7 @@ export function CalibrationPanel({ state, connected, send }: {
         </>}
       </section>
 
+      <ValidationPanel validation={state.validation} canStart={controller.cameraRunning && neutral.frozen && complete && allReady} send={send} />
       {complete && <section className="calibration-card" aria-labelledby="live-title">
         <h3 id="live-title">현재 동작 · Live Classification</h3>
         <p className="major-instruction" role="status">
