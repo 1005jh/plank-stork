@@ -2,6 +2,7 @@ import type { CalibrationControllerStatus, CalibrationRemoteState, CalibrationRe
 import type { PoseFeatureView } from '../pose/features/poseFeatureTypes';
 import { POSE_ACTIONS, type PoseActionView } from '../pose/actions/poseActionTypes';
 import type { ValidationView } from '../pose/validation/validationTypes';
+import type { MotionView } from '../pose/motion/kneeMotionTypes';
 
 export interface CalibrationPorts {
   getCamera: () => CalibrationControllerStatus;
@@ -13,8 +14,11 @@ export interface CalibrationPorts {
   getValidation: () => ValidationView;
   startValidation: () => boolean;
   resetValidation: () => void;
+  getMotion: () => MotionView;
+  startMotion: () => boolean;
+  resetMotion: () => void;
 }
-export type RemoteCommand = 'neutral:start' | 'action:start' | 'action:reset' | 'validation:start' | 'validation:reset';
+export type RemoteCommand = 'neutral:start' | 'action:start' | 'action:reset' | 'validation:start' | 'validation:reset' | 'motion:start' | 'motion:reset';
 
 /** Adapts existing local engines to wire types; owns no calibration timing or samples. */
 export class CalibrationRemoteController {
@@ -36,6 +40,8 @@ export class CalibrationRemoteController {
     this.lastCommandError = null;
     if (command === 'action:reset') { ports.resetAction(); return; }
     if (command === 'validation:reset') { ports.resetValidation(); return; }
+    if (command === 'motion:reset') { ports.resetMotion(); return; }
+    if (command === 'motion:start' && ports.getMotion().status === 'ACTIVE') return;
     if (command === 'validation:start' && ports.getValidation().status === 'ACTIVE') return;
     if (command === 'neutral:start' && ['HIP', 'FINISHING'].includes(neutral.collectionState)) return;
     if (command === 'action:start' && action.calibration.status === 'RUNNING') return;
@@ -47,6 +53,9 @@ export class CalibrationRemoteController {
       ports.startNeutral();
     } else if (neutral.collectionState !== 'FROZEN') {
       this.lastCommandError = 'NEUTRAL_NOT_FROZEN';
+    } else if (command === 'motion:start') {
+      if (!camera.poseDetected) this.lastCommandError = 'POSE_NOT_DETECTED';
+      else if (!ports.startMotion()) this.lastCommandError = 'MOTION_NOT_READY';
     } else if (command === 'validation:start') {
       if (action.calibration.status !== 'READY' || !POSE_ACTIONS.every((key) => action.calibration.prototypes[key]) || !ports.startValidation()) {
         this.lastCommandError = 'ACTION_NOT_READY';
@@ -62,6 +71,7 @@ export class CalibrationRemoteController {
     const active = calibration.status === 'RUNNING';
     const completed = calibration.status === 'READY' || calibration.status === 'PARTIAL';
     const validation = ports.getValidation();
+    const motion = ports.getMotion();
     return {
       timestamp: Date.now(),
       controller: controllerOverride ?? ports.getCamera(),
@@ -89,6 +99,10 @@ export class CalibrationRemoteController {
       validation: {
         status: validation.status, phase: validation.phase, expectedAction: validation.expectedAction,
         remainingMs: validation.remainingMs, recordedFrames: validation.recordedFrames,
+      },
+      motionValidation: {
+        status: motion.status, phase: motion.phase, expectedMotion: motion.expectedMotion,
+        remainingMs: motion.remainingMs, recordedFrames: motion.recordedFrames,
       },
       lastCommandError: this.lastCommandError,
     };

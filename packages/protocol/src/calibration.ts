@@ -47,5 +47,13 @@ export interface CalibrationRemoteState {
   actionCalibration: RemoteActionCalibrationState;
   classification: RemoteClassificationState | null;
   validation: RemoteValidationState;
-  lastCommandError: 'CAMERA_NOT_READY' | 'POSE_NOT_DETECTED' | 'NEUTRAL_NOT_FROZEN' | 'ACTION_NOT_READY' | null;
+  motionValidation: RemoteMotionValidationState;
+  lastCommandError: 'CAMERA_NOT_READY' | 'POSE_NOT_DETECTED' | 'NEUTRAL_NOT_FROZEN' | 'ACTION_NOT_READY' | 'MOTION_NOT_READY' | null;
+}
+export interface RemoteMotionValidationState {
+  status: 'IDLE' | 'ACTIVE' | 'COMPLETED';
+  phase: 'IDLE' | 'PREPARE' | 'NEUTRAL' | 'MOVE' | 'HOLD' | 'RETURN' | 'COMPLETED';
+  expectedMotion: 'NEUTRAL' | CalibrationAction | null;
+  remainingMs: number;
+  recordedFrames: number;
 }

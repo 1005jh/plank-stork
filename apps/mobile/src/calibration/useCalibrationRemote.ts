@@ -3,7 +3,7 @@ import type { Socket } from 'socket.io-client';
 import type { CalibrationRemoteState, ClientToServerEvents, ServerToClientEvents } from '@plank-stork/protocol';
 
 export const REMOTE_STATE_TIMEOUT_MS = 1500;
-export type CalibrationCommand = 'calibration:neutral:start' | 'calibration:action:start' | 'calibration:action:reset' | 'validation:start' | 'validation:reset';
+export type CalibrationCommand = 'calibration:neutral:start' | 'calibration:action:start' | 'calibration:action:reset' | 'validation:start' | 'validation:reset' | 'motion:validation:start' | 'motion:validation:reset';
 type CalibrationSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 // Works on phone HTTP LAN origins too, where crypto.randomUUID may be unavailable.

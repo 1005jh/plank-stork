@@ -17,6 +17,7 @@ function initialSnapshot(): CalibrationRemoteState {
       readiness: { TWIST_LEFT: false, TWIST_RIGHT: false, KNEE_LEFT: false, KNEE_RIGHT: false } },
     classification: null, lastCommandError: null,
     validation: { status: 'IDLE', phase: 'IDLE', expectedAction: null, remainingMs: 0, recordedFrames: 0 },
+    motionValidation: { status: 'IDLE', phase: 'IDLE', expectedMotion: null, remainingMs: 0, recordedFrames: 0 },
   };
 }
 function completedSnapshot(): CalibrationRemoteState {
@@ -213,5 +214,47 @@ describe('phone calibration remote UI and connection lifecycle', () => {
     expect(panel.textContent).toContain('345 frames');
     expect(panel.textContent).toContain('Laptop');
     expect(button('다시 검증').disabled).toBe(false);
+  });
+
+  it('enables Knee Motion with Neutral alone, without any Action prototype, and sends start/reset', async () => {
+    await receive(initialSnapshot());
+    expect(button('Knee Motion Validation 시작').disabled).toBe(true);
+    const state = initialSnapshot(); state.neutral = completedSnapshot().neutral;
+    await receive(state);
+    expect(state.actionCalibration.status).toBe('IDLE');
+    expect(button('Knee Motion Validation 시작').disabled).toBe(false);
+    await act(async () => button('Knee Motion Validation 시작').click());
+    expect(socket.emit).toHaveBeenLastCalledWith('motion:validation:start', expect.objectContaining({ requestId: expect.any(String) }));
+    state.motionValidation = { status: 'ACTIVE', phase: 'MOVE', expectedMotion: 'KNEE_LEFT', remainingMs: 800, recordedFrames: 42 };
+    await receive({ ...state });
+    expect(button('Knee Motion Validation 시작').disabled).toBe(true);
+    await act(async () => button('Motion 검증 초기화').click());
+    expect(socket.emit).toHaveBeenLastCalledWith('motion:validation:reset', expect.any(Object));
+  });
+
+  it.each([
+    ['PREPARE', 'NEUTRAL', '기본 자세를 유지하세요'], ['NEUTRAL', 'NEUTRAL', '기본 자세를 유지하세요'],
+    ['MOVE', 'TWIST_LEFT', '← 왼쪽 트위스트'], ['HOLD', 'KNEE_RIGHT', '유지하세요'], ['RETURN', 'KNEE_LEFT', '기본 자세로 돌아오세요'],
+  ] as const)('shows motion phase %s only from controller snapshots', async (phase, expectedMotion, text) => {
+    const state = initialSnapshot(); state.neutral = completedSnapshot().neutral;
+    state.motionValidation = { status: 'ACTIVE', phase, expectedMotion, remainingMs: 620, recordedFrames: 60 };
+    await receive(state);
+    const guide = container.querySelector('.knee-motion-guide')!;
+    expect(guide.textContent).toContain(text); expect(guide.textContent).toContain('60');
+    expect(guide.querySelector('.countdown')!.textContent).toBe('0.6초');
+    await advance(500);
+    expect(guide.querySelector('.countdown')!.textContent).toBe('0.6초');
+    await advance(1000);
+    expect(container.querySelector('.knee-motion-guide')).toBeNull();
+    expect(container.textContent).toContain('연결 대기');
+  });
+
+  it('shows completed motion measurement without a KICK verdict', async () => {
+    const state = initialSnapshot(); state.neutral = completedSnapshot().neutral;
+    state.motionValidation = { status: 'COMPLETED', phase: 'COMPLETED', expectedMotion: null, remainingMs: 0, recordedFrames: 390 };
+    await receive(state);
+    const panel = container.querySelector('[aria-labelledby="mobile-motion-title"]')!;
+    expect(panel.textContent).toContain('Motion 검증 기록 완료'); expect(panel.textContent).toContain('390 frames');
+    expect(panel.textContent).toContain('Download Motion Validation JSON');
   });
 });

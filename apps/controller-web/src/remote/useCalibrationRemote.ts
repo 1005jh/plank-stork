@@ -33,6 +33,8 @@ export function useCalibrationRemote(socket: CalibrationSocket | null | undefine
     const reset = command('action:reset');
     const validationStart = command('validation:start');
     const validationReset = command('validation:reset');
+    const motionStart = command('motion:start');
+    const motionReset = command('motion:reset');
     socket.on('connect', publish);
     socket.on('calibration:sync:requested', publish);
     socket.on('calibration:neutral:start:requested', neutral);
@@ -40,6 +42,8 @@ export function useCalibrationRemote(socket: CalibrationSocket | null | undefine
     socket.on('calibration:action:reset:requested', reset);
     socket.on('validation:start:requested', validationStart);
     socket.on('validation:reset:requested', validationReset);
+    socket.on('motion:validation:start:requested', motionStart);
+    socket.on('motion:validation:reset:requested', motionReset);
     publish();
     // Never called from the inference callback; only compact debug snapshots cross the wire.
     const timer = window.setInterval(publish, REMOTE_PUBLISH_INTERVAL_MS);
@@ -52,6 +56,8 @@ export function useCalibrationRemote(socket: CalibrationSocket | null | undefine
       socket.off('calibration:action:reset:requested', reset);
       socket.off('validation:start:requested', validationStart);
       socket.off('validation:reset:requested', validationReset);
+      socket.off('motion:validation:start:requested', motionStart);
+      socket.off('motion:validation:reset:requested', motionReset);
     };
   }, [socket, remote, publish]);
 

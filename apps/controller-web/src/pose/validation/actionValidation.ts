@@ -5,6 +5,7 @@ import { CALIBRATION_FEATURES, type PoseFeatureView } from '../features/poseFeat
 import type { PoseFrame } from '../../recorder/poseRecorderTypes';
 import type { ValidationDataset, ValidationMetadata, ValidationSample, ValidationStage, ValidationStart, ValidationSummary, ValidationView } from './validationTypes';
 import { summarizeValidation } from './validationAnalyzer';
+import { snapshotLandmarks } from '../snapshotLandmarks';
 
 export const VALIDATION_SEQUENCE: readonly ValidationStage[] = [
   { phase: 'PREPARE', expectedAction: 'NONE', durationMs: 2000 },
@@ -86,12 +87,11 @@ export class ActionValidation {
     if (this.status !== 'ACTIVE') return;
     const stage = this.metadata.sequence[this.stageIndex];
     if (stage.phase !== 'RECORD_ACTION' && stage.phase !== 'RECORD_NEUTRAL') return;
-    const snapshot = (points: PoseFrame['landmarks']) => points.map(({ x, y, z, visibility }, index) => ({ index, x, y, z, visibility: visibility ?? null }));
     // Synchronous primitive copies, before the caller closes the MediaPipe result.
     this.samples.push({
       timestamp: frame.timestamp, videoTime: frame.videoTime, stageIndex: this.stageIndex, expectedAction: stage.expectedAction,
       poseValid: frame.landmarks.length > 0 && features.smoothed.validNow,
-      landmarks: snapshot(frame.landmarks), worldLandmarks: snapshot(frame.worldLandmarks),
+      landmarks: snapshotLandmarks(frame.landmarks), worldLandmarks: snapshotLandmarks(frame.worldLandmarks),
       rawFeatures: { ...features.raw }, calibratedFeatures: { ...features.calibrated },
       smoothedFeatures: { values: { ...features.smoothed.values }, validNow: features.smoothed.validNow, lastValidAt: features.smoothed.lastValidAt },
       classification: { ...actions.classification, actionDistances: { ...actions.classification.actionDistances } },

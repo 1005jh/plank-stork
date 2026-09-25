@@ -12,6 +12,9 @@ import { useCalibrationRemote, type CalibrationSocket } from '../remote/useCalib
 import { useActionValidation } from '../pose/validation/useActionValidation';
 import { validationReady } from '../pose/validation/actionValidation';
 import { PoseValidation } from './PoseValidation';
+import { useKneeMotionValidation } from '../pose/motion/useKneeMotionValidation';
+import { kneeMotionReady } from '../pose/motion/kneeMotionValidation';
+import { KneeMotionValidationPanel } from './KneeMotionValidation';
 
 const SIGNAL_FIELDS = ['x', 'y', 'z', 'visibility', 'worldX', 'worldY', 'worldZ'] as const;
 
@@ -20,18 +23,21 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
   const features = usePoseFeatures();
   const actions = usePoseActions(features.getCurrent);
   const validation = useActionValidation();
+  const motion = useKneeMotionValidation();
   const { videoRef, canvasRef, status, error, delegate, metrics, start, stop, getRecordingContext } = usePoseCamera({
     onFrame: (frame) => {
       recorder.recordFrame(frame);
       const currentFeatures = features.processFrame(frame.landmarks, frame.worldLandmarks, frame.timestamp);
       const currentActions = actions.processFrame(currentFeatures, frame.timestamp);
       validation.recordFrame(frame, currentFeatures, currentActions);
+      motion.recordFrame(frame, currentFeatures);
     },
     onCameraStopped: () => {
       recorder.interrupt();
       features.reset();
       actions.reset();
       validation.reset();
+      motion.reset();
       remote.publishStopped();
     },
   });
@@ -39,6 +45,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
   function calibrateNeutral() {
     if (status !== 'RUNNING' || getRecordingContext() === null) return;
     validation.reset();
+    motion.reset();
     actions.resetCalibration();
     features.calibrate(true);
   }
@@ -56,6 +63,14 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
       timeOrigin: performance.timeOrigin, createdAt: new Date().toISOString(),
     });
   }
+  function startMotion() {
+    return motion.start({
+      cameraRunning: status === 'RUNNING', poseDetected: getRecordingContext() !== null,
+      neutral: features.getCurrent(), delegate,
+      videoWidth: videoRef.current?.videoWidth || metrics.width, videoHeight: videoRef.current?.videoHeight || metrics.height,
+      previewMirrored: mirrored, createdAt: new Date().toISOString(), timeOrigin: performance.timeOrigin,
+    });
+  }
   const remote = useCalibrationRemote(socket, {
     getCamera: () => ({ cameraRunning: status === 'RUNNING', poseDetected: status === 'RUNNING' && getRecordingContext() !== null }),
     getNeutral: features.getCurrent,
@@ -66,6 +81,9 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
     getValidation: validation.getCurrent,
     startValidation,
     resetValidation: validation.resetValidation,
+    getMotion: motion.getCurrent,
+    startMotion,
+    resetMotion: motion.resetMotion,
   });
 
   return (
@@ -165,6 +183,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
       />
       <PoseActions actions={actions} onStart={startAction} onReset={resetAction} />
       <PoseValidation validation={validation} canStart={validationReady(status === 'RUNNING', features.view, actions.view)} onStart={startValidation} />
+      <KneeMotionValidationPanel motion={motion} canStart={kneeMotionReady(status === 'RUNNING', metrics.detected, features.view)} onStart={startMotion} />
     </section>
   );
 }

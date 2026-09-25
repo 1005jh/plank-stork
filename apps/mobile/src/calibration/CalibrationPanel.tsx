@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { CalibrationAction, CalibrationRemoteState } from '@plank-stork/protocol';
 import type { CalibrationCommand } from './useCalibrationRemote';
 import { ValidationPanel } from './ValidationPanel';
+import { KneeMotionPanel } from './KneeMotionPanel';
 
 const ACTIONS: CalibrationAction[] = ['TWIST_LEFT', 'TWIST_RIGHT', 'KNEE_LEFT', 'KNEE_RIGHT'];
 const LABELS: Record<CalibrationAction, string> = {
@@ -13,6 +14,7 @@ const ERRORS = {
   POSE_NOT_DETECTED: 'Pose not detected — 몸 전체가 카메라에 보이도록 이동하세요.',
   NEUTRAL_NOT_FROZEN: '기본 자세 보정을 먼저 완료하세요.',
   ACTION_NOT_READY: '네 동작 prototype READY 후 검증을 시작하세요.',
+  MOTION_NOT_READY: '카메라, Pose 및 Neutral FROZEN 상태를 확인하세요.',
 };
 const number = (value: number | null | undefined) => value?.toFixed(3) ?? '-';
 
@@ -34,6 +36,7 @@ export function CalibrationPanel({ state, connected, send }: {
       <button disabled>Neutral 보정 시작</button>
       <button disabled>동작 보정 시작</button>
       <button disabled>동작 검증 시작</button>
+      <button disabled>Knee Motion Validation 시작</button>
     </section>
   );
 
@@ -79,6 +82,7 @@ export function CalibrationPanel({ state, connected, send }: {
         {neutral.frozen && (!neutral.leftKneeReady || !neutral.rightKneeReady) && <p>Knee PARTIAL이어도 다음 보정을 진행할 수 있습니다.</p>}
       </section>
 
+      <KneeMotionPanel motion={state.motionValidation} canStart={controller.cameraRunning && controller.poseDetected && neutral.frozen} send={send} />
       <section className="calibration-card" aria-labelledby="action-title">
         <h3 id="action-title">2. 동작 보정</h3>
         <p>LEFT / RIGHT는 본인의 신체 기준입니다. Mirror와 관계없습니다.</p>

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { KneeMotionValidation } from '../pose/motion/kneeMotionValidation';
 import { ActionValidation } from '../pose/validation/actionValidation';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
@@ -40,6 +41,8 @@ describe('real NestJS Socket.IO relay', () => {
   const cases = [
     ['calibration:sync:request', 'calibration:sync:requested'],
     ['validation:start', 'validation:start:requested'],
+    ['motion:validation:start', 'motion:validation:start:requested'],
+    ['motion:validation:reset', 'motion:validation:reset:requested'],
     ['validation:reset', 'validation:reset:requested'],
     ['calibration:neutral:start', 'calibration:neutral:start:requested'],
     ['calibration:action:start', 'calibration:action:start:requested'],
@@ -59,6 +62,7 @@ describe('real NestJS Socket.IO relay', () => {
       getCamera: () => ({ cameraRunning: false, poseDetected: false }), getNeutral: () => neutral.getView(0),
       getActions: () => actions.getView(neutral.getView(0), 0), startNeutral() {}, startAction() {}, resetAction() {},
       getValidation: () => new ActionValidation().getView(0), startValidation: () => false, resetValidation() {},
+      getMotion: () => new KneeMotionValidation().getView(0), startMotion: () => false, resetMotion() {},
     })).snapshot();
     const received = clients.map((client) => new Promise((resolve) => client.once('calibration:state', resolve)));
     clients[0].emit('calibration:state:publish', snapshot);

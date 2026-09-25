@@ -7,6 +7,7 @@ import { PoseCamera } from '../components/PoseCamera';
 import { testSocket } from './testSocket';
 import { features, prototypes, RECORD_STARTS } from '../pose/actions/testFixtures';
 import { POSE_ACTIONS } from '../pose/actions/poseActionTypes';
+import { KneeMotionValidation } from '../pose/motion/kneeMotionValidation';
 
 vi.mock('../camera/usePoseCamera', () => ({ usePoseCamera: vi.fn() }));
 
@@ -155,7 +156,7 @@ describe('controller remote lifecycle', () => {
   });
 
   it('cleans remote listeners/timers under StrictMode and cannot handle requests after unmount', async () => {
-    const events = ['validation:start:requested', 'validation:reset:requested', 'connect', 'calibration:sync:requested', 'calibration:neutral:start:requested', 'calibration:action:start:requested', 'calibration:action:reset:requested'];
+    const events = ['motion:validation:start:requested', 'motion:validation:reset:requested', 'validation:start:requested', 'validation:reset:requested', 'connect', 'calibration:sync:requested', 'calibration:neutral:start:requested', 'calibration:action:start:requested', 'calibration:action:reset:requested'];
     for (const event of events) expect(socket.listenerCount(event)).toBe(1);
     await act(async () => root.unmount());
     await advance(1000);
@@ -165,5 +166,66 @@ describe('controller remote lifecycle', () => {
     socket.emit.mockClear();
     await request('calibration:neutral:start:requested');
     expect(socket.emit).not.toHaveBeenCalled();
+  });
+
+  it('runs motion validation without Action calibration, publishes compact stages and downloads only on the controller', async () => {
+    const read = vi.spyOn(KneeMotionValidation.prototype, 'recordFrame');
+    await freezeNeutral();
+    expect(snapshot().actionCalibration.status).toBe('IDLE');
+    await request('motion:validation:start:requested', 'motion');
+    expect(snapshot().motionValidation).toMatchObject({ status: 'ACTIVE', phase: 'PREPARE', remainingMs: 2000 });
+    await advance(100);
+    await request('motion:validation:start:requested', 'motion-duplicate');
+    expect(snapshot().motionValidation.remainingMs).toBe(1900);
+    const mirror = container.querySelector<HTMLButtonElement>('button[aria-pressed]')!;
+    await act(async () => mirror.click());
+    for (let elapsed = 150; elapsed <= 15000; elapsed += 50) { await advance(50); inference(); }
+    await request('calibration:sync:requested');
+    expect(snapshot().motionValidation).toEqual({ status: 'COMPLETED', phase: 'COMPLETED', expectedMotion: null, remainingMs: 0, recordedFrames: 260 });
+    expect(snapshot().actionCalibration.status).toBe('IDLE');
+    expect(JSON.stringify(snapshot())).not.toMatch(/landmarks|samples|neutralCorridor|crossingExperiments|velocity|features/);
+    const engine = read.mock.contexts.at(-1)!;
+    if (!(engine instanceof KneeMotionValidation)) throw new Error('Missing motion engine');
+    expect(JSON.parse(engine.exportJson())).toMatchObject({ previewMirrored: true, status: 'COMPLETED' });
+    await advance(250);
+    expect(container.querySelector('[aria-label="Motion summary"]')).not.toBeNull();
+    const createUrl = vi.fn(() => 'blob:motion-test'), revokeUrl = vi.fn();
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = createUrl; static revokeObjectURL = revokeUrl; });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const download = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Download Motion Validation JSON')!;
+    await act(async () => download.click());
+    expect(createUrl).toHaveBeenCalledWith(expect.any(Blob)); expect(click).toHaveBeenCalledOnce();
+    expect((click.mock.contexts[0] as HTMLAnchorElement).download).toMatch(/^plank-stork-knee-motion-.*\.json$/);
+    await act(async () => root.unmount());
+    await advance(1000);
+    expect(revokeUrl).toHaveBeenCalledWith('blob:motion-test');
+    expect(engine.getView(now)).toMatchObject({ status: 'IDLE', recordedFrames: 0 });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('rejects motion before Neutral/pose readiness and resets on command, Neutral recalibration and Camera Stop', async () => {
+    await request('motion:validation:start:requested', 'before-neutral');
+    expect(snapshot().lastCommandError).toBe('NEUTRAL_NOT_FROZEN');
+    await freezeNeutral();
+    vi.mocked(camera.getRecordingContext).mockReturnValue(null);
+    await request('motion:validation:start:requested', 'no-pose');
+    expect(snapshot().lastCommandError).toBe('POSE_NOT_DETECTED');
+    vi.mocked(camera.getRecordingContext).mockReturnValue({ delegate: 'CPU', videoWidth: 1280, videoHeight: 720 });
+    await request('motion:validation:start:requested', 'first');
+    await advance(2000); inference();
+    await request('calibration:sync:requested');
+    expect(snapshot().motionValidation.recordedFrames).toBe(1);
+    await request('calibration:action:reset:requested');
+    expect(snapshot().motionValidation.status).toBe('ACTIVE');
+    await request('motion:validation:reset:requested');
+    expect(snapshot().motionValidation).toMatchObject({ status: 'IDLE', recordedFrames: 0 });
+    await request('motion:validation:start:requested', 'second');
+    await request('calibration:neutral:start:requested', 'recalibrate-for-motion');
+    expect(snapshot().motionValidation).toMatchObject({ status: 'IDLE', recordedFrames: 0 });
+    for (let index = 0; index < 20; index++) { await advance(50); inference(); }
+    await request('motion:validation:start:requested', 'third');
+    expect(snapshot().motionValidation.status).toBe('ACTIVE');
+    await act(async () => camera.stop());
+    expect(snapshot().motionValidation).toMatchObject({ status: 'IDLE', recordedFrames: 0 });
   });
 });

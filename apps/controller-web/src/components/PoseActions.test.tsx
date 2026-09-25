@@ -162,7 +162,7 @@ describe('action panel and live camera integration', () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     await act(async () => button('Download Validation JSON').click());
     expect(createUrl).toHaveBeenCalledWith(expect.any(Blob)); expect(click).toHaveBeenCalledOnce();
-    expect(click.mock.contexts[0].download).toMatch(/^plank-stork-validation-.*\.json$/);
+    expect((click.mock.contexts[0] as HTMLAnchorElement).download).toMatch(/^plank-stork-validation-.*\.json$/);
     expect(document.querySelector('a[download]')).toBeNull();
     await act(async () => root.unmount());
     expect(revokeUrl).toHaveBeenCalledWith('blob:validation-test');

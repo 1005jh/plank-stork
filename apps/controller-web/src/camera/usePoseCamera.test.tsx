@@ -8,6 +8,8 @@ import { PoseDatasetRecorder } from '../recorder/poseDatasetRecorder';
 import { ActionValidation } from '../pose/validation/actionValidation';
 import { validationContext } from '../pose/validation/testFixtures';
 import type { PoseFrame } from '../recorder/poseRecorderTypes';
+import { KneeMotionValidation } from '../pose/motion/kneeMotionValidation';
+import { motionContext } from '../pose/motion/testFixtures';
 
 const drawing = vi.hoisted(() => ({
   drawConnectors: vi.fn(), drawLandmarks: vi.fn(), close: vi.fn(),
@@ -202,6 +204,22 @@ describe('Pose camera lifecycle and measurement', () => {
     expect(sample.worldLandmarks[25].y).toBe(-2.5);
     expect(sample.timestamp).toBe(4500);
     expect(camera.status).toBe('RUNNING');
+  });
+
+  it('records MOVE motion before result.close and keeps pose-loss inference frames', async () => {
+    const context = motionContext(), motion = new KneeMotionValidation(); motion.start(context, 0);
+    onValidationFrame = (frame) => motion.recordFrame(frame, context.neutral);
+    const close = vi.fn(() => { if (result.landmarks[0]) result.landmarks[0][25].x = 999; }); result.close = close;
+    await act(async () => camera.start());
+    await frame(3000, 3);
+    result = { ...result, landmarks: [], worldLandmarks: [] };
+    await frame(3050, 3.05);
+    expect(close).toHaveBeenCalledTimes(2);
+    motion.getView(15000);
+    const samples = JSON.parse(motion.exportJson()).samples;
+    expect(samples[0]).toMatchObject({ phase: 'MOVE', expectedMotion: 'TWIST_LEFT' });
+    expect(samples[0].landmarks[25].x).toBe(0.5);
+    expect(samples[1]).toMatchObject({ poseValid: false, landmarks: [], worldLandmarks: [] });
   });
 
   it('stops every resource and ignores stale scheduled frames, then starts again', async () => {
