@@ -1,3 +1,4 @@
+import type { KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
 import type { CalibrationControllerStatus, CalibrationRemoteState, CalibrationRequest } from '@plank-stork/protocol';
 import type { PoseFeatureView } from '../pose/features/poseFeatureTypes';
 import { POSE_ACTIONS, type PoseActionView } from '../pose/actions/poseActionTypes';
@@ -17,8 +18,11 @@ export interface CalibrationPorts {
   getMotion: () => MotionView;
   startMotion: () => boolean;
   resetMotion: () => void;
+  getKick: () => ReturnType<KneeKickAnalysis['getView']>;
+  startDetectorTest: () => boolean;
+  resetDetectorTest: () => void;
 }
-export type RemoteCommand = 'neutral:start' | 'action:start' | 'action:reset' | 'validation:start' | 'validation:reset' | 'motion:start' | 'motion:reset';
+export type RemoteCommand = 'neutral:start' | 'action:start' | 'action:reset' | 'validation:start' | 'validation:reset' | 'motion:start' | 'motion:reset' | 'kick:start' | 'kick:reset';
 
 /** Adapts existing local engines to wire types; owns no calibration timing or samples. */
 export class CalibrationRemoteController {
@@ -40,6 +44,8 @@ export class CalibrationRemoteController {
     this.lastCommandError = null;
     if (command === 'action:reset') { ports.resetAction(); return; }
     if (command === 'validation:reset') { ports.resetValidation(); return; }
+    if (command === 'kick:reset') { ports.resetDetectorTest(); return; }
+    if (command === 'kick:start' && ports.getKick().test.status === 'ACTIVE') return;
     if (command === 'motion:reset') { ports.resetMotion(); return; }
     if (command === 'motion:start' && ports.getMotion().status === 'ACTIVE') return;
     if (command === 'validation:start' && ports.getValidation().status === 'ACTIVE') return;
@@ -53,6 +59,9 @@ export class CalibrationRemoteController {
       ports.startNeutral();
     } else if (neutral.collectionState !== 'FROZEN') {
       this.lastCommandError = 'NEUTRAL_NOT_FROZEN';
+    } else if (command === 'kick:start') {
+      if (!camera.poseDetected) this.lastCommandError = 'POSE_NOT_DETECTED';
+      else if (!ports.startDetectorTest()) this.lastCommandError = 'DETECTOR_NOT_READY';
     } else if (command === 'motion:start') {
       if (!camera.poseDetected) this.lastCommandError = 'POSE_NOT_DETECTED';
       else if (!ports.startMotion()) this.lastCommandError = 'MOTION_NOT_READY';
@@ -72,6 +81,7 @@ export class CalibrationRemoteController {
     const completed = calibration.status === 'READY' || calibration.status === 'PARTIAL';
     const validation = ports.getValidation();
     const motion = ports.getMotion();
+    const { detector, test } = ports.getKick();
     return {
       timestamp: Date.now(),
       controller: controllerOverride ?? ports.getCamera(),
@@ -104,6 +114,9 @@ export class CalibrationRemoteController {
         status: motion.status, phase: motion.phase, expectedMotion: motion.expectedMotion,
         remainingMs: motion.remainingMs, recordedFrames: motion.recordedFrames,
       },
+      kneeKick: { ready: detector.ready, validNow: detector.validNow, state: detector.state, currentEvent: detector.currentEvent,
+        lastEvent: detector.lastEvent ? { ...detector.lastEvent } : null, counts: { ...detector.counts } },
+      detectorTest: { status: test.status, expected: test.expected, remainingMs: test.remainingMs, eventCount: test.eventCount, summary: test.summary },
       lastCommandError: this.lastCommandError,
     };
   }

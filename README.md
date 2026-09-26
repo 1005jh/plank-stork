@@ -501,6 +501,82 @@ Neutral 재보정, Camera Stop/해제/추론 오류, unmount는 Motion dataset/s
 6. **Download Motion Validation JSON**을 누릅니다. 같은 조건에서 여러 번 측정하고, pose/visibility와 실제 동작 수행을 함께 확인하며 세션별 corridor·속도·반복 변화를 비교합니다. 현재 앱은 이 통계로 KICK을 판정하지 않습니다.
 7. 짧은/긴 pose loss, Mirror ON/OFF, Reset, Neutral 재보정, Camera Stop 및 폰 연결 해제도 확인합니다. 접근이 막히면 기존 STEP 1의 사설 네트워크 포트 허용 안내를 따르며 방화벽 전체를 끄지 않습니다.
 
+## STEP 4E: Knee Kick Event Detector v1
+
+STEP 4D의 raw image-space signal로 실시간 Knee Kick 이벤트를 측정합니다. 기존 Pose classifier v1, Action prototype, STEP 3B/4A/4B/4C/4D의 계산과 상수는 변경하지 않습니다. 최종 Twist detector, ML, game input 연결은 없습니다. **Action Calibration과 STEP 4D recording은 필요하지 않습니다.**
+
+**Neutral baseline**
+
+기존 Neutral 보정 중 HIP/FINISHING 구간의 inference frame을 별도 bounded buffer에 수집하고, **FROZEN 시 한 번 고정**합니다. 최근 1초의 각 knee 유효 sample이 20개 이상일 때 아래 baseline을 만듭니다. FROZEN을 만든 frame은 포함하지만 grace deadline 이후 frame은 포함하지 않습니다. Visibility 기준은 hip 양쪽 ≥ 0.7, 해당 knee ≥ 0.5이며 다른 knee의 결측은 그 knee 표본 수집을 막지 않습니다.
+
+- `neutralLeftMedian` / `neutralRightMedian`: `knee.x − hipCenterX`의 각각 median.
+- `bodyScale`: `(leftKneeHipDistance median + rightKneeHipDistance median) / 2`. 거리는 STEP 4D와 동일한 normalized image X/Y 2D 거리입니다.
+- 양쪽 표본 부족, 유효하지 않은 scale 또는 scale < 0.01이면 **NOT_READY**입니다. FROZEN 후 움직임을 추가 수집하지 않습니다. 카메라 배치와 visibility를 확인한 뒤 Neutral을 다시 보정하세요. Controller에 각 knee 수집 수를 표시합니다.
+- Detector baseline은 STEP 4A의 same-side delta baseline과 별도이며, median 간 차이를 조합해서 대체하지 않습니다. 기존 Neutral calibration의 완료 기준이나 grace period는 변경하지 않습니다.
+
+**실험 detector와 debug**
+
+`src/pose/kick/kneeKickDetector.ts`의 순수 상태 머신은 각 inference frame에서 `normalizedLeft/Right = (currentCenterOffset − neutralMedian) / bodyScale`을 계산합니다. 현재 usable한 knee 중 절댓값이 큰 **signed** 값을 dominant로 사용합니다. 정확한 동률은 left landmark 값을 선택합니다. 음수는 KNEE_LEFT, 양수는 KNEE_RIGHT이며 landmark 이름이나 Mirror로 방향을 바꾸지 않습니다.
+
+| 상수 | 초기값 | 용도 |
+| --- | --- | --- |
+| KICK_ENTER_DISPLACEMENT | 0.28 | ARMED에서 절댓값이 이 값 이상이면 1회 발생 |
+| KICK_EXIT_DISPLACEMENT | 0.15 | 양쪽 모두 이 값 **미만**이어야 복귀 관찰 |
+| RETURN_DWELL_MS | 180ms | 양쪽의 연속 복귀 확인 후 re-arm |
+| KICK_HIP_VISIBILITY / KICK_KNEE_VISIBILITY | 0.7 / 0.5 | 현재 landmark 사용 가능 여부 |
+| MIN_KICK_BODY_SCALE | 0.01 | 매우 작은/퇴화된 scale 제외 |
+| KICK_STALE_MS | 400ms | 입력 단절과 복귀 dwell 연속성 확인 |
+
+ENTER/EXIT는 **3회 실측에서 관찰된 Twist peak < 약 0.23, Kick peak > 약 0.34 간격을 바탕으로 한 experimental constant**입니다. 제품의 확정 threshold가 아니며 카메라/사용자/세션을 바꾼 추가 실측이 필요합니다. 나머지 품질·시간 상수도 코드에서 분리되어 있습니다.
+
+`NOT_READY → ARMED → TRIGGERED_LEFT/RIGHT → WAIT_RETURN → ARMED`로 진행합니다. TRIGGERED는 event를 만드는 순간의 전이이며 같은 호출에서 즉시 WAIT_RETURN으로 잠급니다. 바깥 자세를 유지하거나 바로 반대쪽으로 이동해도 추가 event는 없습니다. **양쪽이 usable하고 EXIT 안인 상태를 180ms 유지**해야 다시 ARMED가 됩니다. 한쪽 결측, pose stale, 바깥 값, 400ms 이상 frame gap은 복귀 dwell을 초기화하지만 WAIT_RETURN 잠금과 기존 count는 유지합니다.
+
+- Runtime은 현재 HIP pose가 유효하고 hip visibility가 충족된 경우, 각 knee의 finite 좌표와 visibility를 독립 검사합니다. 한 knee만 usable해도 trigger할 수 있습니다. 양쪽 unusable/stale이면 새 trigger를 금지합니다.
+- STEP 4D의 `relativeKneeVelocity / bodyScale`도 표시합니다. 단위는 초당 normalized displacement이며, 이전/현재 knee가 usable하지 않거나 dt가 잘못됐거나 gap이 길면 null입니다. **Velocity는 trigger 조건이 아닙니다.** 추가 smoothing도 적용하지 않습니다.
+- READY는 baseline 준비 여부, `validNow`는 현재 입력 사용 가능 여부입니다. Baseline READY여도 pose loss에서는 displacement/velocity를 `-`로 표시합니다.
+- 큰 `KNEE LEFT / KNEE RIGHT / NONE` 표시는 이벤트를 놓치지 않도록 최대 800ms 유지하는 시각 cue입니다. 지속적인 control 값이 아닙니다. 같은 ID를 표시하는 동안 count는 증가하지 않습니다. Pose loss에서는 current cue를 숨기고 last event와 count는 과거 기록으로 유지합니다.
+
+**Guided Detector Test — 22초**
+
+폰 또는 Controller의 Start 버튼으로 다음 sequence를 실행합니다. Camera RUNNING, Neutral FROZEN, detector READY와 현재 usable pose가 필요합니다. 테스트를 시작해도 detector baseline/count/WAIT_RETURN 잠금을 초기화하지 않습니다. 첫 Neutral에서 정상 복귀 후 시작할 수 있습니다.
+
+```text
+NEUTRAL 2s
+TWIST_LEFT 3s → NEUTRAL 2s
+TWIST_RIGHT 3s → NEUTRAL 2s
+KNEE_LEFT 3s → NEUTRAL 2s
+KNEE_RIGHT 3s → NEUTRAL 2s
+```
+
+동작 안내가 나오면 **그 구간에서 한 번 이동해 수행하고 유지**합니다. Neutral 안내 때 돌아옵니다. 이동 중 event도 해당 expected stage의 관찰에 포함합니다. 시작 시각 포함/종료 시각 제외이며, event timestamp로 stage를 정합니다. 안내에 앞서 움직이거나 늦게 수행하면 다른 stage의 기록으로 남으므로 실제 수행과 안내의 일치를 확인해야 합니다.
+
+Controller는 각 stage의 event ID/방향, 잘못된 event 수, 첫 event 이후 추가 event 수를 표시합니다. 완료 summary는 다음과 같습니다.
+
+- TWIST_LEFT/RIGHT `falseKickCount`: 그 stage에서 나온 모든 kick event 수.
+- NEUTRAL `falseKickCount`: 다섯 Neutral stage에서 나온 모든 kick 수. 복귀 중 오검출도 조용히 제외하지 않습니다.
+- KNEE_LEFT/RIGHT `detected`: 해당 stage에서 한 번 이상 event가 있었는지. false이면 관찰된 miss입니다.
+- `directionCorrect`: 발생한 모든 event가 expected 방향과 같을 때 true, 잘못된 방향이 있으면 false, event가 없으면 null입니다. `wrongEventCount`도 별도로 제공합니다.
+- `duplicateCount`: 해당 stage의 첫 event를 초과하는 개수입니다. 같은 event ID가 재전달돼도 중복 기록하지 않습니다.
+
+자동 PASS/FAIL은 없습니다. Test Reset은 test의 event log와 summary만 비우며 detector의 re-arm 상태나 누적 count는 유지합니다. 다시 시작하면 이전 test 결과를 교체합니다.
+
+**Remote / lifecycle**
+
+폰의 기본 자세 보정 다음에 Knee Kick Detector와 Guided Detector Test를 표시합니다. Controller가 단계를 계산하며 Phone은 큰 안내·남은 시간만 표시합니다. 별도의 폰 countdown은 없습니다. `kick:test:start/reset`을 기존 requestId 기반 relay로 요청합니다.
+
+기존 250ms `calibration:state`에는 `kneeKick`(ready, validNow, state, currentEvent, lastEvent ID/방향/시간, 좌우 count)와 `detectorTest`(status, expected, remainingMs, eventCount, 완료 summary)만 추가합니다. Raw landmarks, per-frame 수치, baseline, 전체 event log는 Socket으로 보내지 않습니다. 이는 debug snapshot이며 game event가 아닙니다. 기존 연결 만료/재접속 정책을 그대로 사용합니다.
+
+Neutral 재보정, Camera Stop/카메라 해제/추론 실패, unmount 시 detector baseline·count·velocity·복귀 pending·test를 모두 초기화합니다. Mirror는 표시만 바꾸며 detector/test를 초기화하거나 좌표를 변환하지 않습니다. Action calibration/reset 및 STEP 4D reset은 detector baseline에 영향을 주지 않습니다. 서로 다른 guided sequence는 동시에 실행하지 마세요.
+
+**실제 테스트 방법**
+
+1. `pnpm dev` 후 노트북 `http://localhost:5173`에서 Start Camera를 누릅니다. 발쪽에서 머리 방향을 보는 기존 배치를 유지합니다.
+2. 폰에서 `http://<LAPTOP_LAN_IP>:3000/health` 확인 후 `:5174`에 접속합니다. 기본 플랭크 자세에서 Neutral 보정을 시작합니다.
+3. Neutral FROZEN과 **Knee Kick Detector READY**를 확인합니다. NOT_READY면 노트북의 유효 표본 수와 scale, visibility를 확인하고 다시 보정합니다. Action Calibration은 생략합니다.
+4. 폰의 **Guided Detector Test 시작**을 누르고 22초 안내에 따라 각 동작을 한 번 수행합니다. LEFT/RIGHT KICK, count, 완료 후 falseKickCount/detected/directionCorrect/duplicateCount를 확인합니다. 노트북에서 stage별 event와 displacement/velocity도 확인할 수 있습니다.
+5. 자유 테스트로 한쪽 니킥을 계속 유지할 때 count가 1회만 증가하는지, 양쪽을 충분히 Neutral로 복귀한 뒤 반대쪽 이벤트가 발생하는지 확인합니다. 짧은 가림 후에도 바깥 자세에서 재발생하면 안 됩니다.
+6. Mirror 토글, pose loss, 폰 재접속, Neutral 재보정, Camera Stop을 확인합니다. 다른 카메라 거리/세션에서 반복하고 오검출·누락 여부를 비교하세요. 이번 단계는 실제 정확도를 자동 보증하거나 최종 판정값을 확정하지 않습니다.
+
 ## 검증 및 빌드
 
 ```sh
@@ -510,8 +586,8 @@ pnpm --filter @plank-stork/controller-web test
 curl http://localhost:3000/health
 ```
 
-자동 테스트는 초기화/fallback, 프레임 중복 방지, 지표/좌표 갱신, Mirror 독립성, raw snapshot·STABILIZE·sequence·label별 count/dropped·reset·JSON, 음성 실패, feature 수식·null 처리·중앙값 calibration·HIP readiness·독립 knee 완성·grace 경계/고정/재보정·delta·시간 기반 smoothing·pose loss 즉시 무효화/복귀·visibility 경계값, result/camera/unmount lifecycle을 검증합니다. 추가로 Action Validation의 21.5초 경계·수집 구간·primitive snapshot·invalid frame·summary/feature drift·JSON·remote/reset/lifecycle과 Action 보정 sequence·중앙값·필수 HIP/선택 knee, 정규화 거리·NONE·confidence·hysteresis·enter/release·pose stale·Mirror·재보정/Stop/unmount를 검증합니다. STEP 4B-2는 실제 NestJS 서버를 임시 loopback 포트에서 실행해 5개 relay 이벤트와 기존 LEFT/RIGHT, health를 검증하고, Controller 요청/중복/reset/주기/cleanup 및 Mobile 화면/sync/stale/연결 만료를 기존 controller-web Vitest 환경에서 함께 검증합니다. Mobile/Server 전용 테스트 stack이나 별도 test script는 추가하지 않았습니다. STEP 4D는 Neutral-only 시작, 15초 stage 경계·MOVE/HOLD/RETURN 기록, 후보 geometry/projection·derivative, corridor/crossing/dominant-knee 수식, full snapshot·pose loss·remote·다운로드·reset/cleanup도 검증합니다. 실제 웹캠의 추적 품질과 분류 품질은 위 STEP 2·3A·3B·4A·4B 순서로 별도 확인합니다.
+자동 테스트는 초기화/fallback, 프레임 중복 방지, 지표/좌표 갱신, Mirror 독립성, raw snapshot·STABILIZE·sequence·label별 count/dropped·reset·JSON, 음성 실패, feature 수식·null 처리·중앙값 calibration·HIP readiness·독립 knee 완성·grace 경계/고정/재보정·delta·시간 기반 smoothing·pose loss 즉시 무효화/복귀·visibility 경계값, result/camera/unmount lifecycle을 검증합니다. 추가로 Action Validation의 21.5초 경계·수집 구간·primitive snapshot·invalid frame·summary/feature drift·JSON·remote/reset/lifecycle과 Action 보정 sequence·중앙값·필수 HIP/선택 knee, 정규화 거리·NONE·confidence·hysteresis·enter/release·pose stale·Mirror·재보정/Stop/unmount를 검증합니다. STEP 4B-2는 실제 NestJS 서버를 임시 loopback 포트에서 실행해 5개 relay 이벤트와 기존 LEFT/RIGHT, health를 검증하고, Controller 요청/중복/reset/주기/cleanup 및 Mobile 화면/sync/stale/연결 만료를 기존 controller-web Vitest 환경에서 함께 검증합니다. Mobile/Server 전용 테스트 stack이나 별도 test script는 추가하지 않았습니다. STEP 4D는 Neutral-only 시작, 15초 stage 경계·MOVE/HOLD/RETURN 기록, 후보 geometry/projection·derivative, corridor/crossing/dominant-knee 수식, full snapshot·pose loss·remote·다운로드·reset/cleanup도 검증합니다. STEP 4E는 baseline/freeze, signed crossing·body normalization, one-shot/re-arm·dwell, visibility/stale·velocity, Guided Test summary, remote/phone·Mirror·reset/unmount도 검증합니다. 실제 웹캠의 추적·분류·kick event 정확도는 위 실측 가이드로 별도 확인합니다.
 
 빌드 결과는 각 패키지의 `dist/`에 생성됩니다. 빌드한 서버는 `pnpm --filter @plank-stork/server start`로 실행합니다. 웹 빌드는 `pnpm --filter @plank-stork/controller-web preview` 또는 `pnpm --filter @plank-stork/mobile preview`로 확인할 수 있습니다.
 
-`packages/protocol`에는 STEP 1 Socket 테스트 타입과 STEP 4B-2/4C/4D calibration·validation 요청/debug snapshot wire 타입이 있습니다. Raw Pose나 classifier 내부 계산 타입은 포함하지 않습니다. Web Worker, 사용자 독립 최종 threshold, cooldown, control strength, Pose → game control 변환, Room/Session, 로그인/인증, DB, Redis, Phaser/게임 로직, Capacitor/모바일 네이티브 기능, WebRTC, custom ML model은 구현하지 않습니다.
+`packages/protocol`에는 STEP 1 Socket 테스트 타입과 STEP 4B-2/4C/4D/4E calibration·validation·detector debug 요청/debug snapshot wire 타입이 있습니다. Raw Pose나 classifier 내부 계산 타입은 포함하지 않습니다. Web Worker, 사용자 독립 최종 threshold, cooldown, control strength, Pose → game control 변환, Room/Session, 로그인/인증, DB, Redis, Phaser/게임 로직, Capacitor/모바일 네이티브 기능, WebRTC, custom ML model은 구현하지 않습니다.

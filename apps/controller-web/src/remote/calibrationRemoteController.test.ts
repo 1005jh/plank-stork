@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
 import { KneeMotionValidation } from '../pose/motion/kneeMotionValidation';
 import { ActionValidation } from '../pose/validation/actionValidation';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -49,6 +50,7 @@ describe('controller calibration remote adapter with real engines', () => {
       startNeutral, startAction, resetAction: () => actions.reset(),
       getValidation: () => new ActionValidation().getView(now), startValidation: () => false, resetValidation() {},
       getMotion: () => new KneeMotionValidation().getView(0), startMotion: () => false, resetMotion() {},
+      getKick: () => new KneeKickAnalysis().getView(0), startDetectorTest: () => false, resetDetectorTest() {},
     }));
   });
 

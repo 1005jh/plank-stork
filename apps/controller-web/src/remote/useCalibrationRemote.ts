@@ -35,6 +35,10 @@ export function useCalibrationRemote(socket: CalibrationSocket | null | undefine
     const validationReset = command('validation:reset');
     const motionStart = command('motion:start');
     const motionReset = command('motion:reset');
+    const kickStart = command('kick:start');
+    const kickReset = command('kick:reset');
+    socket.on('kick:test:start:requested', kickStart);
+    socket.on('kick:test:reset:requested', kickReset);
     socket.on('connect', publish);
     socket.on('calibration:sync:requested', publish);
     socket.on('calibration:neutral:start:requested', neutral);
@@ -49,6 +53,8 @@ export function useCalibrationRemote(socket: CalibrationSocket | null | undefine
     const timer = window.setInterval(publish, REMOTE_PUBLISH_INTERVAL_MS);
     return () => {
       window.clearInterval(timer);
+      socket.off('kick:test:start:requested', kickStart);
+      socket.off('kick:test:reset:requested', kickReset);
       socket.off('connect', publish);
       socket.off('calibration:sync:requested', publish);
       socket.off('calibration:neutral:start:requested', neutral);

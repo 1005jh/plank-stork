@@ -1,3 +1,4 @@
+import { KneeKickPanel } from './KneeKickPanel';
 import { useEffect, useRef } from 'react';
 import type { CalibrationAction, CalibrationRemoteState } from '@plank-stork/protocol';
 import type { CalibrationCommand } from './useCalibrationRemote';
@@ -10,6 +11,7 @@ const LABELS: Record<CalibrationAction, string> = {
   KNEE_LEFT: '← 왼쪽 니킥', KNEE_RIGHT: '오른쪽 니킥 →',
 };
 const ERRORS = {
+  DETECTOR_NOT_READY: '양쪽 knee가 보이는 Neutral을 보정하고 Detector READY와 현재 Pose를 확인하세요.',
   CAMERA_NOT_READY: '카메라 준비 필요 — 노트북에서 Start Camera를 눌러주세요.',
   POSE_NOT_DETECTED: 'Pose not detected — 몸 전체가 카메라에 보이도록 이동하세요.',
   NEUTRAL_NOT_FROZEN: '기본 자세 보정을 먼저 완료하세요.',
@@ -37,6 +39,7 @@ export function CalibrationPanel({ state, connected, send }: {
       <button disabled>동작 보정 시작</button>
       <button disabled>동작 검증 시작</button>
       <button disabled>Knee Motion Validation 시작</button>
+      <button disabled>Guided Detector Test 시작</button>
     </section>
   );
 
@@ -82,6 +85,7 @@ export function CalibrationPanel({ state, connected, send }: {
         {neutral.frozen && (!neutral.leftKneeReady || !neutral.rightKneeReady) && <p>Knee PARTIAL이어도 다음 보정을 진행할 수 있습니다.</p>}
       </section>
 
+      <KneeKickPanel detector={state.kneeKick} test={state.detectorTest} canStart={controller.cameraRunning && controller.poseDetected && neutral.frozen && state.kneeKick.ready && state.kneeKick.validNow} send={send} />
       <KneeMotionPanel motion={state.motionValidation} canStart={controller.cameraRunning && controller.poseDetected && neutral.frozen} send={send} />
       <section className="calibration-card" aria-labelledby="action-title">
         <h3 id="action-title">2. 동작 보정</h3>

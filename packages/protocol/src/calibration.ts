@@ -1,3 +1,4 @@
+import type { RemoteKneeKickState, RemoteDetectorTestState } from './kneeKick.js';
 /** Wire snapshots only. Pose landmarks and classifier implementation stay in controller-web. */
 export type CalibrationAction = 'TWIST_LEFT' | 'TWIST_RIGHT' | 'KNEE_LEFT' | 'KNEE_RIGHT';
 export type RemoteActionState = 'NONE' | CalibrationAction;
@@ -48,7 +49,9 @@ export interface CalibrationRemoteState {
   classification: RemoteClassificationState | null;
   validation: RemoteValidationState;
   motionValidation: RemoteMotionValidationState;
-  lastCommandError: 'CAMERA_NOT_READY' | 'POSE_NOT_DETECTED' | 'NEUTRAL_NOT_FROZEN' | 'ACTION_NOT_READY' | 'MOTION_NOT_READY' | null;
+  kneeKick: RemoteKneeKickState;
+  detectorTest: RemoteDetectorTestState;
+  lastCommandError: 'CAMERA_NOT_READY' | 'POSE_NOT_DETECTED' | 'NEUTRAL_NOT_FROZEN' | 'ACTION_NOT_READY' | 'MOTION_NOT_READY' | 'DETECTOR_NOT_READY' | null;
 }
 export interface RemoteMotionValidationState {
   status: 'IDLE' | 'ACTIVE' | 'COMPLETED';

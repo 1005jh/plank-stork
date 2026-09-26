@@ -17,6 +17,8 @@ function initialSnapshot(): CalibrationRemoteState {
       readiness: { TWIST_LEFT: false, TWIST_RIGHT: false, KNEE_LEFT: false, KNEE_RIGHT: false } },
     classification: null, lastCommandError: null,
     validation: { status: 'IDLE', phase: 'IDLE', expectedAction: null, remainingMs: 0, recordedFrames: 0 },
+    kneeKick: { ready: false, validNow: false, state: 'NOT_READY', currentEvent: 'NONE', lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } },
+    detectorTest: { status: 'IDLE', expected: null, remainingMs: 0, eventCount: 0, summary: null },
     motionValidation: { status: 'IDLE', phase: 'IDLE', expectedMotion: null, remainingMs: 0, recordedFrames: 0 },
   };
 }
@@ -257,4 +259,32 @@ describe('phone calibration remote UI and connection lifecycle', () => {
     expect(panel.textContent).toContain('Motion 검증 기록 완료'); expect(panel.textContent).toContain('390 frames');
     expect(panel.textContent).toContain('Download Motion Validation JSON');
   });
+
+  it('shows compact kick events and guides a test without any Action prototypes', async () => {
+    const state = initialSnapshot();
+    await receive(state);
+    expect(button('Guided Detector Test 시작').disabled).toBe(true);
+    state.neutral = { ...state.neutral, frozen: true, collectionState: 'FROZEN' };
+    state.kneeKick = { ...state.kneeKick, ready: true, validNow: true, state: 'ARMED' };
+    await receive({ ...state });
+    expect(button('Guided Detector Test 시작').disabled).toBe(false);
+    await act(async () => button('Guided Detector Test 시작').click());
+    expect(socket.emit).toHaveBeenLastCalledWith('kick:test:start', expect.any(Object));
+    state.kneeKick = { ...state.kneeKick, currentEvent: 'KNEE_LEFT', state: 'WAIT_RETURN', lastEvent: { id: 1, direction: 'KNEE_LEFT', timestamp: 123 }, counts: { KNEE_LEFT: 1, KNEE_RIGHT: 0 } };
+    state.detectorTest = { status: 'ACTIVE', expected: 'KNEE_LEFT', remainingMs: 1800, eventCount: 1, summary: null };
+    await receive({ ...state });
+    const panel = () => container.querySelector('[aria-labelledby="mobile-kick-title"]')!;
+    expect(panel().textContent).toContain('LEFT KICK');
+    expect(panel().textContent).toContain('LEFT: 1 · RIGHT: 0');
+    expect(panel().querySelector('.major-instruction')!.textContent).toBe('LEFT KICK');
+    expect(panel().querySelector('.action-guide')!.textContent).toContain('왼쪽 니킥');
+    await advance(500);
+    expect(panel().querySelector('.countdown')!.textContent).toBe('1.8초');
+    await act(async () => button('Detector Test 초기화').click());
+    expect(socket.emit).toHaveBeenLastCalledWith('kick:test:reset', expect.any(Object));
+    await advance(1000);
+    expect(container.textContent).toContain('연결 대기');
+    expect(container.textContent).not.toContain('LEFT KICK');
+  });
+
 });

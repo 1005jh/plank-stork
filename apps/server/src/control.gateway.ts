@@ -86,4 +86,15 @@ export class ControlGateway implements OnGatewayConnection, OnGatewayDisconnect 
   handleMotionReset(@MessageBody() request: CalibrationRequest): void {
     this.server.emit('motion:validation:reset:requested', request);
   }
+
+  @SubscribeMessage('kick:test:start')
+  handleKickTestStart(@MessageBody() request: CalibrationRequest): void {
+    this.server.emit('kick:test:start:requested', request);
+  }
+
+  @SubscribeMessage('kick:test:reset')
+  handleKickTestReset(@MessageBody() request: CalibrationRequest): void {
+    this.server.emit('kick:test:reset:requested', request);
+  }
+
 }
