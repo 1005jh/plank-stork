@@ -296,11 +296,31 @@ describe('controller remote lifecycle', () => {
     } });
     await advance(250);
     expect(container.querySelector('[aria-label="Detector test stages"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Detector diagnostics"]')).not.toBeNull();
+    expect(JSON.stringify(snapshot())).not.toMatch(/diagnostic|stateBefore|hipCenterX|normalizedLeft|stageSummaries|frames/);
+    const engine = read.mock.contexts.at(-1)!;
+    if (!(engine instanceof KneeKickAnalysis)) throw new Error('Missing kick engine');
+    const dataset = JSON.parse(engine.exportDiagnosticsJson());
+    expect(dataset.frames).toHaveLength(439); // 20 fps, first frame at +50ms; end-exclusive.
+    expect(dataset.existingGuidedSummary).toEqual(snapshot().detectorTest.summary);
+    const createUrl = vi.fn((_blob: Blob) => 'blob:kick-diagnostics'), revokeUrl = vi.fn();
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = createUrl; static revokeObjectURL = revokeUrl; });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const download = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Download Detector Diagnostics JSON')!;
+    await act(async () => download.click());
+    expect(createUrl).toHaveBeenCalledWith(expect.any(Blob)); expect(click).toHaveBeenCalledOnce();
+    expect(createUrl.mock.calls[0][0].type).toBe('application/json');
+    expect((click.mock.contexts[0] as HTMLAnchorElement).download).toMatch(/^plank-stork-kick-diagnostics-.*\.json$/);
     await request('kick:test:reset:requested');
+    expect(revokeUrl).toHaveBeenCalledWith('blob:kick-diagnostics');
+    expect(() => engine.exportDiagnosticsJson()).toThrow();
+    expect(engine.getDiagnosticSummary()).toEqual([]);
+    expect(container.querySelector('[aria-label="Detector diagnostics"]')).toBeNull();
     expect(snapshot().detectorTest.status).toBe('IDLE');
     expect(snapshot().kneeKick.counts.KNEE_LEFT).toBe(1);
     await request('calibration:neutral:start:requested', 'kick-recalibrate');
     expect(snapshot().kneeKick).toMatchObject({ ready: false, lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
+    expect(() => engine.exportDiagnosticsJson()).toThrow();
     for (let index = 0; index < 20; index++) { await advance(50); callbacks?.onFrame?.(motionFrame(now)); }
     await request('calibration:sync:requested');
     expect(snapshot().kneeKick.ready).toBe(true);
@@ -308,10 +328,29 @@ describe('controller remote lifecycle', () => {
     await act(async () => camera.stop());
     expect(snapshot().kneeKick.ready).toBe(false);
     expect(snapshot().detectorTest.status).toBe('IDLE');
-    const engine = read.mock.contexts.at(-1)!;
-    if (!(engine instanceof KneeKickAnalysis)) throw new Error('Missing kick engine');
+    expect(() => engine.exportDiagnosticsJson()).toThrow();
     await act(async () => root.unmount());
     expect(engine.getView(now).detector.state).toBe('NOT_READY');
+    expect(engine.getDiagnosticSummary()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('revokes a pending diagnostic download and clears the completed dataset on unmount', async () => {
+    const read = vi.spyOn(KneeKickAnalysis.prototype, 'processFrame');
+    await freezeKickNeutral();
+    await request('kick:test:start:requested');
+    await kickFrame(-0.15);
+    await advance(22000);
+    const engine = read.mock.contexts.at(-1)!;
+    if (!(engine instanceof KneeKickAnalysis)) throw new Error('Missing kick engine');
+    expect(JSON.parse(engine.exportDiagnosticsJson()).frames).toHaveLength(1);
+    const revoke = vi.fn();
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = () => 'blob:kick-unmount'; static revokeObjectURL = revoke; });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await act(async () => [...container.querySelectorAll('button')].find((button) => button.textContent === 'Download Detector Diagnostics JSON')!.click());
+    await act(async () => root.unmount());
+    expect(revoke).toHaveBeenCalledWith('blob:kick-unmount');
+    expect(() => engine.exportDiagnosticsJson()).toThrow();
     expect(vi.getTimerCount()).toBe(0);
   });
 

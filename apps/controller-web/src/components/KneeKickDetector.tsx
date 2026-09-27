@@ -42,6 +42,18 @@ export function KneeKickDetectorPanel({ kick, canStart, onStart }: {
         <tbody>{kick.stages.map((stage, index) => <tr key={index}><th>{index + 1}. {stage.expected}</th><td>{stage.events.map((event) => `#${event.id} ${event.direction}`).join(', ') || '-'}</td><td>{stage.wrongEventCount}</td><td>{stage.duplicateCount}</td></tr>)}</tbody>
       </table></div>
       <p>안내한 expected stage와 비교한 관찰 통계이며 자동 PASS/FAIL 판정은 없습니다.</p>
+      <div className="signal-table-scroll"><table className="visibility-table" aria-label="Detector diagnostics">
+        <thead><tr>{['Stage', 'Start State', 'Fresh / Total', 'Usable L / R', 'Max |Disp|', 'Max |Disp| while ARMED', 'Enter Margin', 'Peak |Velocity| L/R', 'Events'].map((label) => <th key={label}>{label}</th>)}</tr></thead>
+        <tbody>{kick.diagnostics.map((row) => <tr key={row.stageIndex}>
+          <th>{row.stageIndex + 1}. {row.expected}</th><td>{row.stateAtStageStart ?? '-'}</td>
+          <td>{row.freshFrames} / {row.totalFrames}</td><td>{row.leftUsableFrames} / {row.rightUsableFrames}</td>
+          <td>{number(row.maxAbsDominantDisplacement)}</td><td>{number(row.maxAbsDominantWhileArmed)}</td><td>{number(row.enterMargin)}</td>
+          <td>{number(row.peakAbsLeftVelocity)} / {number(row.peakAbsRightVelocity)}</td><td>{row.eventCount}</td>
+        </tr>)}</tbody>
+      </table></div>
+      <p>Start State는 각 stage의 첫 inference 직전 상태입니다. 전체 상태·visibility·위치 통계는 JSON에서 확인하세요.</p>
+      <button onClick={kick.downloadDiagnostics}>Download Detector Diagnostics JSON</button>
+      {kick.downloadError && <p className="camera-error" role="alert">{kick.downloadError}</p>}
     </>}
   </section>;
 }

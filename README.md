@@ -577,6 +577,84 @@ Neutral 재보정, Camera Stop/카메라 해제/추론 실패, unmount 시 detec
 5. 자유 테스트로 한쪽 니킥을 계속 유지할 때 count가 1회만 증가하는지, 양쪽을 충분히 Neutral로 복귀한 뒤 반대쪽 이벤트가 발생하는지 확인합니다. 짧은 가림 후에도 바깥 자세에서 재발생하면 안 됩니다.
 6. Mirror 토글, pose loss, 폰 재접속, Neutral 재보정, Camera Stop을 확인합니다. 다른 카메라 거리/세션에서 반복하고 오검출·누락 여부를 비교하세요. 이번 단계는 실제 정확도를 자동 보증하거나 최종 판정값을 확정하지 않습니다.
 
+## STEP 4E-DIAG: Knee Kick Detector 진단 기록
+
+간헐적인 KNEE_LEFT miss를 다음 실측에서 분석하기 위한 **instrumentation only** 변경입니다. ENTER **0.28**, EXIT **0.15**, RETURN **180ms**, usable 기준, 방향, bodyScale, WAIT_RETURN/re-arm, start/reset 조건은 그대로입니다. 기존 classifier v1과 STEP 4D, Mobile UI·Socket wire 형식, 패널 순서도 유지합니다.
+
+**수집 위치와 동작 보존**
+
+Guided Detector Test가 ACTIVE인 동안 각 inference frame에서 아래 값만 snapshot합니다. React의 250ms 표시 값으로 기록하지 않으며, per-frame React render를 추가하지 않습니다. 전부 Controller 내부의 비-React buffer에 저장합니다.
+
+- `timestamp`, `stageIndex`, `expected`
+- 실제 `poseFresh`와 같은 `usableKnees(features, poseFresh)` 함수의 `usableLeft/Right`
+- `stateBefore` / `stateAfter`: `detector.processFrame()` 직전/직후 상태
+- 계산된 `hipCenterX`, `hipWidth`, 좌우 knee visibility
+- detector가 실제 사용한 `normalizedLeft/Right`, `dominantNormalizedDisplacement`
+- detector가 계산한 `normalizedLeft/RightVelocity`
+- 그 frame에서 **새로 발생한** event의 ID·방향·timestamp 또는 null
+
+검출기의 read-only `getStateForDiagnostics()` / `getValuesForDiagnostics()`만 사용합니다. 진단 수집에서 `getView()`를 추가 호출하지 않습니다. 기존 `getView()`는 stale 시 복귀 dwell을 초기화할 수 있으므로, 그 부수 효과를 진단이 유발하지 않도록 했습니다. 변위/속도를 별도 수식으로 재계산하지 않으며, 기존 event 기록 호출도 유지합니다.
+
+Pose missing 또는 양쪽 knee unusable인 inference도 저장합니다. 기존 monotonic frame 중복 방지와 stage 시간 구간(시작 포함/종료 제외)을 그대로 사용합니다. **IDLE/COMPLETED 및 마지막 stage 종료 시각 이후에는 추가 기록하지 않습니다.** Full 33 landmarks, world landmarks, 영상/이미지는 저장하지 않습니다. 진단 수치나 전체 frame buffer는 Socket으로 전송하지 않습니다.
+
+**Stage summary**
+
+완료 후 9개 stage 각각에 다음을 제공합니다. Neutral이 여러 번 나오므로 `stageIndex`로 구별합니다.
+
+- `totalFrames`, `freshFrames`, `staleFrames`, `leftUsableFrames`, `rightUsableFrames`, `bothUsableFrames`
+- `stateAtStageStart`와 `firstFrameTimestamp`: **그 stage의 첫 관측 inference 직전 상태**와 시각입니다. 정확한 stage 경계에 frame이 없으면 첫 관측 시점을 사용하고, stage 전체에 frame이 없으면 둘 다 null입니다.
+- `stateFrameCounts`는 **stateBefore**, `stateAfterFrameCounts`는 **stateAfter**의 상태별 개수입니다. TRIGGERED_LEFT/RIGHT는 내부 one-shot 전이이므로 실제 관측되지 않으면 0을 유지합니다.
+- `maxAbsDominantDisplacement`, `signedDominantAtMax`, 좌우 `maxAbsLeft/RightDisplacement`. 절댓값 peak가 동률이면 먼저 관측한 signed 값을 남깁니다.
+- `framesAboveEnter`: `abs(dominant) >= 0.28`인 frame 수. `armedFramesAboveEnter`는 여기에 `stateBefore === ARMED` 조건을 적용한 수입니다.
+- `maxAbsDominantWhileArmed`, `enterMargin = maxAbsDominantDisplacement − 0.28`, `armedEnterMargin = maxAbsDominantWhileArmed − 0.28`. 비교 가능한 값이 없으면 null입니다.
+- 좌우 `peakAbsLeft/RightVelocity`, visibility median/min
+- `medianHipCenterX`, `minHipCenterX`, `maxHipCenterX`, `medianHipWidth`
+- `eventCount`, 발생 순서의 `eventDirections`, 기존 `wrongEventCount`, `duplicateCount`
+
+Median/min/max/peak 계산은 해당 값이 finite인 frame만 사용하고 결측을 0으로 바꾸지 않습니다. Fresh는 기존 HIP pose freshness 조건이며 knee usability와 별개입니다. Inference가 아예 오지 않은 시간에 가상 stale frame을 만들지 않으므로, total과 firstFrameTimestamp도 함께 확인해야 합니다. 자동 원인 판정이나 PASS/FAIL은 추가하지 않습니다.
+
+**Neutral 위치 진단과 JSON**
+
+기존 Neutral 수집 buffer에 위치/visibility 숫자만 함께 저장하고 동일한 freeze 시점에 통계를 계산합니다. `baseline.diagnostics.hipCenterX`는 sampleCount/median/p10/p90, 좌우 knee visibility는 sampleCount/median입니다. p10/p90은 기존 nearest-rank 방식을 사용합니다. 낮은 visibility 값도 finite이면 진단 통계에 남깁니다. 이 값들은 bodyScale이나 trigger 계산에 사용하지 않습니다.
+
+완료 후 Controller의 **STEP 4E → Guided Detector Test 기존 summary 아래**에 작은 진단 표와 **Download Detector Diagnostics JSON** 버튼이 표시됩니다. 파일 이름은 `plank-stork-kick-diagnostics-<timestamp>.json`입니다.
+
+```text
+version: 1
+createdAt: 테스트 시작 당시 ISO 시각
+startedAt: Controller monotonic milliseconds
+detectorConfig:
+  enterDisplacement, exitDisplacement, returnDwellMs
+  hipVisibility, kneeVisibility, staleMs
+baseline:
+  detector: 기존 KneeKickBaseline snapshot
+  diagnostics: Neutral hipCenterX / knee visibility 통계
+testStart:
+  detectorState, ready, valid
+sequence: [{ expected, durationMs }, ...]
+frames: [{ timestamp, stageIndex, expected, poseFresh, usableLeft, usableRight,
+           stateBefore, stateAfter, hipCenterX, hipWidth,
+           leftKneeVisibility, rightKneeVisibility,
+           normalizedLeft, normalizedRight, dominantNormalizedDisplacement,
+           normalizedLeftVelocity, normalizedRightVelocity, event }, ...]
+stageSummaries: [위 stage별 통계, ...]
+existingGuidedSummary: 기존 falseKickCount / detected / directionCorrect / duplicateCount 등
+```
+
+`timestamp - startedAt`은 테스트 시작 후 경과 ms입니다. 시작 시 baseline과 testStart를 복사하므로 이후 상태와 섞이지 않습니다. WAIT_RETURN 상태에서의 test 시작도 기존처럼 허용하고, 그 사실을 testStart에 기록합니다. 폰에는 기존 compact 결과만 전달하며 JSON은 노트북의 Blob/ObjectURL 다운로드로만 받습니다.
+
+**초기화와 실제 실험**
+
+Reset Detector Test는 기존 detector state/count/return latch를 유지하며 test frame·metadata·summary만 함께 제거합니다. Neutral 재보정, Camera Stop/해제/오류, unmount는 기존 analysis reset과 함께 baseline 진단과 test 진단을 모두 제거합니다. 새 test를 성공적으로 시작하면 이전 진단을 교체하며, 거절된 시작 요청으로 이전 진단을 지우지 않습니다. 다운로드 ObjectURL도 reset/unmount 시 해제합니다.
+
+1. 기존 순서로 Camera 시작 → 폰 Neutral 보정 → Detector READY를 확인합니다. Action Calibration은 필요하지 않습니다.
+2. 폰에서 Guided Detector Test를 실행합니다. 화면 좌측 등 실제 평소 위치를 유지하고 22초 안내를 따라 수행합니다.
+3. 완료 후 **Stop/재보정/Reset/새 test 시작 전에** 노트북에서 Download Detector Diagnostics JSON을 누릅니다. 성공한 run과 miss가 난 run을 각각 저장하세요.
+4. KNEE_LEFT stage에서 peak와 enterMargin, ARMED일 때의 peak/margin 및 armedFramesAboveEnter를 함께 비교합니다. stateAtStageStart와 WAIT_RETURN frame 수, fresh/usable 수와 visibility를 확인합니다.
+5. 해당 stage의 hipCenterX/hipWidth와 Neutral 위치 통계를 비교해 관측 위치 차이도 살펴봅니다. 단일 수치로 원인을 확정하지 않고, 성공/누락 run의 per-frame stateBefore/stateAfter와 event를 시간순으로 비교합니다.
+
+자동 회귀 테스트는 진단 활성/비활성에 동일 synthetic frame sequence를 넣어 기존 event 방향·시각·개수·최종 상태가 일치하는지 확인합니다. 실제 간헐적 miss의 원인은 다음 실측 JSON을 통해 판단합니다.
+
 ## 검증 및 빌드
 
 ```sh

@@ -109,6 +109,18 @@ export class KneeKickDetector {
     };
   }
 
+  /** Read-only instrumentation. Unlike getView(), these reads never expire return dwell. */
+  getStateForDiagnostics(): KneeKickState { return this.state; }
+
+  getValuesForDiagnostics() {
+    return {
+      state: this.state,
+      normalizedLeft: this.left, normalizedRight: this.right,
+      dominantNormalizedDisplacement: this.dominant,
+      normalizedLeftVelocity: this.leftVelocity, normalizedRightVelocity: this.rightVelocity,
+    };
+  }
+
   reset(): void {
     this.baseline = null; this.state = 'NOT_READY'; this.returnStartedAt = this.lastFrameAt = null;
     this.lastEvent = null; this.counts = { KNEE_LEFT: 0, KNEE_RIGHT: 0 };
