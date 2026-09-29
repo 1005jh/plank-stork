@@ -131,6 +131,11 @@ export class KneeKickDetector {
       leftKneeX: usable.left ? features.leftKneeX : null, rightKneeX: usable.right ? features.rightKneeX : null,
     } } : null;
 
+    if (this.state === 'WAIT_CLEAR') {
+      // No event was emitted: observe a fresh sub-ENTER frame, without the confirmed-event penalty.
+      if (this.dominant !== null && Math.abs(this.dominant) < KICK_ENTER_DISPLACEMENT) this.state = 'ARMED';
+      return null;
+    }
     if (this.state === 'WAIT_RETURN') {
       // Both knees must be observed inside EXIT continuously. Loss never unlocks a latched event.
       if (this.left !== null && this.right !== null && Math.abs(this.left) < KICK_EXIT_DISPLACEMENT && Math.abs(this.right) < KICK_EXIT_DISPLACEMENT) {
@@ -178,7 +183,7 @@ export class KneeKickDetector {
     if (now < Math.min(staleAt, timeoutAt)) return;
     this.candidate.outcome = staleAt <= timeoutAt ? 'STALE' : 'TIMED_OUT';
     this.candidate.endedAt = Math.min(staleAt, timeoutAt);
-    this.state = 'WAIT_RETURN'; this.returnStartedAt = null;
+    this.state = 'WAIT_CLEAR'; this.returnStartedAt = null;
   }
 
   getView(now: number): KneeKickView {
@@ -226,12 +231,12 @@ export class KneeKickDetector {
     };
   }
 
-  /** New trial: retain calibration and current visibility, discard previous movement evidence. */
+  /** Independent trial: only the frozen Neutral baseline survives. */
   restartTrial(): void {
-    this.state = this.baseline ? 'ARMED' : 'NOT_READY';
-    this.returnStartedAt = null; this.candidate = null; this.candidateCount = 0;
-    this.lastEvent = null; this.counts = { KNEE_LEFT: 0, KNEE_RIGHT: 0 };
-    this.previous = null; this.leftVelocity = this.rightVelocity = null;
+    const baseline = this.baseline;
+    this.reset();
+    this.baseline = baseline;
+    this.state = baseline ? 'ARMED' : 'NOT_READY';
   }
 
   reset(): void {

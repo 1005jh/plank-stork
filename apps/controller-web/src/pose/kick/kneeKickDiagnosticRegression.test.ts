@@ -104,7 +104,7 @@ describe('diagnostics preserve temporal STEP 4E-v2 detector behavior', () => {
     expect(engine.analysis.startTest(1400)).toBe(true); expect(engine.analysis.startTest(1450)).toBe(false);
     finish(engine, 1400, -0.295);
     const dataset = read(engine.analysis);
-    expect(dataset.testStart).toEqual({ detectorState: 'ARMED', ready: true, valid: true });
+    expect(dataset.testStart).toEqual({ detectorState: 'ARMED', ready: true, valid: false });
     expect(dataset.baseline.detector!.bodyScale).toBeCloseTo(Math.hypot(0.05, 0.3));
     const diagnostic = dataset.baseline.diagnostics!;
     expect(diagnostic.hipCenterX.sampleCount).toBe(20); expect(diagnostic.hipCenterX.median).toBeCloseTo(0.205);
@@ -115,7 +115,7 @@ describe('diagnostics preserve temporal STEP 4E-v2 detector behavior', () => {
     const engine = calibrated(); engine.analysis.startTest(1000); frameAt(engine, 1050, -0.15);
     const before = engine.analysis.getView(1050).detector;
     engine.analysis.resetTest(); expect(engine.analysis.getView(1050).detector).toMatchObject({ baseline: before.baseline, state: 'ARMED', lastEvent: null });
-    expect(engine.analysis.getDiagnosticSummary()).toEqual([]); expect(() => engine.analysis.exportDiagnosticsJson()).toThrow();
+    expect(engine.analysis.getDiagnosticSummary()).toEqual([]); expect(read(engine.analysis).status).toBe('INTERRUPTED');
     expect(engine.analysis.startTest(1050)).toBe(true);
     engine.analysis.resetTest();
     frameAt(engine, 1150, -0.15); engine.analysis.resetTest(); expect(engine.analysis.startTest(1150)).toBe(true); engine.analysis.resetTest();
@@ -123,6 +123,6 @@ describe('diagnostics preserve temporal STEP 4E-v2 detector behavior', () => {
     engine.analysis.startTest(1400); finish(engine, 1400);
     expect(read(engine.analysis).frames.every((frame) => frame.timestamp > 1400)).toBe(true);
     engine.analysis.reset(); expect(engine.analysis.getView(24000).detector.ready).toBe(false);
-    expect(engine.analysis.getDiagnosticSummary()).toEqual([]); expect(() => engine.analysis.exportDiagnosticsJson()).toThrow();
+    expect(engine.analysis.getDiagnosticSummary()).toEqual([]); expect(read(engine.analysis).status).toBe('COMPLETED');
   });
 });

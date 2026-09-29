@@ -5,7 +5,7 @@ import { extractKneeMotionFeatures, type KneeMotionFeatures } from '../motion/kn
 import { robustStats } from '../motion/kneeMotionAnalyzer';
 import { GuidedDetectorTest } from './guidedDetectorTest';
 import { KneeKickDetector, usableKnees } from './kneeKickDetector';
-import { summarizeNeutralDiagnostics, type NeutralKickDiagnosticSample, type NeutralKickDiagnostics } from './kneeKickDiagnostics';
+import { summarizeNeutralDiagnostics, type NeutralKickDiagnosticSample, type NeutralKickDiagnostics, type KickDiagnosticDataset } from './kneeKickDiagnostics';
 
 /** Collect only during the existing Neutral window; never learn from later movement. */
 export class KneeKickAnalysis {
@@ -16,9 +16,14 @@ export class KneeKickAnalysis {
   private neutralDiagnostics: NeutralKickDiagnostics | null = null;
   private counts = { left: 0, right: 0 };
   private lastFrameAt: number | null = null;
+  private savedDiagnostics: KickDiagnosticDataset | null;
+
+  constructor(savedDiagnostics: KickDiagnosticDataset | null = null) {
+    this.savedDiagnostics = savedDiagnostics ? structuredClone(savedDiagnostics) : null;
+  }
 
   processFrame(frame: PoseFrame, neutral: PoseFeatureView): void {
-    if (neutral.collectionState === 'IDLE' || (this.sealed && neutral.collectionState !== 'FROZEN')) this.reset();
+    if (neutral.collectionState === 'IDLE' || (this.sealed && neutral.collectionState !== 'FROZEN')) this.reset(frame.timestamp, 'RECALIBRATION');
     if (this.lastFrameAt !== null && frame.timestamp <= this.lastFrameAt) return;
     const inferenceGapMs = this.lastFrameAt === null ? null : frame.timestamp - this.lastFrameAt;
     this.lastFrameAt = frame.timestamp;
@@ -35,7 +40,7 @@ export class KneeKickAnalysis {
     const usable = usableKnees(features);
     const poseFresh = usable.left || usable.right;
     const stateBefore = this.detector.getStateForDiagnostics();
-    this.test.advance(frame.timestamp, stateBefore === 'ARMED' && poseFresh && (usable.left || usable.right));
+    this.test.advance(frame.timestamp, stateBefore);
     const event = this.detector.processFrame(features, frame.timestamp);
     const values = this.detector.getValuesForDiagnostics();
     this.test.recordDiagnosticFrame({
@@ -79,26 +84,49 @@ export class KneeKickAnalysis {
   getView(now: number) {
     const detector = this.detector.getView(now);
     return { detector, baselineCounts: { ...this.counts }, baselineSealed: this.sealed,
-      test: this.test.getView(now, detector.ready && detector.validNow && detector.state === 'ARMED') };
+      test: this.test.getView(now, detector.state), diagnosticsDownload: this.getDownloadInfo() };
   }
   getTestStages() { return this.test.getStages(); }
   getDiagnosticSummary() { return this.test.getDiagnosticSummary(); }
-  exportDiagnosticsJson(): string { return this.test.exportDiagnosticsJson(); }
+  private getDownloadInfo() {
+    const current = this.test.getExportInfo();
+    return current ? { ...current, source: 'CURRENT' as const }
+      : this.savedDiagnostics ? { status: this.savedDiagnostics.status, frameCount: this.savedDiagnostics.frames.length, source: 'PREVIOUS' as const } : null;
+  }
+  getSavedDiagnostics(): KickDiagnosticDataset | null { return this.savedDiagnostics ? structuredClone(this.savedDiagnostics) : null; }
+  exportDiagnosticsJson(now?: number): string {
+    if (now !== undefined) this.getView(now);
+    const dataset = this.test.snapshotDiagnostics() ?? this.savedDiagnostics;
+    if (!dataset) throw new Error('Inference frame을 한 개 이상 기록한 뒤 진단 JSON을 다운로드할 수 있습니다.');
+    return JSON.stringify(dataset, null, 2);
+  }
+  private preserveDiagnostics(now: number, reason: string): void {
+    this.test.interrupt(now, reason, this.detector.getStateForDiagnostics());
+    const dataset = this.test.snapshotDiagnostics();
+    if (dataset) this.savedDiagnostics = dataset;
+  }
   startTest(now: number): boolean {
     const view = this.detector.getView(now);
+    if (!this.sealed || !view.ready || this.test.getView(now, view.state).status === 'ACTIVE') return false;
+    this.preserveDiagnostics(now, 'NEW_TRIAL');
     const started = this.test.start(now, view.ready);
     if (started) {
       this.detector.restartTrial();
+      this.lastFrameAt = null;
       this.test.beginDiagnostics({
         createdAt: new Date().toISOString(), startedAt: now,
         baseline: { detector: view.baseline, diagnostics: this.neutralDiagnostics },
-        testStart: { detectorState: this.detector.getStateForDiagnostics(), ready: view.ready, valid: view.validNow },
+        testStart: { detectorState: this.detector.getStateForDiagnostics(), ready: view.ready, valid: false },
       });
     }
     return started;
   }
-  resetTest(): void { this.test.reset(); this.detector.restartTrial(); }
-  reset(): void {
+  resetTest(now = this.lastFrameAt ?? 0): void {
+    this.preserveDiagnostics(now, 'RESET_TEST');
+    this.test.reset(); this.detector.restartTrial(); this.lastFrameAt = null;
+  }
+  reset(now = this.lastFrameAt ?? 0, reason = 'RESET'): void {
+    this.preserveDiagnostics(now, reason);
     this.detector.reset(); this.test.reset(); this.samples = []; this.sealed = false; this.counts = { left: 0, right: 0 }; this.lastFrameAt = null;
     this.neutralDiagnostics = null;
   }

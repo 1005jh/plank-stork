@@ -2,17 +2,14 @@ import { useEffect, useRef } from 'react';
 import type { RemoteDetectorTestState, RemoteKneeKickState } from '@plank-stork/protocol';
 import type { CalibrationCommand } from './useCalibrationRemote';
 
-const instructions = { NEUTRAL: '기본 자세로 돌아와 유지하세요', TWIST_LEFT: '왼쪽 트위스트', TWIST_RIGHT: '오른쪽 트위스트', KNEE_LEFT: '왼쪽 니킥', KNEE_RIGHT: '오른쪽 니킥' };
+const instructions = { NEUTRAL: '기본 자세', TWIST_LEFT: '왼쪽 트위스트', TWIST_RIGHT: '오른쪽 트위스트', KNEE_LEFT: '왼쪽 니킥', KNEE_RIGHT: '오른쪽 니킥' };
 export function KneeKickPanel({ detector, test, prerequisiteMessage, send }: {
   detector: RemoteKneeKickState; test: RemoteDetectorTestState; prerequisiteMessage: string | null; send: (command: CalibrationCommand) => void;
 }) {
   const guide = useRef<HTMLDivElement>(null);
   const active = test.status === 'ACTIVE';
-  const geometryMessage = !detector.validNow || (!detector.usableLeftNow && !detector.usableRightNow)
-    ? 'POSE GEOMETRY NOT READY — 현재 Kick 입력을 사용할 수 없습니다. 몸 전체가 보이도록 기본 자세를 유지하세요.'
-    : !detector.usableLeftNow ? 'LEFT KNEE NOT VISIBLE — 왼쪽 무릎을 카메라에서 확인 중입니다. 무릎이 보이도록 자세를 확인하세요.'
-    : !detector.usableRightNow ? 'RIGHT KNEE NOT VISIBLE — 오른쪽 무릎을 카메라에서 확인 중입니다. 무릎이 보이도록 자세를 확인하세요.'
-    : 'BOTH KNEES READY · Pose usable';
+  const geometryMessage = detector.validNow && detector.usableLeftNow && detector.usableRightNow
+    ? 'Tracking OK' : 'Tracking Weak';
   const blockedReason = active ? 'Guided Detector Test가 진행 중입니다.' : prerequisiteMessage
     ?? (!detector.ready ? '양쪽 무릎이 보이는 Neutral을 보정하고 Detector READY를 확인하세요.'
     : null);
@@ -20,13 +17,11 @@ export function KneeKickPanel({ detector, test, prerequisiteMessage, send }: {
   return <section className="calibration-card" aria-labelledby="mobile-kick-title">
     <h3 id="mobile-kick-title">Knee Kick Detector</h3>
     <div role="status">
-      {detector.ready && detector.state === 'WAIT_RETURN' && <p>복귀 감지 중 · 테스트 시간은 계속 진행됩니다.</p>}
       {detector.ready && detector.state === 'CANDIDATE' && <p>KICK 후보 확인 중</p>}
       <p>{detector.ready ? 'READY' : 'NOT_READY'} · {detector.state}</p>
       <p>{geometryMessage}</p>
       <p className="major-instruction">{detector.currentEvent === 'KNEE_LEFT' ? 'LEFT KICK' : detector.currentEvent === 'KNEE_RIGHT' ? 'RIGHT KICK' : 'NONE'}</p>
       <p>LEFT: {detector.counts.KNEE_LEFT} · RIGHT: {detector.counts.KNEE_RIGHT}</p>
-      {!detector.validNow && <p>Pose를 찾는 중... 현재 입력을 사용할 수 없습니다.</p>}
       {detector.lastEvent && <p>Last: #{detector.lastEvent.id} {detector.lastEvent.direction}</p>}
     </div>
     {!detector.ready && <p>양쪽 knee가 보이는 Neutral을 보정하세요. FROZEN 후에도 NOT_READY면 카메라 배치를 확인하고 다시 보정하세요.</p>}

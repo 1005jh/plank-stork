@@ -21,7 +21,7 @@ export function advanceUnblockedTest(test: GuidedDetectorTest, now: number, star
   for (const stage of DETECTOR_TEST_SEQUENCE) {
     boundary += stage.durationMs;
     if (boundary > now) break;
-    test.advance(boundary, true);
+    test.advance(boundary);
   }
-  return test.getView(now, true);
+  return test.getView(now);
 }

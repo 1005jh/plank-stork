@@ -11,7 +11,7 @@ const LABELS: Record<CalibrationAction, string> = {
   KNEE_LEFT: '← 왼쪽 니킥', KNEE_RIGHT: '오른쪽 니킥 →',
 };
 const ERRORS = {
-  DETECTOR_NOT_ARMED: '기본 자세를 유지하세요. Detector ARMED 대기 중입니다.',
+  DETECTOR_NOT_ARMED: '이전 요청의 detector 상태입니다. 새 테스트는 보정된 baseline으로 시작합니다.',
   DETECTOR_NOT_READY: '양쪽 knee가 보이는 Neutral을 보정하고 Detector READY와 현재 Pose를 확인하세요.',
   CAMERA_NOT_READY: '카메라 준비 필요 — 노트북에서 Start Camera를 눌러주세요.',
   POSE_NOT_DETECTED: 'Pose not detected — 몸 전체가 카메라에 보이도록 이동하세요.',

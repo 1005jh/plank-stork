@@ -244,6 +244,68 @@ describe('controller remote lifecycle', () => {
     await request('calibration:sync:requested');
   }
 
+  it('starts with no current pose after calibration and completes exactly 22 seconds later without a frame', async () => {
+    const read = vi.spyOn(KneeKickAnalysis.prototype, 'processFrame');
+    await freezeKickNeutral();
+    vi.mocked(camera.getRecordingContext).mockReturnValue(null);
+    await advance(400);
+    await request('kick:test:start:requested', 'missing-pose-start');
+    expect(snapshot().detectorTest.status).toBe('ACTIVE');
+    await advance(2000);
+    expect(snapshot().detectorTest).toMatchObject({ expected: 'TWIST_LEFT', remainingMs: 3000 });
+    await advance(20000);
+    expect(snapshot().detectorTest).toMatchObject({ status: 'COMPLETED', summary: { KNEE_LEFT: { detected: false }, KNEE_RIGHT: { detected: false } } });
+    const engine = read.mock.contexts.at(-1) as KneeKickAnalysis;
+    const dataset = JSON.parse(engine.exportDiagnosticsJson());
+    expect(dataset).toMatchObject({ status: 'COMPLETED', frames: [] });
+    expect(dataset.endedAt - dataset.startedAt).toBe(22000);
+  });
+
+  it('downloads ACTIVE data and retains INTERRUPTED snapshots across trial reset and Camera Stop', async () => {
+    const read = vi.spyOn(KneeKickAnalysis.prototype, 'processFrame');
+    await freezeKickNeutral();
+    await request('kick:test:start:requested', 'partial-first');
+    await kickFrame(); await kickFrame(-0.15);
+    const engine = read.mock.contexts.at(-1) as KneeKickAnalysis;
+    const baseline = engine.getView(now).detector.baseline;
+    expect(JSON.parse(engine.exportDiagnosticsJson())).toMatchObject({ status: 'ACTIVE', frames: expect.any(Array) });
+    await advance(250);
+    const createUrl = vi.fn(() => 'blob:partial'), revoke = vi.fn();
+    vi.stubGlobal('URL', class extends URL { static createObjectURL = createUrl; static revokeObjectURL = revoke; });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const download = () => [...container.querySelectorAll('button')].find((button) => button.textContent === 'Download Current Detector Diagnostics JSON')!;
+    expect(download().disabled).toBe(false);
+    await act(async () => download().click()); expect(createUrl).toHaveBeenCalledOnce(); expect(click).toHaveBeenCalledOnce();
+    await request('kick:test:reset:requested');
+    expect(engine.getView(now)).toMatchObject({ test: { status: 'IDLE', summary: null }, detector: { baseline, state: 'ARMED', lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } } });
+    expect(JSON.parse(engine.exportDiagnosticsJson())).toMatchObject({ status: 'INTERRUPTED', interruptionReason: 'RESET_TEST', frames: expect.any(Array) });
+    expect(JSON.parse(engine.exportDiagnosticsJson()).frames).toHaveLength(2);
+    expect(revoke).toHaveBeenCalledWith('blob:partial');
+    expect(download().disabled).toBe(false);
+    await request('kick:test:start:requested', 'partial-second'); await kickFrame();
+    await act(async () => camera.stop());
+    const stopped = JSON.parse(engine.exportDiagnosticsJson());
+    expect(stopped).toMatchObject({ status: 'INTERRUPTED', interruptionReason: 'CAMERA_STOP' });
+    expect(stopped.frames).toHaveLength(1);
+    expect(engine.getView(now).detector.ready).toBe(false);
+    expect(click).toHaveBeenCalledOnce(); // No automatic download on stop/reset.
+  });
+
+  it('keeps the latest interrupted snapshot across component unmount/remount without restoring its baseline', async () => {
+    const read = vi.spyOn(KneeKickAnalysis.prototype, 'processFrame');
+    await freezeKickNeutral(); await request('kick:test:start:requested', 'before-unmount'); await kickFrame();
+    const engine = read.mock.contexts.at(-1) as KneeKickAnalysis;
+    await act(async () => root.unmount());
+    expect(JSON.parse(engine.exportDiagnosticsJson())).toMatchObject({ status: 'INTERRUPTED', interruptionReason: 'UNMOUNT' });
+    root = createRoot(container);
+    await act(async () => root.render(<StrictMode><PoseCamera socket={socket.asSocket()} /></StrictMode>));
+    const panel = container.querySelector('[aria-labelledby="knee-kick-title"]')!;
+    expect(panel.textContent).toContain('INTERRUPTED'); expect(panel.textContent).toContain('보존된 이전 trial');
+    expect([...panel.querySelectorAll('button')].find((button) => button.textContent === 'Download Current Detector Diagnostics JSON')!.disabled).toBe(false);
+    await request('calibration:sync:requested');
+    expect(snapshot().kneeKick.ready).toBe(false);
+  });
+
   it.each([25, 26])('starts with knee %s unavailable and advances despite missing 4A depth', async (index) => {
     const read = vi.spyOn(KneeKickAnalysis.prototype, 'processFrame');
     await freezeKickNeutral();
@@ -252,7 +314,7 @@ describe('controller remote lifecycle', () => {
     callbacks?.onFrame?.(frame);
     await request('kick:test:start:requested', 'one-knee');
     expect(snapshot()).toMatchObject({ lastCommandError: null, detectorTest: { status: 'ACTIVE' }, kneeKick: {
-      ready: true, state: 'ARMED', validNow: true, usableLeftNow: index !== 25, usableRightNow: index !== 26,
+      ready: true, state: 'ARMED', validNow: false, usableLeftNow: false, usableRightNow: false,
     } });
     const controllerStart = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Start Guided Detector Test')!;
     expect(controllerStart.disabled).toBe(true);
@@ -334,21 +396,21 @@ describe('controller remote lifecycle', () => {
     const createUrl = vi.fn((_blob: Blob) => 'blob:kick-diagnostics'), revokeUrl = vi.fn();
     vi.stubGlobal('URL', class extends URL { static createObjectURL = createUrl; static revokeObjectURL = revokeUrl; });
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    const download = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Download Detector Diagnostics JSON')!;
+    const download = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Download Current Detector Diagnostics JSON')!;
     await act(async () => download.click());
     expect(createUrl).toHaveBeenCalledWith(expect.any(Blob)); expect(click).toHaveBeenCalledOnce();
     expect(createUrl.mock.calls[0][0].type).toBe('application/json');
     expect((click.mock.contexts[0] as HTMLAnchorElement).download).toMatch(/^plank-stork-kick-diagnostics-.*\.json$/);
     await request('kick:test:reset:requested');
     expect(revokeUrl).toHaveBeenCalledWith('blob:kick-diagnostics');
-    expect(() => engine.exportDiagnosticsJson()).toThrow();
+    expect(JSON.parse(engine.exportDiagnosticsJson()).status).toBe('COMPLETED');
     expect(engine.getDiagnosticSummary()).toEqual([]);
     expect(container.querySelector('[aria-label="Detector diagnostics"]')).toBeNull();
     expect(snapshot().detectorTest.status).toBe('IDLE');
     expect(snapshot().kneeKick.counts.KNEE_LEFT).toBe(0);
     await request('calibration:neutral:start:requested', 'kick-recalibrate');
     expect(snapshot().kneeKick).toMatchObject({ ready: false, validNow: false, usableLeftNow: false, usableRightNow: false, lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
-    expect(() => engine.exportDiagnosticsJson()).toThrow();
+    expect(JSON.parse(engine.exportDiagnosticsJson()).status).toBe('COMPLETED');
     for (let index = 0; index < 20; index++) { await advance(50); callbacks?.onFrame?.(motionFrame(now)); }
     await request('calibration:sync:requested');
     expect(snapshot().kneeKick.ready).toBe(true);
@@ -356,7 +418,7 @@ describe('controller remote lifecycle', () => {
     await act(async () => camera.stop());
     expect(snapshot().kneeKick).toMatchObject({ ready: false, validNow: false, usableLeftNow: false, usableRightNow: false });
     expect(snapshot().detectorTest.status).toBe('IDLE');
-    expect(() => engine.exportDiagnosticsJson()).toThrow();
+    expect(JSON.parse(engine.exportDiagnosticsJson()).status).toBe('COMPLETED');
     await act(async () => root.unmount());
     expect(engine.getView(now).detector).toMatchObject({ state: 'NOT_READY', validNow: false, usableLeftNow: false, usableRightNow: false });
     expect(engine.getDiagnosticSummary()).toEqual([]);
@@ -370,7 +432,7 @@ describe('controller remote lifecycle', () => {
     expect(snapshot()).toMatchObject({ lastCommandError: null, detectorTest: { status: 'ACTIVE' }, kneeKick: { state: 'ARMED' } });
     for (let index = 0; index < 45; index++) await kickFrame(-0.15);
     expect(snapshot().detectorTest).toMatchObject({ expected: 'TWIST_LEFT', waitingForArmed: false });
-    expect(snapshot().kneeKick.state).toBe('WAIT_RETURN');
+    expect(snapshot().kneeKick.state).toBe('WAIT_CLEAR');
     await request('kick:test:reset:requested');
     expect(snapshot().kneeKick).toMatchObject({ state: 'ARMED', lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
     await advance(400);
@@ -381,7 +443,7 @@ describe('controller remote lifecycle', () => {
     expect(snapshot().detectorTest).toMatchObject({ status: 'COMPLETED', waitingForArmed: false });
   });
 
-  it('revokes a pending diagnostic download and clears the completed dataset on unmount', async () => {
+  it('revokes a pending download while retaining the completed dataset on unmount', async () => {
     const read = vi.spyOn(KneeKickAnalysis.prototype, 'processFrame');
     await freezeKickNeutral();
     await request('kick:test:start:requested');
@@ -392,10 +454,10 @@ describe('controller remote lifecycle', () => {
     const revoke = vi.fn();
     vi.stubGlobal('URL', class extends URL { static createObjectURL = () => 'blob:kick-unmount'; static revokeObjectURL = revoke; });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    await act(async () => [...container.querySelectorAll('button')].find((button) => button.textContent === 'Download Detector Diagnostics JSON')!.click());
+    await act(async () => [...container.querySelectorAll('button')].find((button) => button.textContent === 'Download Current Detector Diagnostics JSON')!.click());
     await act(async () => root.unmount());
     expect(revoke).toHaveBeenCalledWith('blob:kick-unmount');
-    expect(() => engine.exportDiagnosticsJson()).toThrow();
+    expect(JSON.parse(engine.exportDiagnosticsJson()).status).toBe('COMPLETED');
     expect(vi.getTimerCount()).toBe(0);
   });
 

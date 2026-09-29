@@ -71,6 +71,11 @@ export interface KickStageDiagnostics {
   /** First observed inference in this stage; null if no frames arrived. */
   firstFrameTimestamp: number | null;
   stateAtStageStart: KneeKickState | null;
+  stagePlannedDurationMs: number;
+  stageActualDurationMs: number;
+  stageStartedWhileState: KneeKickState | null;
+  stageEndedWhileState: KneeKickState | null;
+  detectorUnavailableFrames: number;
   stateFrameCounts: Record<KneeKickState, number>;
   stateAfterFrameCounts: Record<KneeKickState, number>;
   totalFrames: number;
@@ -118,6 +123,10 @@ export interface KickStageDiagnostics {
 }
 export interface KickDiagnosticDataset extends KickDiagnosticMetadata {
   version: 3;
+  status: 'ACTIVE' | 'COMPLETED' | 'INTERRUPTED';
+  capturedAt: number;
+  endedAt: number | null;
+  interruptionReason: string | null;
   detectorConfig: ReturnType<typeof diagnosticConfig>;
   sequence: { expected: DetectorTestExpected; durationMs: number }[];
   stageTimings: DetectorStageTiming[];
@@ -143,14 +152,14 @@ export function summarizeNeutralDiagnostics(samples: readonly NeutralKickDiagnos
   };
 }
 
-const emptyStates = (): Record<KneeKickState, number> => ({ NOT_READY: 0, ARMED: 0, CANDIDATE: 0, TRIGGERED_LEFT: 0, TRIGGERED_RIGHT: 0, WAIT_RETURN: 0 });
+const emptyStates = (): Record<KneeKickState, number> => ({ NOT_READY: 0, ARMED: 0, CANDIDATE: 0, TRIGGERED_LEFT: 0, TRIGGERED_RIGHT: 0, WAIT_RETURN: 0, WAIT_CLEAR: 0 });
 const peak = (values: readonly (number | null)[]) => {
   const present = values.filter(finite);
   return present.length ? Math.max(...present.map(Math.abs)) : null;
 };
 
 /** Observations only: no diagnosis, threshold selection, or feedback into the detector. */
-export function summarizeKickDiagnostics(frames: readonly KickDetectorDiagnosticFrame[], stages: readonly DetectorTestStage[]): KickStageDiagnostics[] {
+export function summarizeKickDiagnostics(frames: readonly KickDetectorDiagnosticFrame[], stages: readonly DetectorTestStage[], timings: readonly DetectorStageTiming[] = [], now = 0): KickStageDiagnostics[] {
   const starts = new Set<number>(), outcomes = new Set<number>();
   const startFrames: KickDetectorDiagnosticFrame[] = [], outcomeFrames: KickDetectorDiagnosticFrame[] = [];
   for (const frame of frames) {
@@ -173,8 +182,13 @@ export function summarizeKickDiagnostics(frames: readonly KickDetectorDiagnostic
     const leftVisibility = values('leftKneeVisibility'), rightVisibility = values('rightKneeVisibility'), hip = values('hipCenterX');
     const resolutions = outcomeFrames.filter((row) => row.stageIndex === stageIndex);
     const confirmationLatenciesMs = rows.filter((row) => row.event !== null).map((row) => row.confirmationLatencyMs).filter(finite);
+    const timing = timings[stageIndex];
     return {
       stageIndex, expected: stage.expected, firstFrameTimestamp: rows[0]?.timestamp ?? null, stateAtStageStart: rows[0]?.stateBefore ?? null,
+      stagePlannedDurationMs: stage.expected === 'NEUTRAL' ? 2000 : 3000,
+      stageActualDurationMs: timing?.startedAt == null ? 0 : Math.max(0, (timing.endedAt ?? now) - timing.startedAt),
+      stageStartedWhileState: timing?.stageStartedWhileState ?? null, stageEndedWhileState: timing?.stageEndedWhileState ?? null,
+      detectorUnavailableFrames: rows.filter((row) => !(row.kickLeftUsable || row.kickRightUsable) || ['NOT_READY', 'WAIT_RETURN', 'WAIT_CLEAR'].includes(row.stateBefore)).length,
       stateFrameCounts, stateAfterFrameCounts,
       totalFrames: rows.length, freshFrames: rows.filter((row) => row.poseFresh).length, staleFrames: rows.filter((row) => !row.poseFresh).length,
       neutralInvalidFrames: rows.filter((row) => !row.neutralSmoothedValidNow).length,

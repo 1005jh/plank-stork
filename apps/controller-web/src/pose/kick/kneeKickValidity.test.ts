@@ -100,7 +100,7 @@ describe('STEP 4A validity is diagnostic-only after Neutral FROZEN', () => {
     for (let time = 1350; time <= 23500; time += 50) deliver(engine, withoutDepth(time));
     const dataset = JSON.parse(engine.kick.exportDiagnosticsJson()) as KickDiagnosticDataset;
     expect(dataset.version).toBe(3);
-    expect(dataset.frames[0]).toMatchObject({ neutralSmoothedValidNow: false, kickHipsUsable: true, kickLeftUsable: true, kickRightUsable: true, poseFresh: true, kickValidityReasons: ['OK'], inferenceGapMs: 25,
+    expect(dataset.frames[0]).toMatchObject({ neutralSmoothedValidNow: false, kickHipsUsable: true, kickLeftUsable: true, kickRightUsable: true, poseFresh: true, kickValidityReasons: ['OK'], inferenceGapMs: null,
       rawHipCenterX: 0.5, rawLeftHipVisibility: 0.95, rawRightHipVisibility: 0.95, rawLeftKneeVisibility: 0.7, rawRightKneeVisibility: 0.6 });
     const row = dataset.frames.find((frame) => frame.timestamp === 1250)!;
     expect(row).toMatchObject({ neutralSmoothedValidNow: false, poseFresh: false, kickHipsUsable: false, normalizedRight: null,
@@ -114,7 +114,7 @@ describe('STEP 4A validity is diagnostic-only after Neutral FROZEN', () => {
     expect(dataset.frames.every((frame) => !('landmarks' in frame) && !('worldLandmarks' in frame))).toBe(true);
     engine.kick.reset();
     expect(engine.kick.getDiagnosticSummary()).toEqual([]);
-    expect(() => engine.kick.exportDiagnosticsJson()).toThrow();
+    expect(JSON.parse(engine.kick.exportDiagnosticsJson()).status).toBe('COMPLETED');
   });
   it.each([25, 26])('starts and permits ongoing inference with landmark %s unavailable', (index) => {
     const engine = calibrated();
@@ -130,6 +130,6 @@ describe('STEP 4A validity is diagnostic-only after Neutral FROZEN', () => {
     const frame = motionFrame(1050); frame.landmarks[26].x -= 0.15; frame.worldLandmarks = [];
     expect(deliver(engine, frame).detector.state).toBe('CANDIDATE');
     frame.timestamp = 1450;
-    expect(deliver(engine, frame).detector).toMatchObject({ state: 'WAIT_RETURN', validNow: true, lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
+    expect(deliver(engine, frame).detector).toMatchObject({ state: 'WAIT_CLEAR', validNow: true, lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
   });
 });

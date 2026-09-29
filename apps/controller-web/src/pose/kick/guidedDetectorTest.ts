@@ -1,4 +1,4 @@
-import type { DetectorTestExpected, DetectorTestSummary, KneeKickEvent, RemoteDetectorTestState } from '@plank-stork/protocol';
+import type { DetectorTestExpected, DetectorTestSummary, KneeKickEvent, KneeKickState, RemoteDetectorTestState } from '@plank-stork/protocol';
 import { diagnosticConfig, summarizeKickDiagnostics, type KickDiagnosticDataset, type KickDiagnosticInput, type KickDiagnosticMetadata, type KickDetectorDiagnosticFrame } from './kneeKickDiagnostics';
 
 export const DETECTOR_TEST_SEQUENCE: readonly { expected: DetectorTestExpected; durationMs: number }[] = [
@@ -7,7 +7,7 @@ export const DETECTOR_TEST_SEQUENCE: readonly { expected: DetectorTestExpected; 
     { expected, durationMs: 3000 }, { expected: 'NEUTRAL' as const, durationMs: 2000 },
   ]),
 ];
-export interface DetectorStageTiming { stageIndex: number; expected: DetectorTestExpected; startedAt: number | null; endedAt: number | null; armedWaitMs: number }
+export interface DetectorStageTiming { stageIndex: number; expected: DetectorTestExpected; startedAt: number | null; endedAt: number | null; armedWaitMs: number; stageStartedWhileState: KneeKickState | null; stageEndedWhileState: KneeKickState | null }
 export interface DetectorTestStage {
   expected: DetectorTestExpected;
   events: KneeKickEvent[];
@@ -26,30 +26,35 @@ export class GuidedDetectorTest {
   private lastAdvancedAt = 0;
   private diagnosticFrames: KickDetectorDiagnosticFrame[] = [];
   private diagnosticMetadata: KickDiagnosticMetadata | null = null;
+  private interruptionReason: string | null = null;
+  private lastObservedState: KneeKickState | null = null;
 
   start(now: number, ready: boolean): boolean {
     if (!ready || this.status === 'ACTIVE') return false;
     this.reset(); this.startedAt = now; this.status = 'ACTIVE';
     this.stages = DETECTOR_TEST_SEQUENCE.map(({ expected }) => ({ expected, events: [], wrongEventCount: 0, duplicateCount: 0 }));
-    this.timings = DETECTOR_TEST_SEQUENCE.map(({ expected }, stageIndex) => ({ stageIndex, expected, startedAt: stageIndex === 0 ? now : null, endedAt: null, armedWaitMs: 0 }));
+    this.timings = DETECTOR_TEST_SEQUENCE.map(({ expected }, stageIndex) => ({ stageIndex, expected, startedAt: stageIndex === 0 ? now : null, endedAt: null, armedWaitMs: 0, stageStartedWhileState: stageIndex === 0 ? 'ARMED' : null, stageEndedWhileState: null }));
     this.lastAdvancedAt = now;
     return true;
   }
   /** Called before processing a frame and by the controller UI clock; never by the phone. */
-  advance(now: number, _canAdvanceNeutral: boolean): void {
+  advance(now: number, detectorState?: KneeKickState): void {
     if (this.status !== 'ACTIVE' || now < this.lastAdvancedAt) return;
     this.lastAdvancedAt = now;
     while (this.status === 'ACTIVE') {
       const stage = DETECTOR_TEST_SEQUENCE[this.currentStageIndex];
       const timing = this.timings[this.currentStageIndex];
       const deadline = timing.startedAt! + stage.durationMs;
-      if (now < deadline) return;
+      if (now < deadline) { this.lastObservedState = detectorState ?? this.lastObservedState; return; }
       // Measurement time never depends on detector readiness or pose availability.
       timing.endedAt = deadline;
       timing.armedWaitMs = 0;
+      // At a late tick use the last observed state, not a fabricated inference at the boundary.
+      timing.stageEndedWhileState = now === deadline ? detectorState ?? this.lastObservedState : this.lastObservedState;
       this.currentStageIndex += 1;
       if (this.currentStageIndex === DETECTOR_TEST_SEQUENCE.length) { this.status = 'COMPLETED'; return; }
       this.timings[this.currentStageIndex].startedAt = timing.endedAt;
+      this.timings[this.currentStageIndex].stageStartedWhileState = timing.stageEndedWhileState;
     }
   }
   private stageAt(now: number): { index: number; remainingMs: number } | null {
@@ -72,11 +77,15 @@ export class GuidedDetectorTest {
     if (this.status !== 'ACTIVE') return;
     // Detached start-time snapshots; no live baseline or camera object is retained.
     this.diagnosticMetadata = structuredClone(metadata);
+    this.lastObservedState = metadata.testStart.detectorState;
+    this.timings[0].stageStartedWhileState = metadata.testStart.detectorState;
   }
   recordDiagnosticFrame(frame: KickDiagnosticInput): void {
+    this.advance(frame.timestamp, frame.stateBefore);
     if (this.status !== 'ACTIVE') return;
     const current = this.stageAt(frame.timestamp);
     if (!current) return;
+    this.lastObservedState = frame.stateAfter;
     // Explicit primitive allow-list, including missing/stale frames and only NEW events.
     this.diagnosticFrames.push({
       timestamp: frame.timestamp, stageIndex: current.index, expected: this.stages[current.index].expected,
@@ -104,15 +113,35 @@ export class GuidedDetectorTest {
     });
   }
   getDiagnosticSummary() {
-    return this.status === 'COMPLETED' ? summarizeKickDiagnostics(this.diagnosticFrames, this.stages) : [];
+    return this.status === 'COMPLETED' ? summarizeKickDiagnostics(this.diagnosticFrames, this.stages, this.timings, this.lastAdvancedAt) : [];
+  }
+  getExportInfo() {
+    return (this.diagnosticFrames.length > 0 || this.status === 'COMPLETED') && this.diagnosticMetadata && this.status !== 'IDLE'
+      ? { status: this.status, frameCount: this.diagnosticFrames.length } : null;
+  }
+  interrupt(now: number, reason: string, state?: KneeKickState): void {
+    this.advance(now, state);
+    if (this.status !== 'ACTIVE') return;
+    const timing = this.timings[this.currentStageIndex];
+    timing.endedAt = this.lastAdvancedAt;
+    timing.stageEndedWhileState = state ?? this.lastObservedState;
+    this.status = 'INTERRUPTED'; this.interruptionReason = reason;
+  }
+  snapshotDiagnostics(): KickDiagnosticDataset | null {
+    if (!this.getExportInfo() || !this.diagnosticMetadata || this.status === 'IDLE') return null;
+    const dataset: KickDiagnosticDataset = {
+      version: 3, ...this.diagnosticMetadata, status: this.status, capturedAt: this.lastAdvancedAt,
+      endedAt: this.status === 'ACTIVE' ? null : this.timings.filter((timing) => timing.endedAt !== null).at(-1)?.endedAt ?? null,
+      interruptionReason: this.interruptionReason, detectorConfig: diagnosticConfig(),
+      sequence: DETECTOR_TEST_SEQUENCE.map((stage) => ({ ...stage })), stageTimings: this.timings,
+      frames: this.diagnosticFrames,
+      stageSummaries: summarizeKickDiagnostics(this.diagnosticFrames, this.stages, this.timings, this.lastAdvancedAt), existingGuidedSummary: this.summary(),
+    };
+    return structuredClone(dataset);
   }
   exportDiagnosticsJson(): string {
-    if (this.status !== 'COMPLETED' || !this.diagnosticMetadata) throw new Error('Guided Detector Test 완료 후 진단 JSON을 다운로드할 수 있습니다.');
-    const dataset: KickDiagnosticDataset = {
-      version: 3, ...this.diagnosticMetadata, detectorConfig: diagnosticConfig(),
-      sequence: DETECTOR_TEST_SEQUENCE.map((stage) => ({ ...stage })), stageTimings: this.timings.map((stage) => ({ ...stage })), frames: this.diagnosticFrames,
-      stageSummaries: this.getDiagnosticSummary(), existingGuidedSummary: this.summary(),
-    };
+    const dataset = this.snapshotDiagnostics();
+    if (!dataset) throw new Error('Inference frame을 한 개 이상 기록한 뒤 진단 JSON을 다운로드할 수 있습니다.');
     return JSON.stringify(dataset, null, 2);
   }
   private summary(): DetectorTestSummary {
@@ -125,8 +154,8 @@ export class GuidedDetectorTest {
     return { TWIST_LEFT: { falseKickCount: count('TWIST_LEFT').length }, TWIST_RIGHT: { falseKickCount: count('TWIST_RIGHT').length },
       NEUTRAL: { falseKickCount: count('NEUTRAL').length }, KNEE_LEFT: knee('KNEE_LEFT'), KNEE_RIGHT: knee('KNEE_RIGHT') };
   }
-  getView(now: number, _canAdvanceNeutral: boolean): RemoteDetectorTestState {
-    this.advance(now, _canAdvanceNeutral);
+  getView(now: number, detectorState?: KneeKickState): RemoteDetectorTestState {
+    this.advance(now, detectorState);
     const current = this.status === 'ACTIVE' ? this.stageAt(now) : null;
     const expected = current ? this.stages[current.index].expected : null;
     return { status: this.status, expected, remainingMs: current?.remainingMs ?? 0,
@@ -136,6 +165,7 @@ export class GuidedDetectorTest {
   getStages(): DetectorTestStage[] { return this.stages.map((stage) => ({ ...stage, events: stage.events.map((event) => ({ ...event })) })); }
   reset(): void {
     this.startedAt = null; this.status = 'IDLE'; this.stages = []; this.seen.clear();
+    this.interruptionReason = null; this.lastObservedState = null;
     this.diagnosticFrames = []; this.diagnosticMetadata = null; this.timings = []; this.currentStageIndex = 0; this.lastAdvancedAt = 0;
   }
 }

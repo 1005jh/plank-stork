@@ -18,6 +18,44 @@ function confirm(detector: KneeKickDetector, sign = -1, start = 0) {
 }
 
 describe('experimental temporal knee kick detector v2', () => {
+  it('recovers a rejected sway below ENTER immediately, but never spams above ENTER or on missing frames', () => {
+    const detector = ready(); detector.processFrame(features(), 0);
+    for (let time = 100; time <= 700; time += 100) detector.processFrame(features(0.29), time);
+    expect(detector.getView(700)).toMatchObject({ state: 'WAIT_CLEAR', lastEvent: null });
+    for (let time = 750; time <= 1000; time += 50) detector.processFrame(features(0.30), time);
+    detector.processFrame(features(0.28), 1050);
+    detector.processFrame(extractKneeMotionFeatures([]), 1100);
+    expect(detector.getView(1100).state).toBe('WAIT_CLEAR');
+    expect(detector.getValuesForDiagnostics()).toMatchObject({ candidateId: 1, candidateOutcome: 'TIMED_OUT' });
+    expect(detector.processFrame(features(0.27), 1150)).toBeNull();
+    expect(detector.getView(1150)).toMatchObject({ state: 'ARMED', lastEvent: null });
+    expect(detector.processFrame(features(0.30), 1200)).toBeNull();
+    expect(detector.getValuesForDiagnostics()).toMatchObject({ state: 'CANDIDATE', candidateId: 2 });
+  });
+  it('retains EXIT and the full 180ms return dwell after an actual confirmed event', () => {
+    const detector = ready(); confirm(detector);
+    for (const now of [150, 300, 450]) detector.processFrame(features(0.27), now);
+    expect(detector.getView(450)).toMatchObject({ state: 'WAIT_RETURN', counts: { KNEE_LEFT: 1, KNEE_RIGHT: 0 } });
+    detector.processFrame(features(0.14, 0.14), 500);
+    detector.processFrame(features(0.14, 0.14), 679);
+    expect(detector.getView(679).state).toBe('WAIT_RETURN');
+    detector.processFrame(features(0.14, 0.14), 680);
+    expect(detector.getView(680).state).toBe('ARMED');
+  });
+  it.each(['CANDIDATE', 'WAIT_CLEAR', 'WAIT_RETURN'] as const)('cleans all transient evidence from %s while preserving the exact Neutral baseline', (state) => {
+    const detector = ready();
+    if (state === 'WAIT_RETURN') confirm(detector);
+    else { detector.processFrame(features(), 0); detector.processFrame(features(-0.5), 20); }
+    const now = state === 'WAIT_CLEAR' ? 420 : 100;
+    expect(detector.getView(now).state).toBe(state);
+    detector.restartTrial();
+    expect(detector.getView(now)).toMatchObject({ baseline, state: 'ARMED', validNow: false, usableLeftNow: false, usableRightNow: false,
+      normalizedLeft: null, normalizedRight: null, lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
+    expect(detector.getValuesForDiagnostics()).toMatchObject({ candidateId: null, candidateFrameCount: 0, candidateOutcome: null });
+    detector.processFrame(features(-0.7), now + 50);
+    expect(detector.getView(now + 50).normalizedLeftVelocity).toBeNull();
+    expect(detector.getValuesForDiagnostics()).toMatchObject({ candidateId: 1, candidatePeakAbsVelocity: 0 });
+  });
   it('is NOT_READY before a valid baseline and rejects small/nonfinite body scales', () => {
     const detector = new KneeKickDetector();
     expect(detector.processFrame(features(-1), 0)).toBeNull();
@@ -60,7 +98,7 @@ describe('experimental temporal knee kick detector v2', () => {
     for (let time = 100; time <= 700; time += 100) {
       expect(detector.processFrame({ ...features(0, 0.285 + Math.min(0.057, (time - 100) * 0.0001)), leftKneeVisibility: 0.1 }, time)).toBeNull();
     }
-    expect(detector.getView(700)).toMatchObject({ state: 'WAIT_RETURN', lastEvent: null });
+    expect(detector.getView(700)).toMatchObject({ state: 'WAIT_CLEAR', lastEvent: null });
     expect(detector.getValuesForDiagnostics()).toMatchObject({ candidateOutcome: 'TIMED_OUT', candidateSawLeft: false, candidateSawRight: true });
   });
   it('CASE D: Neutral sway lacks confirmation displacement/velocity and does not repeatedly start candidates', () => {
@@ -111,7 +149,7 @@ describe('experimental temporal knee kick detector v2', () => {
       const values = features(-0.6, 0.7); values[side === 'left' ? 'rightKneeVisibility' : 'leftKneeVisibility'] = null;
       expect(detector.processFrame(values, time)).toBeNull();
     }
-    expect(detector.getView(640).state).toBe('WAIT_RETURN');
+    expect(detector.getView(640).state).toBe('WAIT_CLEAR');
   });
   it('can collect the two usable knees on different candidate frames', () => {
     const detector = ready(); detector.processFrame(features(), 0);
@@ -125,7 +163,7 @@ describe('experimental temporal knee kick detector v2', () => {
       const start = peak > 0.34 ? 200 : 20;
       detector.processFrame(features(crossing), start);
       for (let offset = 100; offset <= 600; offset += 100) expect(detector.processFrame(features(crossing + (peak - crossing) * offset / 600), start + offset)).toBeNull();
-      expect(detector.getView(start + 600).state).toBe('WAIT_RETURN');
+      expect(detector.getView(start + 600).state).toBe('WAIT_CLEAR');
     }
   });
   it('requires direction margin and never confirms at or after the 600ms timeout boundary', () => {
@@ -147,13 +185,13 @@ describe('experimental temporal knee kick detector v2', () => {
     const detector = ready(); detector.processFrame(features(), 0);
     detector.processFrame(features(-0.5), 20);
     expect(detector.processFrame(features(-1), 420)).toBeNull();
-    expect(detector.getValuesForDiagnostics()).toMatchObject({ state: 'WAIT_RETURN', candidateOutcome: 'STALE', candidateEndedAt: 420 });
+    expect(detector.getValuesForDiagnostics()).toMatchObject({ state: 'WAIT_CLEAR', candidateOutcome: 'STALE', candidateEndedAt: 420 });
   });
   it.each(['no-frames', 'invalid-frames'] as const)('cancels long stale candidate (%s), with no confirmation on return', (mode) => {
     const detector = ready(); detector.processFrame(features(), 0);
     detector.processFrame(features(-0.5), 20);
     if (mode === 'invalid-frames') for (let time = 100; time <= 400; time += 100) detector.processFrame(extractKneeMotionFeatures([]), time);
-    expect(detector.getView(420).state).toBe('WAIT_RETURN');
+    expect(detector.getView(420).state).toBe('WAIT_CLEAR');
     expect(detector.getValuesForDiagnostics().candidateOutcome).toBe('STALE');
     expect(detector.processFrame(features(-1), 450)).toBeNull();
   });

@@ -5,7 +5,7 @@ const number = (value: number | null) => value?.toFixed(3) ?? '-';
 export function KneeKickDetectorPanel({ kick, canStart, onStart }: {
   kick: ReturnType<typeof useKneeKick>; canStart: boolean; onStart: () => void;
 }) {
-  const { detector, test, baselineCounts, baselineSealed } = kick.view;
+  const { detector, test, baselineCounts, baselineSealed, diagnosticsDownload } = kick.view;
   return <section className="features-panel" aria-labelledby="knee-kick-title">
     <h3 id="knee-kick-title">STEP 4E — Knee Kick Detector</h3>
     <p>Experimental · ENTER {KICK_ENTER_DISPLACEMENT} / EXIT {KICK_EXIT_DISPLACEMENT} / return {RETURN_DWELL_MS}ms</p>
@@ -56,8 +56,9 @@ export function KneeKickDetectorPanel({ kick, canStart, onStart }: {
         </tr>)}</tbody>
       </table></div>
       <p>Start State는 각 stage의 첫 inference 직전 상태입니다. Fresh는 현재 Kick geometry 기준이며 4A smoothing validity와 독립적입니다. 두 validity 비교·visibility·위치 통계는 JSON에서 확인하세요.</p>
-      <button onClick={kick.downloadDiagnostics}>Download Detector Diagnostics JSON</button>
-      {kick.downloadError && <p className="camera-error" role="alert">{kick.downloadError}</p>}
     </>}
+    {diagnosticsDownload && <p>Diagnostics: {diagnosticsDownload.status} · {diagnosticsDownload.frameCount} frames · {diagnosticsDownload.source === 'CURRENT' ? '현재 trial' : '보존된 이전 trial'}</p>}
+    <button disabled={!diagnosticsDownload} onClick={kick.downloadDiagnostics}>Download Current Detector Diagnostics JSON</button>
+    {kick.downloadError && <p className="camera-error" role="alert">{kick.downloadError}</p>}
   </section>;
 }

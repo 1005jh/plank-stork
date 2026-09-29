@@ -262,7 +262,7 @@ describe('phone calibration remote UI and connection lifecycle', () => {
 
   it.each([
     ['ARMED', false, 'READY · ARMED'],
-    ['WAIT_RETURN', false, '복귀 감지 중'],
+    ['WAIT_RETURN', false, 'READY · WAIT_RETURN'],
     ['CANDIDATE', false, 'KICK 후보 확인 중'],
   ] as const)('shows %s with correct start gating and guidance', async (detectorState, disabled, message) => {
     const state = initialSnapshot(); state.neutral = { ...state.neutral, frozen: true, collectionState: 'FROZEN' };
@@ -276,10 +276,10 @@ describe('phone calibration remote UI and connection lifecycle', () => {
   });
 
   it.each([
-    [true, true, true, 'BOTH KNEES READY', false],
-    [false, true, true, 'LEFT KNEE NOT VISIBLE', false],
-    [true, false, true, 'RIGHT KNEE NOT VISIBLE', false],
-    [false, false, false, 'POSE GEOMETRY NOT READY', false],
+    [true, true, true, 'Tracking OK', false],
+    [false, true, true, 'Tracking Weak', false],
+    [true, false, true, 'Tracking Weak', false],
+    [false, false, false, 'Tracking Weak', false],
   ] as const)('shows usable knees L=%s R=%s and actionable start guidance', async (left, right, valid, message, disabled) => {
     const state = initialSnapshot(); state.neutral = { ...state.neutral, frozen: true, collectionState: 'FROZEN' };
     state.kneeKick = { ...state.kneeKick, ready: true, validNow: valid, usableLeftNow: left, usableRightNow: right, state: 'ARMED' };
@@ -316,12 +316,13 @@ describe('phone calibration remote UI and connection lifecycle', () => {
     await receive(state);
     const guide = () => container.querySelector('[aria-labelledby="mobile-kick-title"] .action-guide')!;
     expect(guide().textContent).not.toContain('Detector ARMED 대기 중'); expect(guide().querySelector('.countdown')).not.toBeNull();
-    await advance(500); expect(guide().textContent).toContain('기본 자세로 돌아와 유지하세요');
+    await advance(500); expect(guide().textContent).toContain('기본 자세');
     await receive({ ...state, kneeKick: { ...state.kneeKick, state: 'ARMED' }, detectorTest: { ...state.detectorTest, expected: 'KNEE_RIGHT', remainingMs: 3000, waitingForArmed: false } });
     expect(guide().textContent).toContain('오른쪽 니킥'); expect(guide().querySelector('.countdown')!.textContent).toBe('3.0초');
     await receive({ ...state, kneeKick: { ...state.kneeKick, validNow: false }, lastCommandError: 'DETECTOR_NOT_ARMED' });
     expect(guide().textContent).toContain('타이머와 동작 안내는 계속');
-    expect(container.querySelector('[role="alert"]')!.textContent).toContain('ARMED 대기');
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain('새 테스트는 보정된 baseline으로 시작');
+    expect(container.querySelector('[aria-labelledby="mobile-kick-title"]')!.textContent).not.toMatch(/ARMED 대기|인식까지 기다리|유지하고 기다리/);
   });
 
   it('shows compact kick events and guides a test without any Action prototypes', async () => {

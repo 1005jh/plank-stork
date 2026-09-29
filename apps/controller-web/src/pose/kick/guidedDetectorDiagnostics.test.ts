@@ -15,6 +15,42 @@ const metadata = (): KickDiagnosticMetadata => ({ createdAt: '2026-09-26T00:00:0
 const read = (test: GuidedDetectorTest) => JSON.parse(test.exportDiagnosticsJson()) as KickDiagnosticDataset;
 
 describe('guided diagnostic frame storage and export', () => {
+  it.each(['WAIT_RETURN', 'CANDIDATE', 'NOT_READY', 'WAIT_CLEAR', 'ARMED'] as const)('never extends the 22-second schedule for %s or unusable pose; misses remain observable', (state) => {
+    const test = new GuidedDetectorTest(); test.start(0, true); test.beginDiagnostics(metadata());
+    const usable = state !== 'NOT_READY' && state !== 'ARMED';
+    for (let time = 0; time < 22000; time += 50) {
+      test.advance(time, state);
+      test.recordDiagnosticFrame({ ...input(time), ...frameValidity(usable), poseFresh: usable, usableLeft: usable, usableRight: usable, stateBefore: state, stateAfter: state });
+      if (time === 2000) expect(test.getView(time, state)).toMatchObject({ expected: 'TWIST_LEFT', remainingMs: 3000, waitingForArmed: false });
+    }
+    expect(test.getView(22000, state).status).toBe('COMPLETED');
+    const dataset = read(test);
+    expect(dataset.endedAt).toBe(22000);
+    expect(dataset.stageSummaries.map((row) => row.stageActualDurationMs)).toEqual([2000, 3000, 2000, 3000, 2000, 3000, 2000, 3000, 2000]);
+    expect(dataset.stageSummaries.every((row) => row.stageActualDurationMs === row.stagePlannedDurationMs)).toBe(true);
+    expect(dataset.stageSummaries[5]).toMatchObject({ stageStartedWhileState: state, stageEndedWhileState: state,
+      detectorUnavailableFrames: state === 'CANDIDATE' ? 0 : 60, stateFrameCounts: { [state]: 60 }, eventCount: 0 });
+    expect(dataset.existingGuidedSummary.KNEE_LEFT.detected).toBe(false);
+  });
+  it('exports a detached ACTIVE snapshot, then INTERRUPTED data with the actual partial stage duration', () => {
+    const test = new GuidedDetectorTest(); test.start(0, true); test.beginDiagnostics(metadata());
+    expect(() => test.exportDiagnosticsJson()).toThrow();
+    test.recordDiagnosticFrame(input(100));
+    const active = read(test);
+    expect(active).toMatchObject({ version: 3, status: 'ACTIVE', capturedAt: 100, endedAt: null, interruptionReason: null });
+    expect(active.stageSummaries[0].stageActualDurationMs).toBe(100);
+    active.frames[0].kickValidityReasons.length = 0;
+    expect(read(test).frames[0].kickValidityReasons).toContain('NO_LANDMARKS');
+    test.advance(2500, 'WAIT_RETURN'); test.recordDiagnosticFrame(input(2500));
+    test.interrupt(2750, 'CAMERA_STOP', 'WAIT_RETURN');
+    const interrupted = read(test);
+    expect(interrupted).toMatchObject({ status: 'INTERRUPTED', endedAt: 2750, interruptionReason: 'CAMERA_STOP' });
+    expect(interrupted.stageSummaries[0].stageActualDurationMs).toBe(2000);
+    expect(interrupted.stageSummaries[1]).toMatchObject({ stagePlannedDurationMs: 3000, stageActualDurationMs: 750, stageEndedWhileState: 'WAIT_RETURN' });
+    expect(interrupted.stageSummaries[2]).toMatchObject({ stageActualDurationMs: 0, stageStartedWhileState: null, stageEndedWhileState: null });
+    test.getView(30000); test.recordDiagnosticFrame(input(30000));
+    expect(read(test)).toEqual(interrupted);
+  });
   it('only stores ACTIVE inference frames and attributes exact sequence boundaries with existing timing', () => {
     const test = new GuidedDetectorTest();
     test.recordDiagnosticFrame(input(0));
@@ -30,7 +66,7 @@ describe('guided diagnostic frame storage and export', () => {
       now += stage.durationMs;
     }
     advanceUnblockedTest(test, now); test.recordDiagnosticFrame(input(now)); // End-exclusive, even before the UI tick completes the test.
-    test.getView(now, true);
+    test.getView(now);
     test.recordDiagnosticFrame(input(now + 1));
     const dataset = read(test);
     expect(dataset.frames.map(({ timestamp, stageIndex, expected }) => ({ timestamp, stageIndex, expected }))).toEqual(expected);
@@ -80,15 +116,15 @@ describe('guided diagnostic frame storage and export', () => {
   });
   it('exports fixed deadlines even with unavailable input and delayed ticks', () => {
     const test = new GuidedDetectorTest(); test.start(0, true); test.beginDiagnostics(metadata());
-    test.advance(2500, false); test.recordDiagnosticFrame(input(2500));
-    test.advance(3000, true); test.recordDiagnosticFrame(input(3000));
+    test.advance(2500); test.recordDiagnosticFrame(input(2500));
+    test.advance(3000); test.recordDiagnosticFrame(input(3000));
     test.record({ id: 1, direction: 'KNEE_LEFT', timestamp: 3000 });
-    test.advance(6000, false); test.recordDiagnosticFrame(input(6000));
-    test.advance(8000, false);
-    for (const time of [9000, 12000, 14000, 17000, 19000, 22000]) test.advance(time, true);
-    test.advance(24000, false); test.recordDiagnosticFrame(input(24000));
-    expect(test.getView(24999, false).status).toBe('COMPLETED');
-    test.advance(25000, true);
+    test.advance(6000); test.recordDiagnosticFrame(input(6000));
+    test.advance(8000);
+    for (const time of [9000, 12000, 14000, 17000, 19000, 22000]) test.advance(time);
+    test.advance(24000); test.recordDiagnosticFrame(input(24000));
+    expect(test.getView(24999).status).toBe('COMPLETED');
+    test.advance(25000);
     const dataset = read(test);
     expect(dataset.frames.map((frame) => frame.stageIndex)).toEqual([1, 1, 2]);
     expect(dataset.stageTimings[0]).toMatchObject({ startedAt: 0, endedAt: 2000, armedWaitMs: 0 });

@@ -42,7 +42,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
       actions.reset();
       validation.reset();
       motion.reset();
-      kick.reset();
+      kick.reset('CAMERA_STOP');
       remote.publishStopped();
     },
   });
@@ -51,7 +51,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
     if (status !== 'RUNNING' || getRecordingContext() === null) return;
     validation.reset();
     motion.reset();
-    kick.reset();
+    kick.reset('RECALIBRATION');
     actions.resetCalibration();
     features.calibrate(true);
   }
@@ -78,7 +78,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
     });
   }
   function startDetectorTest() {
-    return status === 'RUNNING' && getRecordingContext() !== null && features.getCurrent().collectionState === 'FROZEN' && kick.startTest();
+    return status === 'RUNNING' && features.getCurrent().collectionState === 'FROZEN' && kick.startTest();
   }
   const remote = useCalibrationRemote(socket, {
     getCamera: () => ({ cameraRunning: status === 'RUNNING', poseDetected: status === 'RUNNING' && getRecordingContext() !== null }),
