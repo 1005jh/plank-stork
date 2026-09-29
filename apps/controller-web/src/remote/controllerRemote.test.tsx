@@ -244,6 +244,32 @@ describe('controller remote lifecycle', () => {
     await request('calibration:sync:requested');
   }
 
+  it.each([25, 26])('starts with knee %s unavailable and advances despite missing 4A depth', async (index) => {
+    const read = vi.spyOn(KneeKickAnalysis.prototype, 'processFrame');
+    await freezeKickNeutral();
+    await advance(50);
+    const frame = motionFrame(now); frame.landmarks[index].visibility = 0.49;
+    callbacks?.onFrame?.(frame);
+    await request('kick:test:start:requested', 'one-knee');
+    expect(snapshot()).toMatchObject({ lastCommandError: null, detectorTest: { status: 'ACTIVE' }, kneeKick: {
+      ready: true, state: 'ARMED', validNow: true, usableLeftNow: index !== 25, usableRightNow: index !== 26,
+    } });
+    const controllerStart = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Start Guided Detector Test')!;
+    expect(controllerStart.disabled).toBe(true);
+    async function noDepthFrame() {
+      await advance(50);
+      const current = motionFrame(now); current.worldLandmarks = []; callbacks?.onFrame?.(current);
+    }
+    await noDepthFrame();
+    expect(read.mock.calls.at(-1)![1].smoothed.validNow).toBe(false);
+    await request('kick:test:start:requested', 'both-knees');
+    expect(snapshot()).toMatchObject({ lastCommandError: null, detectorTest: { status: 'ACTIVE' }, kneeKick: { validNow: true, usableLeftNow: true, usableRightNow: true } });
+    for (let step = 0; step < 40; step++) await noDepthFrame();
+    await request('calibration:sync:requested');
+    expect(snapshot().detectorTest).toMatchObject({ expected: 'TWIST_LEFT', waitingForArmed: false });
+    expect(Object.keys(snapshot().kneeKick).sort()).toEqual(['ready', 'validNow', 'usableLeftNow', 'usableRightNow', 'state', 'currentEvent', 'lastEvent', 'counts'].sort());
+  });
+
   it('publishes compact live kick events without Action calibration and keeps Mirror/hold independent', async () => {
     await freezeKickNeutral();
     expect(snapshot().actionCalibration.status).toBe('IDLE');
@@ -252,6 +278,8 @@ describe('controller remote lifecycle', () => {
     now += 1; callbacks?.onFrame?.(frame);
     expect(socket.emit).not.toHaveBeenCalled();
     await request('calibration:sync:requested');
+    expect(snapshot().kneeKick).toMatchObject({ state: 'CANDIDATE', currentEvent: 'NONE', counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
+    await kickFrame(-0.15); await kickFrame(-0.15);
     expect(snapshot().kneeKick).toMatchObject({ state: 'WAIT_RETURN', currentEvent: 'KNEE_LEFT', counts: { KNEE_LEFT: 1, KNEE_RIGHT: 0 } });
     expect(JSON.stringify(snapshot().kneeKick)).not.toMatch(/landmarks|baseline|velocity|Displacement/);
     const before = snapshot().kneeKick;
@@ -261,7 +289,7 @@ describe('controller remote lifecycle', () => {
     for (let index = 0; index < 5; index++) await kickFrame(-0.15);
     expect(snapshot().kneeKick.counts.KNEE_LEFT).toBe(1);
     for (let index = 0; index < 5; index++) await kickFrame();
-    await kickFrame(0.15);
+    await kickFrame(0.15); await kickFrame(0.15); await kickFrame(0.15);
     expect(snapshot().kneeKick.counts).toEqual({ KNEE_LEFT: 1, KNEE_RIGHT: 1 });
     await advance(400);
     await request('calibration:sync:requested');
@@ -317,33 +345,50 @@ describe('controller remote lifecycle', () => {
     expect(engine.getDiagnosticSummary()).toEqual([]);
     expect(container.querySelector('[aria-label="Detector diagnostics"]')).toBeNull();
     expect(snapshot().detectorTest.status).toBe('IDLE');
-    expect(snapshot().kneeKick.counts.KNEE_LEFT).toBe(1);
+    expect(snapshot().kneeKick.counts.KNEE_LEFT).toBe(0);
     await request('calibration:neutral:start:requested', 'kick-recalibrate');
-    expect(snapshot().kneeKick).toMatchObject({ ready: false, lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
+    expect(snapshot().kneeKick).toMatchObject({ ready: false, validNow: false, usableLeftNow: false, usableRightNow: false, lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
     expect(() => engine.exportDiagnosticsJson()).toThrow();
     for (let index = 0; index < 20; index++) { await advance(50); callbacks?.onFrame?.(motionFrame(now)); }
     await request('calibration:sync:requested');
     expect(snapshot().kneeKick.ready).toBe(true);
     await request('kick:test:start:requested', 'second-test');
     await act(async () => camera.stop());
-    expect(snapshot().kneeKick.ready).toBe(false);
+    expect(snapshot().kneeKick).toMatchObject({ ready: false, validNow: false, usableLeftNow: false, usableRightNow: false });
     expect(snapshot().detectorTest.status).toBe('IDLE');
     expect(() => engine.exportDiagnosticsJson()).toThrow();
     await act(async () => root.unmount());
-    expect(engine.getView(now).detector.state).toBe('NOT_READY');
+    expect(engine.getView(now).detector).toMatchObject({ state: 'NOT_READY', validNow: false, usableLeftNow: false, usableRightNow: false });
     expect(engine.getDiagnosticSummary()).toEqual([]);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('restarts independently of previous candidates, return latch and stale pose; completes without new frames', async () => {
+    await freezeKickNeutral();
+    await kickFrame(-0.15);
+    await request('kick:test:start:requested', 'candidate-start');
+    expect(snapshot()).toMatchObject({ lastCommandError: null, detectorTest: { status: 'ACTIVE' }, kneeKick: { state: 'ARMED' } });
+    for (let index = 0; index < 45; index++) await kickFrame(-0.15);
+    expect(snapshot().detectorTest).toMatchObject({ expected: 'TWIST_LEFT', waitingForArmed: false });
+    expect(snapshot().kneeKick.state).toBe('WAIT_RETURN');
+    await request('kick:test:reset:requested');
+    expect(snapshot().kneeKick).toMatchObject({ state: 'ARMED', lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
+    await advance(400);
+    await request('kick:test:start:requested', 'stale-start');
+    expect(snapshot()).toMatchObject({ lastCommandError: null, detectorTest: { status: 'ACTIVE' } });
+    await advance(22000);
+    await request('calibration:sync:requested');
+    expect(snapshot().detectorTest).toMatchObject({ status: 'COMPLETED', waitingForArmed: false });
   });
 
   it('revokes a pending diagnostic download and clears the completed dataset on unmount', async () => {
     const read = vi.spyOn(KneeKickAnalysis.prototype, 'processFrame');
     await freezeKickNeutral();
     await request('kick:test:start:requested');
-    await kickFrame(-0.15);
-    await advance(22000);
+    for (let elapsed = 50; elapsed <= 22000; elapsed += 50) { await advance(50); callbacks?.onFrame?.(motionFrame(now)); }
     const engine = read.mock.contexts.at(-1)!;
     if (!(engine instanceof KneeKickAnalysis)) throw new Error('Missing kick engine');
-    expect(JSON.parse(engine.exportDiagnosticsJson()).frames).toHaveLength(1);
+    expect(JSON.parse(engine.exportDiagnosticsJson()).frames).toHaveLength(439);
     const revoke = vi.fn();
     vi.stubGlobal('URL', class extends URL { static createObjectURL = () => 'blob:kick-unmount'; static revokeObjectURL = revoke; });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});

@@ -17,8 +17,8 @@ function initialSnapshot(): CalibrationRemoteState {
       readiness: { TWIST_LEFT: false, TWIST_RIGHT: false, KNEE_LEFT: false, KNEE_RIGHT: false } },
     classification: null, lastCommandError: null,
     validation: { status: 'IDLE', phase: 'IDLE', expectedAction: null, remainingMs: 0, recordedFrames: 0 },
-    kneeKick: { ready: false, validNow: false, state: 'NOT_READY', currentEvent: 'NONE', lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } },
-    detectorTest: { status: 'IDLE', expected: null, remainingMs: 0, eventCount: 0, summary: null },
+    kneeKick: { ready: false, validNow: false, usableLeftNow: false, usableRightNow: false, state: 'NOT_READY', currentEvent: 'NONE', lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } },
+    detectorTest: { waitingForArmed: false, status: 'IDLE', expected: null, remainingMs: 0, eventCount: 0, summary: null },
     motionValidation: { status: 'IDLE', phase: 'IDLE', expectedMotion: null, remainingMs: 0, recordedFrames: 0 },
   };
 }
@@ -260,18 +260,82 @@ describe('phone calibration remote UI and connection lifecycle', () => {
     expect(panel.textContent).toContain('Download Motion Validation JSON');
   });
 
+  it.each([
+    ['ARMED', false, 'READY · ARMED'],
+    ['WAIT_RETURN', false, '복귀 감지 중'],
+    ['CANDIDATE', false, 'KICK 후보 확인 중'],
+  ] as const)('shows %s with correct start gating and guidance', async (detectorState, disabled, message) => {
+    const state = initialSnapshot(); state.neutral = { ...state.neutral, frozen: true, collectionState: 'FROZEN' };
+    state.kneeKick = { ...state.kneeKick, ready: true, validNow: true, usableLeftNow: true, usableRightNow: true, state: detectorState };
+    await receive(state);
+    expect(button('Guided Detector Test 시작').disabled).toBe(disabled);
+    expect(container.querySelector('[aria-labelledby="mobile-kick-title"]')!.textContent).toContain(message);
+    if (disabled) {
+      socket.emit.mockClear(); await act(async () => button('Guided Detector Test 시작').click()); expect(socket.emit).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each([
+    [true, true, true, 'BOTH KNEES READY', false],
+    [false, true, true, 'LEFT KNEE NOT VISIBLE', false],
+    [true, false, true, 'RIGHT KNEE NOT VISIBLE', false],
+    [false, false, false, 'POSE GEOMETRY NOT READY', false],
+  ] as const)('shows usable knees L=%s R=%s and actionable start guidance', async (left, right, valid, message, disabled) => {
+    const state = initialSnapshot(); state.neutral = { ...state.neutral, frozen: true, collectionState: 'FROZEN' };
+    state.kneeKick = { ...state.kneeKick, ready: true, validNow: valid, usableLeftNow: left, usableRightNow: right, state: 'ARMED' };
+    await receive(state);
+    const panel = container.querySelector('[aria-labelledby="mobile-kick-title"]')!;
+    expect(panel.textContent).toContain(message);
+    expect(button('Guided Detector Test 시작').disabled).toBe(disabled);
+    const reason = panel.querySelector('#kick-start-reason')!.textContent;
+    expect(reason).toContain('현재 인식 상태와 관계없이');
+    socket.emit.mockClear(); await act(async () => button('Guided Detector Test 시작').click());
+    if (disabled) expect(socket.emit).not.toHaveBeenCalled();
+    else expect(socket.emit).toHaveBeenCalledWith('kick:test:start', expect.any(Object));
+    // Geometry guidance remains visible within the auto-scrolled active test, too.
+    state.detectorTest = { ...state.detectorTest, status: 'ACTIVE', expected: 'KNEE_LEFT', remainingMs: 1000 };
+    await receive({ ...state });
+    expect(panel.querySelector('.action-guide')!.textContent).toContain(message);
+  });
+
+  it('explains camera/Neutral prerequisites beside the disabled test button', async () => {
+    const state = initialSnapshot(); state.controller.cameraRunning = false;
+    await receive(state);
+    expect(button('Guided Detector Test 시작').disabled).toBe(true);
+    expect(container.querySelector('#kick-start-reason')!.textContent).toContain('카메라를 시작');
+    state.controller.cameraRunning = true;
+    await receive({ ...state });
+    expect(button('Guided Detector Test 시작').disabled).toBe(true);
+    expect(container.querySelector('#kick-start-reason')!.textContent).toContain('기본 자세 보정을 먼저 완료');
+  });
+
+  it('keeps a countdown visible regardless of detector return state', async () => {
+    const state = initialSnapshot(); state.neutral = { ...state.neutral, frozen: true, collectionState: 'FROZEN' };
+    state.kneeKick = { ...state.kneeKick, ready: true, validNow: true, usableLeftNow: true, usableRightNow: true, state: 'WAIT_RETURN' };
+    state.detectorTest = { status: 'ACTIVE', expected: 'NEUTRAL', remainingMs: 0, waitingForArmed: true, eventCount: 1, summary: null };
+    await receive(state);
+    const guide = () => container.querySelector('[aria-labelledby="mobile-kick-title"] .action-guide')!;
+    expect(guide().textContent).not.toContain('Detector ARMED 대기 중'); expect(guide().querySelector('.countdown')).not.toBeNull();
+    await advance(500); expect(guide().textContent).toContain('기본 자세로 돌아와 유지하세요');
+    await receive({ ...state, kneeKick: { ...state.kneeKick, state: 'ARMED' }, detectorTest: { ...state.detectorTest, expected: 'KNEE_RIGHT', remainingMs: 3000, waitingForArmed: false } });
+    expect(guide().textContent).toContain('오른쪽 니킥'); expect(guide().querySelector('.countdown')!.textContent).toBe('3.0초');
+    await receive({ ...state, kneeKick: { ...state.kneeKick, validNow: false }, lastCommandError: 'DETECTOR_NOT_ARMED' });
+    expect(guide().textContent).toContain('타이머와 동작 안내는 계속');
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain('ARMED 대기');
+  });
+
   it('shows compact kick events and guides a test without any Action prototypes', async () => {
     const state = initialSnapshot();
     await receive(state);
     expect(button('Guided Detector Test 시작').disabled).toBe(true);
     state.neutral = { ...state.neutral, frozen: true, collectionState: 'FROZEN' };
-    state.kneeKick = { ...state.kneeKick, ready: true, validNow: true, state: 'ARMED' };
+    state.kneeKick = { ...state.kneeKick, ready: true, validNow: true, usableLeftNow: true, usableRightNow: true, state: 'ARMED' };
     await receive({ ...state });
     expect(button('Guided Detector Test 시작').disabled).toBe(false);
     await act(async () => button('Guided Detector Test 시작').click());
     expect(socket.emit).toHaveBeenLastCalledWith('kick:test:start', expect.any(Object));
     state.kneeKick = { ...state.kneeKick, currentEvent: 'KNEE_LEFT', state: 'WAIT_RETURN', lastEvent: { id: 1, direction: 'KNEE_LEFT', timestamp: 123 }, counts: { KNEE_LEFT: 1, KNEE_RIGHT: 0 } };
-    state.detectorTest = { status: 'ACTIVE', expected: 'KNEE_LEFT', remainingMs: 1800, eventCount: 1, summary: null };
+    state.detectorTest = { waitingForArmed: false, status: 'ACTIVE', expected: 'KNEE_LEFT', remainingMs: 1800, eventCount: 1, summary: null };
     await receive({ ...state });
     const panel = () => container.querySelector('[aria-labelledby="mobile-kick-title"]')!;
     expect(panel().textContent).toContain('LEFT KICK');

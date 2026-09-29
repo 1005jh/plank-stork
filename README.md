@@ -501,92 +501,109 @@ Neutral 재보정, Camera Stop/해제/추론 오류, unmount는 Motion dataset/s
 6. **Download Motion Validation JSON**을 누릅니다. 같은 조건에서 여러 번 측정하고, pose/visibility와 실제 동작 수행을 함께 확인하며 세션별 corridor·속도·반복 변화를 비교합니다. 현재 앱은 이 통계로 KICK을 판정하지 않습니다.
 7. 짧은/긴 pose loss, Mirror ON/OFF, Reset, Neutral 재보정, Camera Stop 및 폰 연결 해제도 확인합니다. 접근이 막히면 기존 STEP 1의 사설 네트워크 포트 허용 안내를 따르며 방화벽 전체를 끄지 않습니다.
 
-## STEP 4E: Knee Kick Event Detector v1
+## STEP 4E-v2: Temporal Knee Kick Confirmation + Mobile Operator Gating
 
-STEP 4D의 raw image-space signal로 실시간 Knee Kick 이벤트를 측정합니다. 기존 Pose classifier v1, Action prototype, STEP 3B/4A/4B/4C/4D의 계산과 상수는 변경하지 않습니다. 최종 Twist detector, ML, game input 연결은 없습니다. **Action Calibration과 STEP 4D recording은 필요하지 않습니다.**
+기존 STEP 4E의 첫 ENTER crossing 즉시 확정을 **candidate → temporal confirmation**으로 변경합니다. 실제 관측에서 첫 crossing은 RIGHT 우세였지만 33~500ms 후 LEFT가 우세해진 사례와, 한쪽 knee만 보인 낮은 속도의 Twist 오검출을 재검증하기 위한 실험입니다. Action classifier v1, STEP 4D, camera/visibility/좌표 계산과 4D/4E 패널 순서는 유지합니다. Action Calibration이나 STEP 4D 기록 없이 Neutral 보정 후 사용할 수 있습니다.
 
-**Neutral baseline**
+**기존 Neutral baseline과 좌표는 유지**
 
-기존 Neutral 보정 중 HIP/FINISHING 구간의 inference frame을 별도 bounded buffer에 수집하고, **FROZEN 시 한 번 고정**합니다. 최근 1초의 각 knee 유효 sample이 20개 이상일 때 아래 baseline을 만듭니다. FROZEN을 만든 frame은 포함하지만 grace deadline 이후 frame은 포함하지 않습니다. Visibility 기준은 hip 양쪽 ≥ 0.7, 해당 knee ≥ 0.5이며 다른 knee의 결측은 그 knee 표본 수집을 막지 않습니다.
+Neutral HIP/FINISHING 구간의 최근 1초에서 각 knee 유효 표본 20개를 모아 FROZEN 시 baseline을 고정합니다. Hip visibility 양쪽 ≥ 0.7, 해당 knee visibility ≥ 0.5를 그대로 사용합니다. Center offset의 좌우 median과 `(leftKneeHipDistance median + rightKneeHipDistance median) / 2`인 bodyScale을 사용합니다. Scale < 0.01 또는 표본 부족이면 NOT_READY이며, FROZEN 후 추가 동작으로 baseline을 갱신하지 않습니다.
 
-- `neutralLeftMedian` / `neutralRightMedian`: `knee.x − hipCenterX`의 각각 median.
-- `bodyScale`: `(leftKneeHipDistance median + rightKneeHipDistance median) / 2`. 거리는 STEP 4D와 동일한 normalized image X/Y 2D 거리입니다.
-- 양쪽 표본 부족, 유효하지 않은 scale 또는 scale < 0.01이면 **NOT_READY**입니다. FROZEN 후 움직임을 추가 수집하지 않습니다. 카메라 배치와 visibility를 확인한 뒤 Neutral을 다시 보정하세요. Controller에 각 knee 수집 수를 표시합니다.
-- Detector baseline은 STEP 4A의 same-side delta baseline과 별도이며, median 간 차이를 조합해서 대체하지 않습니다. 기존 Neutral calibration의 완료 기준이나 grace period는 변경하지 않습니다.
+각 knee displacement는 `(현재 knee center offset − Neutral median) / bodyScale`입니다. Visibility 기준과 v1 relative velocity/bodyScale 계산은 유지하며, v2.1은 아래 설명처럼 runtime validity에서 4A smoothing 의존만 분리합니다. Mirror와 MediaPipe landmark 이름으로 방향을 바꾸지 않습니다.
 
-**실험 detector와 debug**
+**EXPERIMENTAL candidate / confirmation**
 
-`src/pose/kick/kneeKickDetector.ts`의 순수 상태 머신은 각 inference frame에서 `normalizedLeft/Right = (currentCenterOffset − neutralMedian) / bodyScale`을 계산합니다. 현재 usable한 knee 중 절댓값이 큰 **signed** 값을 dominant로 사용합니다. 정확한 동률은 left landmark 값을 선택합니다. 음수는 KNEE_LEFT, 양수는 KNEE_RIGHT이며 landmark 이름이나 Mirror로 방향을 바꾸지 않습니다.
-
-| 상수 | 초기값 | 용도 |
+| 상수 | 값 | 의미 |
 | --- | --- | --- |
-| KICK_ENTER_DISPLACEMENT | 0.28 | ARMED에서 절댓값이 이 값 이상이면 1회 발생 |
-| KICK_EXIT_DISPLACEMENT | 0.15 | 양쪽 모두 이 값 **미만**이어야 복귀 관찰 |
-| RETURN_DWELL_MS | 180ms | 양쪽의 연속 복귀 확인 후 re-arm |
-| KICK_HIP_VISIBILITY / KICK_KNEE_VISIBILITY | 0.7 / 0.5 | 현재 landmark 사용 가능 여부 |
-| MIN_KICK_BODY_SCALE | 0.01 | 매우 작은/퇴화된 scale 제외 |
-| KICK_STALE_MS | 400ms | 입력 단절과 복귀 dwell 연속성 확인 |
+| KICK_ENTER_DISPLACEMENT | 0.28 | ARMED에서 candidate 시작, 즉시 event 아님 |
+| KICK_EXIT_DISPLACEMENT | 0.15 | 기존 양쪽 Neutral 복귀 경계 |
+| RETURN_DWELL_MS | 180ms | 기존 연속 복귀 유지 시간 |
+| KICK_CANDIDATE_MIN_MS | 60ms | 이 시간 전 confirmation 금지 |
+| KICK_CANDIDATE_MAX_MS | 600ms | 이 시각부터 timeout, confirmation 금지 |
+| KICK_CONFIRM_DISPLACEMENT | 0.34 | Candidate의 가장 큰 절대 peak |
+| KICK_CONFIRM_VELOCITY | 5.0 | Candidate의 normalized absolute velocity peak (초당) |
+| KICK_DIRECTION_MARGIN | 0.08 | 양/음 peak magnitude 차이 |
 
-ENTER/EXIT는 **3회 실측에서 관찰된 Twist peak < 약 0.23, Kick peak > 약 0.34 간격을 바탕으로 한 experimental constant**입니다. 제품의 확정 threshold가 아니며 카메라/사용자/세션을 바꾼 추가 실측이 필요합니다. 나머지 품질·시간 상수도 코드에서 분리되어 있습니다.
+모두 **현재 확보한 데이터에 대한 experimental 시작값**이며 최종·일반화된 threshold가 아닙니다. 기존 4D의 Kick normalized peak는 최소 약 0.345 이상, Twist는 대부분 0.28 이하였고, diagnostics의 false Twist는 약 0.342 displacement에 velocity 약 1.3을 보였습니다. v2는 displacement와 velocity를 함께 사용합니다. 다양한 실제 세션에서 재검증해야 합니다.
 
-`NOT_READY → ARMED → TRIGGERED_LEFT/RIGHT → WAIT_RETURN → ARMED`로 진행합니다. TRIGGERED는 event를 만드는 순간의 전이이며 같은 호출에서 즉시 WAIT_RETURN으로 잠급니다. 바깥 자세를 유지하거나 바로 반대쪽으로 이동해도 추가 event는 없습니다. **양쪽이 usable하고 EXIT 안인 상태를 180ms 유지**해야 다시 ARMED가 됩니다. 한쪽 결측, pose stale, 바깥 값, 400ms 이상 frame gap은 복귀 dwell을 초기화하지만 WAIT_RETURN 잠금과 기존 count는 유지합니다.
+상태는 `NOT_READY → ARMED → CANDIDATE → WAIT_RETURN → ARMED`입니다.
 
-- Runtime은 현재 HIP pose가 유효하고 hip visibility가 충족된 경우, 각 knee의 finite 좌표와 visibility를 독립 검사합니다. 한 knee만 usable해도 trigger할 수 있습니다. 양쪽 unusable/stale이면 새 trigger를 금지합니다.
-- STEP 4D의 `relativeKneeVelocity / bodyScale`도 표시합니다. 단위는 초당 normalized displacement이며, 이전/현재 knee가 usable하지 않거나 dt가 잘못됐거나 gap이 길면 null입니다. **Velocity는 trigger 조건이 아닙니다.** 추가 smoothing도 적용하지 않습니다.
-- READY는 baseline 준비 여부, `validNow`는 현재 입력 사용 가능 여부입니다. Baseline READY여도 pose loss에서는 displacement/velocity를 `-`로 표시합니다.
-- 큰 `KNEE LEFT / KNEE RIGHT / NONE` 표시는 이벤트를 놓치지 않도록 최대 800ms 유지하는 시각 cue입니다. 지속적인 control 값이 아닙니다. 같은 ID를 표시하는 동안 count는 증가하지 않습니다. Pose loss에서는 current cue를 숨기고 last event와 count는 과거 기록으로 유지합니다.
+1. ARMED + 현재 fresh/usable knee가 한 개 이상이고 dominant 절댓값 ≥ 0.28이면 candidate를 시작합니다. 첫 부호는 방향으로 확정하지 않습니다.
+2. Candidate 동안 **모든 usable 좌우 displacement**에서 positivePeak(0 이상 최댓값), negativePeak(0 이하 최솟값)를 누적합니다. 양/음 evidence가 없던 쪽 magnitude는 0입니다. 가장 큰 좌우 absolute normalized velocity, 좌우 관측 여부와 frame count도 누적합니다.
+3. `60ms ≤ elapsed < 600ms`, 좌우 knee를 각각 최소 한 번 관측, 가장 큰 magnitude ≥ 0.34, velocity peak ≥ 5.0, 양/음 magnitude 차이 ≥ 0.08을 모두 만족하면 이벤트를 한 번 발생시킵니다. 양쪽 knee가 같은 frame에서 usable할 필요는 없습니다. 현재 frame도 fresh하고 최소 한 knee가 usable해야 합니다.
+4. Candidate 전체 trajectory에서 negative magnitude가 크면 KNEE_LEFT, positive가 크면 KNEE_RIGHT입니다. 동률은 margin 부족으로 확정하지 않습니다. **이벤트 timestamp는 confirmation 시각**입니다.
+5. 600ms에 도달하면 그 frame에서 새 evidence를 받아 확정하지 않고 TIMED_OUT → WAIT_RETURN입니다. 신뢰할 수 있는 관측(현재 fresh + usable knee)이 400ms 이상 끊기면 STALE → WAIT_RETURN입니다. 추론이 멈춘 경우에도 기존 Controller UI clock이 만료를 처리하며 event는 만들지 않습니다.
 
-**Guided Detector Test — 22초**
+Timeout/확정/stale 후에는 움직임 중 다시 candidate를 생성하지 않습니다. 기존처럼 양쪽 knee가 usable하고 양쪽 절댓값이 **EXIT 미만**인 상태를 180ms 유지해야 ARMED로 돌아갑니다. 복귀 dwell의 기준·visibility·gap 처리는 유지합니다. Confirmed event를 크게 800ms 표시하는 cue와 historical lastEvent/count도 유지합니다.
 
-폰 또는 Controller의 Start 버튼으로 다음 sequence를 실행합니다. Camera RUNNING, Neutral FROZEN, detector READY와 현재 usable pose가 필요합니다. 테스트를 시작해도 detector baseline/count/WAIT_RETURN 잠금을 초기화하지 않습니다. 첫 Neutral에서 정상 복귀 후 시작할 수 있습니다.
+**Guided Detector Test — 고정 22초 (2026-09-29 재시험 수정)**
+
+시작에는 Camera RUNNING, Neutral FROZEN 및 detector READY(보정값)가 필요합니다. 현재 pose/양쪽 knee visibility/ARMED 여부는 시작을 막지 않습니다. 시작과 Reset Test는 보정값을 유지하고 이전 candidate, return latch, event/count, velocity history를 정리합니다. 진행 중 중복 시작은 무시합니다.
 
 ```text
 NEUTRAL 2s
 TWIST_LEFT 3s → NEUTRAL 2s
 TWIST_RIGHT 3s → NEUTRAL 2s
 KNEE_LEFT 3s → NEUTRAL 2s
-KNEE_RIGHT 3s → NEUTRAL 2s
+KNEE_RIGHT 3s → NEUTRAL 2s → COMPLETE
 ```
 
-동작 안내가 나오면 **그 구간에서 한 번 이동해 수행하고 유지**합니다. Neutral 안내 때 돌아옵니다. 이동 중 event도 해당 expected stage의 관찰에 포함합니다. 시작 시각 포함/종료 시각 제외이며, event timestamp로 stage를 정합니다. 안내에 앞서 움직이거나 늦게 수행하면 다른 stage의 기록으로 남으므로 실제 수행과 안내의 일치를 확인해야 합니다.
+Controller clock은 pose loss나 WAIT_RETURN 상태에도 진행합니다. 늦은 tick은 시작 시각 기준 현재 단계로 따라잡습니다. 폰은 Controller의 단계와 남은 시간을 표시합니다. `waitingForArmed`는 호환성을 위해 남아 있지만 항상 false이며 `armedWaitMs`는 0입니다. 진단과 이벤트는 고정 stageTimings의 시작 포함/종료 제외 구간에 귀속됩니다.
 
-Controller는 각 stage의 event ID/방향, 잘못된 event 수, 첫 event 이후 추가 event 수를 표시합니다. 완료 summary는 다음과 같습니다.
+인식기의 양쪽 무릎 복귀/180ms dwell은 중복 이벤트 방지를 위해 유지합니다. 복귀 실패로 놓친 동작은 miss로 남으며 테스트를 기다리게 하지 않습니다. ARMED는 내부 재입력 가능 상태이지 사용자에게 기다리라는 요구가 아닙니다. 실시간 무릎/geometry 상태는 진단용으로 표시합니다.
 
-- TWIST_LEFT/RIGHT `falseKickCount`: 그 stage에서 나온 모든 kick event 수.
-- NEUTRAL `falseKickCount`: 다섯 Neutral stage에서 나온 모든 kick 수. 복귀 중 오검출도 조용히 제외하지 않습니다.
-- KNEE_LEFT/RIGHT `detected`: 해당 stage에서 한 번 이상 event가 있었는지. false이면 관찰된 miss입니다.
-- `directionCorrect`: 발생한 모든 event가 expected 방향과 같을 때 true, 잘못된 방향이 있으면 false, event가 없으면 null입니다. `wrongEventCount`도 별도로 제공합니다.
-- `duplicateCount`: 해당 stage의 첫 event를 초과하는 개수입니다. 같은 event ID가 재전달돼도 중복 기록하지 않습니다.
+완료 summary의 Twist/Neutral falseKickCount와 각 Knee detected/directionCorrect/wrongEventCount/duplicateCount는 유지합니다. Expected stage는 안내이지 독립적으로 확인한 정답이 아니며 자동 PASS/FAIL을 만들지 않습니다.
 
-자동 PASS/FAIL은 없습니다. Test Reset은 test의 event log와 summary만 비우며 detector의 re-arm 상태나 누적 count는 유지합니다. 다시 시작하면 이전 test 결과를 교체합니다.
+**개발 메모 — 운동 중 operator 정보는 폰에도 표시**
 
-**Remote / lifecycle**
+운동 중 사용자가 확인하거나 행동을 바꿔야 하는 상태·전제조건·대기는 laptop-only로 두지 않습니다. READY/ARMED/CANDIDATE/WAIT_RETURN/Pose loss/Neutral 유지·진행 대기는 Phone에서 확인 가능해야 합니다. Raw numeric debug, 상세 표와 JSON 다운로드는 Controller 전용이어도 됩니다. 이번 변경은 레이아웃/디자인 개선이 아니며 기존 패널 순서를 유지합니다.
 
-폰의 기본 자세 보정 다음에 Knee Kick Detector와 Guided Detector Test를 표시합니다. Controller가 단계를 계산하며 Phone은 큰 안내·남은 시간만 표시합니다. 별도의 폰 countdown은 없습니다. `kick:test:start/reset`을 기존 requestId 기반 relay로 요청합니다.
+**실제 테스트 순서**
 
-기존 250ms `calibration:state`에는 `kneeKick`(ready, validNow, state, currentEvent, lastEvent ID/방향/시간, 좌우 count)와 `detectorTest`(status, expected, remainingMs, eventCount, 완료 summary)만 추가합니다. Raw landmarks, per-frame 수치, baseline, 전체 event log는 Socket으로 보내지 않습니다. 이는 debug snapshot이며 game event가 아닙니다. 기존 연결 만료/재접속 정책을 그대로 사용합니다.
+1. `pnpm dev` 후 노트북 `http://localhost:5173`에서 Camera 시작. 기존 발쪽→머리 카메라 배치를 사용합니다.
+2. 폰에서 `http://<LAPTOP_LAN_IP>:3000/health` 확인 후 `:5174`에 접속하고 Neutral을 보정합니다.
+3. Neutral 보정 후 READY를 확인하고 Guided Detector Test를 시작합니다. 현재 인식 상태에 관계없이 시작할 수 있습니다.
+4. 안내에 따라 각 동작을 한 번 수행합니다. 첫 crossing에 바로 KICK이 뜨지 않는 것이 정상입니다. Neutral 2초가 지나면 다음 동작 안내를 따릅니다.
+5. 성공/오방향/miss run을 각각 노트북의 **Download Detector Diagnostics JSON**으로 저장합니다. 첫 방향과 확정 방향, confirmation latency, 한쪽 knee 미관측으로 인한 timeout을 비교합니다.
+6. 한 동작을 유지할 때 event가 중복되지 않는지, Reset Test 후 이전 WAIT_RETURN/event가 정리되는지, Pose loss·Mirror·재보정·Camera Stop을 확인합니다. JSON은 Stop/재보정/새 테스트 전에 다운로드합니다.
 
-Neutral 재보정, Camera Stop/카메라 해제/추론 실패, unmount 시 detector baseline·count·velocity·복귀 pending·test를 모두 초기화합니다. Mirror는 표시만 바꾸며 detector/test를 초기화하거나 좌표를 변환하지 않습니다. Action calibration/reset 및 STEP 4D reset은 detector baseline에 영향을 주지 않습니다. 서로 다른 guided sequence는 동시에 실행하지 마세요.
+## STEP 4E-v2.1: Kick-specific validity / freshness
 
-**실제 테스트 방법**
+이전 Kick 경로는 `neutral.smoothed.validNow`를 전역 gate로 사용했습니다. STEP 4A의 이 값은 calibrated HIP X/Y/depth 전체를 요구하므로, 예를 들어 world depth가 누락되면 image-space Kick geometry가 정상이어도 displacement 계산을 막았습니다. v2.1은 **Neutral FROZEN과 baseline 수집 조건을 유지**하고, 이후 runtime 판정에서 이 의존을 제거합니다. 4A smoothing과 Action classifier 자체는 바꾸지 않습니다.
 
-1. `pnpm dev` 후 노트북 `http://localhost:5173`에서 Start Camera를 누릅니다. 발쪽에서 머리 방향을 보는 기존 배치를 유지합니다.
-2. 폰에서 `http://<LAPTOP_LAN_IP>:3000/health` 확인 후 `:5174`에 접속합니다. 기본 플랭크 자세에서 Neutral 보정을 시작합니다.
-3. Neutral FROZEN과 **Knee Kick Detector READY**를 확인합니다. NOT_READY면 노트북의 유효 표본 수와 scale, visibility를 확인하고 다시 보정합니다. Action Calibration은 생략합니다.
-4. 폰의 **Guided Detector Test 시작**을 누르고 22초 안내에 따라 각 동작을 한 번 수행합니다. LEFT/RIGHT KICK, count, 완료 후 falseKickCount/detected/directionCorrect/duplicateCount를 확인합니다. 노트북에서 stage별 event와 displacement/velocity도 확인할 수 있습니다.
-5. 자유 테스트로 한쪽 니킥을 계속 유지할 때 count가 1회만 증가하는지, 양쪽을 충분히 Neutral로 복귀한 뒤 반대쪽 이벤트가 발생하는지 확인합니다. 짧은 가림 후에도 바깥 자세에서 재발생하면 안 됩니다.
-6. Mirror 토글, pose loss, 폰 재접속, Neutral 재보정, Camera Stop을 확인합니다. 다른 카메라 거리/세션에서 반복하고 오검출·누락 여부를 비교하세요. 이번 단계는 실제 정확도를 자동 보증하거나 최종 판정값을 확정하지 않습니다.
+Detector API는 `processFrame(features, timestamp)`입니다. 외부 poseFresh를 받지 않으며 현재 inference의 `KneeMotionFeatures`로 다음을 계산합니다.
+
+- Hips usable: 양쪽 hip visibility ≥ 0.7, finite hipCenterX
+- 각 knee usable: hips usable, 해당 knee visibility ≥ 0.5, finite knee X / center offset X / knee–hip distance
+- 한쪽이라도 usable이면 현재 displacement를 계산합니다. Candidate window 내 양쪽 knee evidence 필요 조건은 그대로입니다.
+- STEP 4A의 hipCenterY / hipDepthDifference / world depth / smoothed.validNow는 runtime gate에 사용하지 않습니다. 기존 STEP 4D의 **2D knee–hip distance 수식에 필요한 image x/y geometry**는 여전히 필요하며 결측을 보간하지 않습니다.
+
+Inference 전달 시각과 geometry 유효성을 구분합니다. `validNow`는 **마지막 inference 이후 400ms 미만 + 현재 최소 한 knee usable**이며, `usableLeftNow/usableRightNow`도 delivery가 stale이면 false입니다. Landmarks가 없는 inference는 즉시 unusable입니다. 실제 전달 또는 usable 관측이 400ms 끊기면 기존 candidate STALE 취소가 적용됩니다. ENTER 0.28, EXIT 0.15, return 180ms, candidate 60–600ms, confirmation 0.34 / 5.0 / 0.08과 velocity 계산은 변경하지 않았습니다.
+
+Guided Test는 보정 완료 후 현재 knee usability와 관계없이 시작하며 고정 22초 동안 진행합니다. 폰은 READY/state와 함께 **BOTH KNEES READY / LEFT KNEE NOT VISIBLE / RIGHT KNEE NOT VISIBLE / POSE GEOMETRY NOT READY**를 표시합니다. 시작 버튼 옆에는 보정/카메라 전제조건을 표시합니다. Geometry 메시지는 자동 스크롤된 진행 안내에도 표시합니다. 원격에는 boolean 두 개만 추가하며 raw 수치는 보내지 않습니다.
+
+**실제 재검증 순서**
+
+1. 기존 발쪽→머리 카메라 배치에서 Camera 시작 → 폰 Neutral 보정 → FROZEN / READY / ARMED / BOTH KNEES READY를 확인합니다.
+2. 폰 Guided Detector Test를 여러 번 실행하고, Neutral 대기가 끝난 후 각 동작을 수행합니다. 한쪽 knee 안내가 나오면 해당 무릎이 보이는지 확인합니다.
+3. 성공한 run과 KNEE_LEFT miss run을 각각 **Stop/Reset/재보정/새 test 전에** 노트북에서 JSON으로 저장합니다.
+4. KNEE_LEFT stage의 `neutralInvalidFrames`, `kickAnyUsableFrames`, `kickBothUsableFrames`, **`neutralInvalidButKickUsableFrames`**를 비교합니다. 마지막 값이 0보다 크면 이전 4A gate에서는 제외됐을 현재 Kick 사용 가능 frame이 실제 존재한 것입니다. 이것만으로 miss 원인 전체를 단정하지 않습니다.
+5. 해당 frame의 `neutralSmoothedValidNow`, `kickValidityReasons`, raw visibility/offset/distance와 normalized displacement, candidate evidence/confirmation latency를 시간순으로 비교합니다. 전달 중단은 `inferenceGapMs`로 별도 확인합니다.
+6. 한쪽 knee 가림에서도 시작되는지, 장시간 pose loss에서 stale 취소되는지, WAIT_RETURN 중에도 테스트가 완료되는지 확인합니다. Mirror, Reset Test, Neutral 재보정, Camera Stop 동작도 유지되는지 확인합니다.
 
 ## STEP 4E-DIAG: Knee Kick Detector 진단 기록
 
-간헐적인 KNEE_LEFT miss를 다음 실측에서 분석하기 위한 **instrumentation only** 변경입니다. ENTER **0.28**, EXIT **0.15**, RETURN **180ms**, usable 기준, 방향, bodyScale, WAIT_RETURN/re-arm, start/reset 조건은 그대로입니다. 기존 classifier v1과 STEP 4D, Mobile UI·Socket wire 형식, 패널 순서도 유지합니다.
+기존 STEP 4E-DIAG 기록과 v2 candidate evidence·동적 stage 시각을 유지하며, v2.1은 4A/Kick validity 비교와 raw Kick geometry를 추가합니다. JSON schema는 **version 3**입니다. 아래 기록은 Controller 전용이며 full landmarks/영상은 포함하지 않습니다.
 
 **수집 위치와 동작 보존**
 
 Guided Detector Test가 ACTIVE인 동안 각 inference frame에서 아래 값만 snapshot합니다. React의 250ms 표시 값으로 기록하지 않으며, per-frame React render를 추가하지 않습니다. 전부 Controller 내부의 비-React buffer에 저장합니다.
 
 - `timestamp`, `stageIndex`, `expected`
-- 실제 `poseFresh`와 같은 `usableKnees(features, poseFresh)` 함수의 `usableLeft/Right`
+- 현재 `usableKnees(features)`의 결과인 `usableLeft/Right`. 기존 `poseFresh` 필드는 현재 Kick knee 중 하나 이상 usable이라는 의미로 유지합니다.
+- `inferenceGapMs`: 직전 처리 inference와의 실제 시간 간격, 첫 frame이면 null
+- `neutralSmoothedValidNow`, `kickHipsUsable`, `kickLeftUsable`, `kickRightUsable`, `kickValidityReasons`
+- gate와 무관하게 보존하는 raw 좌우 hip/knee visibility, hipCenterX, 좌우 knee X / center offset X / knee–hip distance (결측은 null)
 - `stateBefore` / `stateAfter`: `detector.processFrame()` 직전/직후 상태
 - 계산된 `hipCenterX`, `hipWidth`, 좌우 knee visibility
 - detector가 실제 사용한 `normalizedLeft/Right`, `dominantNormalizedDisplacement`
@@ -602,6 +619,8 @@ Pose missing 또는 양쪽 knee unusable인 inference도 저장합니다. 기존
 완료 후 9개 stage 각각에 다음을 제공합니다. Neutral이 여러 번 나오므로 `stageIndex`로 구별합니다.
 
 - `totalFrames`, `freshFrames`, `staleFrames`, `leftUsableFrames`, `rightUsableFrames`, `bothUsableFrames`
+- `neutralInvalidFrames`, `kickAnyUsableFrames`, `kickBothUsableFrames`, `neutralInvalidButKickUsableFrames`
+- `leftVisibilityRejectedFrames`, `rightVisibilityRejectedFrames`, `hipRejectedFrames`: 각 visibility reason 및 hips unusable frame 수. 하나의 frame이 여러 항목에 포함될 수 있으며, 결측 visibility도 rejection에 포함합니다.
 - `stateAtStageStart`와 `firstFrameTimestamp`: **그 stage의 첫 관측 inference 직전 상태**와 시각입니다. 정확한 stage 경계에 frame이 없으면 첫 관측 시점을 사용하고, stage 전체에 frame이 없으면 둘 다 null입니다.
 - `stateFrameCounts`는 **stateBefore**, `stateAfterFrameCounts`는 **stateAfter**의 상태별 개수입니다. TRIGGERED_LEFT/RIGHT는 내부 one-shot 전이이므로 실제 관측되지 않으면 0을 유지합니다.
 - `maxAbsDominantDisplacement`, `signedDominantAtMax`, 좌우 `maxAbsLeft/RightDisplacement`. 절댓값 peak가 동률이면 먼저 관측한 signed 값을 남깁니다.
@@ -611,7 +630,9 @@ Pose missing 또는 양쪽 knee unusable인 inference도 저장합니다. 기존
 - `medianHipCenterX`, `minHipCenterX`, `maxHipCenterX`, `medianHipWidth`
 - `eventCount`, 발생 순서의 `eventDirections`, 기존 `wrongEventCount`, `duplicateCount`
 
-Median/min/max/peak 계산은 해당 값이 finite인 frame만 사용하고 결측을 0으로 바꾸지 않습니다. Fresh는 기존 HIP pose freshness 조건이며 knee usability와 별개입니다. Inference가 아예 오지 않은 시간에 가상 stale frame을 만들지 않으므로, total과 firstFrameTimestamp도 함께 확인해야 합니다. 자동 원인 판정이나 PASS/FAIL은 추가하지 않습니다.
+Median/min/max/peak 계산은 해당 값이 finite인 frame만 사용하고 결측을 0으로 바꾸지 않습니다. v3의 fresh/stale는 **현재 Kick geometry usability** 기준이므로 v2의 4A HIP gate 기준 수치와 직접 같은 의미로 비교하지 않습니다. 이전 조건은 `neutralSmoothedValidNow` 및 `neutralInvalidFrames`로 확인합니다. Inference가 아예 오지 않은 시간에는 가상 stale frame을 만들지 않으므로 `inferenceGapMs`, total과 firstFrameTimestamp도 함께 확인해야 합니다. 자동 원인 판정이나 PASS/FAIL은 추가하지 않습니다.
+
+`kickValidityReasons`는 동시에 발생한 조건을 배열로 기록합니다. 모두 사용 가능하면 `OK`, 나머지는 `NO_LANDMARKS`, `HIP_VISIBILITY`, `HIP_GEOMETRY`, `LEFT_KNEE_VISIBILITY`, `RIGHT_KNEE_VISIBILITY`, `LEFT_KNEE_GEOMETRY`, `RIGHT_KNEE_GEOMETRY`, `NO_USABLE_KNEE`입니다. 한쪽 knee가 unavailable이어도 다른 쪽이 usable할 수 있습니다. 이는 판정 조건 기록이며 camera problem 등의 결론을 자동으로 붙이지 않습니다.
 
 **Neutral 위치 진단과 JSON**
 
@@ -620,40 +641,56 @@ Median/min/max/peak 계산은 해당 값이 finite인 frame만 사용하고 결�
 완료 후 Controller의 **STEP 4E → Guided Detector Test 기존 summary 아래**에 작은 진단 표와 **Download Detector Diagnostics JSON** 버튼이 표시됩니다. 파일 이름은 `plank-stork-kick-diagnostics-<timestamp>.json`입니다.
 
 ```text
-version: 1
+version: 3
 createdAt: 테스트 시작 당시 ISO 시각
 startedAt: Controller monotonic milliseconds
 detectorConfig:
   enterDisplacement, exitDisplacement, returnDwellMs
   hipVisibility, kneeVisibility, staleMs
+  candidateMinMs, candidateMaxMs, confirmDisplacement, confirmVelocity, directionMargin
 baseline:
   detector: 기존 KneeKickBaseline snapshot
   diagnostics: Neutral hipCenterX / knee visibility 통계
 testStart:
   detectorState, ready, valid
 sequence: [{ expected, durationMs }, ...]
+stageTimings: [{ stageIndex, expected, startedAt, endedAt, armedWaitMs }, ...]
 frames: [{ timestamp, stageIndex, expected, poseFresh, usableLeft, usableRight,
+           inferenceGapMs, neutralSmoothedValidNow,
+           kickHipsUsable, kickLeftUsable, kickRightUsable, kickValidityReasons,
+           rawLeftHipVisibility, rawRightHipVisibility, rawLeftKneeVisibility, rawRightKneeVisibility,
+           rawHipCenterX, rawLeftKneeX, rawRightKneeX,
+           rawLeftKneeCenterOffsetX, rawRightKneeCenterOffsetX, rawLeftKneeHipDistance, rawRightKneeHipDistance,
            stateBefore, stateAfter, hipCenterX, hipWidth,
            leftKneeVisibility, rightKneeVisibility,
            normalizedLeft, normalizedRight, dominantNormalizedDisplacement,
-           normalizedLeftVelocity, normalizedRightVelocity, event }, ...]
+           normalizedLeftVelocity, normalizedRightVelocity, event,
+           candidateId, candidateActive, candidateStartedAt, candidateAgeMs,
+           candidatePositivePeak, candidateNegativePeak, candidatePeakAbsVelocity,
+           candidateSawLeft, candidateSawRight, candidateFrameCount,
+           candidateStrongestMagnitude, candidateDirectionMargin,
+           candidateOutcome, candidateEndedAt, confirmationLatencyMs }, ...]
 stageSummaries: [위 stage별 통계, ...]
 existingGuidedSummary: 기존 falseKickCount / detected / directionCorrect / duplicateCount 등
 ```
 
-`timestamp - startedAt`은 테스트 시작 후 경과 ms입니다. 시작 시 baseline과 testStart를 복사하므로 이후 상태와 섞이지 않습니다. WAIT_RETURN 상태에서의 test 시작도 기존처럼 허용하고, 그 사실을 testStart에 기록합니다. 폰에는 기존 compact 결과만 전달하며 JSON은 노트북의 Blob/ObjectURL 다운로드로만 받습니다.
+`timestamp - startedAt`은 테스트 시작 후 경과 ms입니다. 시작 시 baseline과 testStart를 복사하므로 이후 상태와 섞이지 않습니다. 현재 테스트는 보정 완료 후 즉시 시작하며 시작 직후 detector 상태를 testStart에 기록합니다. stageTimings는 고정 22초 일정입니다. 이전 데이터에는 늘어난 Neutral 구간이 남아 있습니다. 폰에는 compact 결과와 좌우 usable boolean만 전달하며 JSON은 노트북의 Blob/ObjectURL 다운로드로만 받습니다.
+
+Candidate 진단은 시작 이후 누적한 양/음 peak, velocity peak, 좌우 관측 여부, age/frame count와 결과(CONFIRMED/TIMED_OUT/STALE)를 유지합니다. Read-only snapshot이 candidate를 확정하거나 만료시키지 않습니다. `confirmationLatencyMs`는 확정된 candidate의 시작→event 경과 시간이며, event가 없는 frame의 historical latency를 새 event로 세지 않습니다.
+
+Stage summary에 `candidateCount`, `confirmedCandidateCount`, `timedOutCandidateCount`, `staleCandidateCount`, `confirmationLatenciesMs`, `medianConfirmationLatencyMs`를 추가합니다. Candidate ID별 시작/결과의 **첫 관측 frame이 속한 stage**에 각각 한 번만 집계합니다. 시작과 결과가 stage를 가로지르면 서로 다른 stage에 집계될 수 있습니다. Frame이 끊겼다가 만료 결과를 나중에 관측한 경우 실제 deadline은 candidateEndedAt으로 확인합니다. 통계와 별개로 event는 confirmation 시각의 정확한 stage에 귀속됩니다.
 
 **초기화와 실제 실험**
 
 Reset Detector Test는 기존 detector state/count/return latch를 유지하며 test frame·metadata·summary만 함께 제거합니다. Neutral 재보정, Camera Stop/해제/오류, unmount는 기존 analysis reset과 함께 baseline 진단과 test 진단을 모두 제거합니다. 새 test를 성공적으로 시작하면 이전 진단을 교체하며, 거절된 시작 요청으로 이전 진단을 지우지 않습니다. 다운로드 ObjectURL도 reset/unmount 시 해제합니다.
 
 1. 기존 순서로 Camera 시작 → 폰 Neutral 보정 → Detector READY를 확인합니다. Action Calibration은 필요하지 않습니다.
-2. 폰에서 Guided Detector Test를 실행합니다. 화면 좌측 등 실제 평소 위치를 유지하고 22초 안내를 따라 수행합니다.
+2. 폰에서 READY · ARMED · BOTH KNEES READY를 확인하고 Guided Detector Test를 실행합니다. 화면 좌측 등 실제 평소 위치를 유지하고 고정 22초 동작 안내를 따릅니다.
 3. 완료 후 **Stop/재보정/Reset/새 test 시작 전에** 노트북에서 Download Detector Diagnostics JSON을 누릅니다. 성공한 run과 miss가 난 run을 각각 저장하세요.
 4. KNEE_LEFT stage에서 peak와 enterMargin, ARMED일 때의 peak/margin 및 armedFramesAboveEnter를 함께 비교합니다. stateAtStageStart와 WAIT_RETURN frame 수, fresh/usable 수와 visibility를 확인합니다.
 5. 해당 stage의 hipCenterX/hipWidth와 Neutral 위치 통계를 비교해 관측 위치 차이도 살펴봅니다. 단일 수치로 원인을 확정하지 않고, 성공/누락 run의 per-frame stateBefore/stateAfter와 event를 시간순으로 비교합니다.
 
-자동 회귀 테스트는 진단 활성/비활성에 동일 synthetic frame sequence를 넣어 기존 event 방향·시각·개수·최종 상태가 일치하는지 확인합니다. 실제 간헐적 miss의 원인은 다음 실측 JSON을 통해 판단합니다.
+자동 회귀 테스트는 진단 활성/비활성에 동일 synthetic frame sequence를 넣어 v2 event 방향·시각·개수·최종 상태가 일치하는지 확인합니다. v1의 즉시 확정 기대값은 v2 temporal confirmation 기대값으로 갱신했습니다. 실제 간헐적 miss의 원인은 다음 실측 JSON을 통해 판단합니다.
 
 ## 검증 및 빌드
 

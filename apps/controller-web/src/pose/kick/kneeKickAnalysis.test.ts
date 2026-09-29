@@ -28,7 +28,10 @@ describe('detector Neutral baseline lifecycle', () => {
     expect(view.detector.baseline!.bodyScale).toBeCloseTo(Math.hypot(0.05, 0.3));
     const moving = motionFrame(1050); moving.landmarks[26].x -= 0.15;
     kick.processFrame(moving, neutral.getView(1050));
-    expect(kick.getView(1050).detector.lastEvent?.direction).toBe('KNEE_LEFT');
+    expect(kick.getView(1050).detector.state).toBe('CANDIDATE');
+    expect(kick.getView(1050).detector.lastEvent).toBeNull();
+    kick.processFrame({ ...moving, timestamp: 1150 }, neutral.getView(1150));
+    expect(kick.getView(1150).detector.lastEvent?.direction).toBe('KNEE_LEFT');
     expect(kick.getView(1050).detector.baseline).toEqual(view.detector.baseline);
   });
 

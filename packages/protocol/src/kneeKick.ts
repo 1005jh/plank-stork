@@ -1,10 +1,13 @@
 /** Compact debug/test snapshots only; these are not game input events. */
 export type KneeKickDirection = 'KNEE_LEFT' | 'KNEE_RIGHT';
-export type KneeKickState = 'NOT_READY' | 'ARMED' | 'TRIGGERED_LEFT' | 'TRIGGERED_RIGHT' | 'WAIT_RETURN';
+export type KneeKickState = 'NOT_READY' | 'ARMED' | 'CANDIDATE' | 'TRIGGERED_LEFT' | 'TRIGGERED_RIGHT' | 'WAIT_RETURN';
 export interface KneeKickEvent { id: number; direction: KneeKickDirection; timestamp: number }
 export interface RemoteKneeKickState {
   ready: boolean;
+  /** A frame arrived within 400ms and at least one knee has usable Kick geometry/visibility. */
   validNow: boolean;
+  usableLeftNow: boolean;
+  usableRightNow: boolean;
   state: KneeKickState;
   currentEvent: KneeKickDirection | 'NONE';
   lastEvent: KneeKickEvent | null;
@@ -22,6 +25,7 @@ export interface RemoteDetectorTestState {
   status: 'IDLE' | 'ACTIVE' | 'COMPLETED';
   expected: DetectorTestExpected | null;
   remainingMs: number;
+  waitingForArmed: boolean;
   eventCount: number;
   summary: DetectorTestSummary | null;
 }

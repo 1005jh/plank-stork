@@ -60,7 +60,8 @@ export class CalibrationRemoteController {
     } else if (neutral.collectionState !== 'FROZEN') {
       this.lastCommandError = 'NEUTRAL_NOT_FROZEN';
     } else if (command === 'kick:start') {
-      if (!camera.poseDetected) this.lastCommandError = 'POSE_NOT_DETECTED';
+      const detector = ports.getKick().detector;
+      if (!detector.ready) this.lastCommandError = 'DETECTOR_NOT_READY';
       else if (!ports.startDetectorTest()) this.lastCommandError = 'DETECTOR_NOT_READY';
     } else if (command === 'motion:start') {
       if (!camera.poseDetected) this.lastCommandError = 'POSE_NOT_DETECTED';
@@ -115,8 +116,9 @@ export class CalibrationRemoteController {
         remainingMs: motion.remainingMs, recordedFrames: motion.recordedFrames,
       },
       kneeKick: { ready: detector.ready, validNow: detector.validNow, state: detector.state, currentEvent: detector.currentEvent,
+        usableLeftNow: detector.usableLeftNow, usableRightNow: detector.usableRightNow,
         lastEvent: detector.lastEvent ? { ...detector.lastEvent } : null, counts: { ...detector.counts } },
-      detectorTest: { status: test.status, expected: test.expected, remainingMs: test.remainingMs, eventCount: test.eventCount, summary: test.summary },
+      detectorTest: { status: test.status, expected: test.expected, remainingMs: test.remainingMs, waitingForArmed: test.waitingForArmed, eventCount: test.eventCount, summary: test.summary },
       lastCommandError: this.lastCommandError,
     };
   }

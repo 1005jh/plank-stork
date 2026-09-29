@@ -51,7 +51,7 @@ export interface CalibrationRemoteState {
   motionValidation: RemoteMotionValidationState;
   kneeKick: RemoteKneeKickState;
   detectorTest: RemoteDetectorTestState;
-  lastCommandError: 'CAMERA_NOT_READY' | 'POSE_NOT_DETECTED' | 'NEUTRAL_NOT_FROZEN' | 'ACTION_NOT_READY' | 'MOTION_NOT_READY' | 'DETECTOR_NOT_READY' | null;
+  lastCommandError: 'CAMERA_NOT_READY' | 'POSE_NOT_DETECTED' | 'NEUTRAL_NOT_FROZEN' | 'ACTION_NOT_READY' | 'MOTION_NOT_READY' | 'DETECTOR_NOT_READY' | 'DETECTOR_NOT_ARMED' | null;
 }
 export interface RemoteMotionValidationState {
   status: 'IDLE' | 'ACTIVE' | 'COMPLETED';

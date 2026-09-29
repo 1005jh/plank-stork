@@ -1,11 +1,12 @@
 // @vitest-environment node
+import { emptyCandidate, frameValidity } from './testFixtures';
 import { describe, expect, it } from 'vitest';
 import { summarizeKickDiagnostics, summarizeNeutralDiagnostics, type KickDetectorDiagnosticFrame } from './kneeKickDiagnostics';
 import type { DetectorTestStage } from './guidedDetectorTest';
 
 const stage = (expected: DetectorTestStage['expected'] = 'KNEE_LEFT'): DetectorTestStage => ({ expected, events: [], wrongEventCount: 0, duplicateCount: 0 });
 const frame = (overrides: Partial<KickDetectorDiagnosticFrame> = {}): KickDetectorDiagnosticFrame => ({
-  timestamp: 100, stageIndex: 0, expected: 'KNEE_LEFT', poseFresh: true, usableLeft: true, usableRight: true,
+  ...emptyCandidate(), ...frameValidity(true), timestamp: 100, stageIndex: 0, expected: 'KNEE_LEFT', poseFresh: true, usableLeft: true, usableRight: true,
   stateBefore: 'ARMED', stateAfter: 'ARMED', hipCenterX: 0.25, hipWidth: 0.1,
   leftKneeVisibility: 0.8, rightKneeVisibility: 0.6,
   normalizedLeft: -0.28, normalizedRight: 0.1, dominantNormalizedDisplacement: -0.28,
@@ -77,5 +78,30 @@ describe('derived-only diagnostic stage summaries', () => {
     expect(summary).toMatchObject({ hipCenterX: { sampleCount: 10, median: 0.45, p10: 0, p90: 0.8 },
       leftKneeVisibility: { sampleCount: 10 }, rightKneeVisibility: { sampleCount: 0, median: null } });
     expect(summary.leftKneeVisibility.median).toBeCloseTo(0.6);
+  });
+  it('separately counts 4A invalidity, Kick usability and visibility rejection without diagnosing a cause', () => {
+    const samples = [
+      frame({ neutralSmoothedValidNow: false }),
+      frame({ neutralSmoothedValidNow: false, kickLeftUsable: false, kickValidityReasons: ['LEFT_KNEE_VISIBILITY'], rawLeftKneeVisibility: 0.49 }),
+      frame({ kickRightUsable: false, kickValidityReasons: ['RIGHT_KNEE_VISIBILITY'], rawRightKneeVisibility: 0.49 }),
+      frame({ neutralSmoothedValidNow: false, kickHipsUsable: false, kickLeftUsable: false, kickRightUsable: false, kickValidityReasons: ['HIP_VISIBILITY', 'NO_USABLE_KNEE'] }),
+      frame({ neutralSmoothedValidNow: false, kickHipsUsable: false, kickLeftUsable: false, kickRightUsable: false, kickValidityReasons: ['HIP_GEOMETRY', 'NO_USABLE_KNEE'] }),
+    ];
+    expect(summarizeKickDiagnostics(samples, [stage()])[0]).toMatchObject({ neutralInvalidFrames: 4, kickAnyUsableFrames: 3, kickBothUsableFrames: 1,
+      neutralInvalidButKickUsableFrames: 2, leftVisibilityRejectedFrames: 1, rightVisibilityRejectedFrames: 1, hipRejectedFrames: 2 });
+  });
+  it('counts each candidate/outcome once and measures event confirmation latency', () => {
+    const samples = [
+      frame({ stateAfter: 'CANDIDATE', candidateId: 1, candidateActive: true, candidateStartedAt: 100 }),
+      frame({ timestamp: 160, stateBefore: 'CANDIDATE', stateAfter: 'WAIT_RETURN', candidateId: 1, candidateOutcome: 'CONFIRMED', confirmationLatencyMs: 60, event: { id: 1, direction: 'KNEE_LEFT', timestamp: 160 } }),
+      frame({ timestamp: 200, stateBefore: 'WAIT_RETURN', stateAfter: 'WAIT_RETURN', candidateId: 1, candidateOutcome: 'CONFIRMED', confirmationLatencyMs: 60 }),
+      frame({ timestamp: 500, candidateId: 2, candidateActive: true, stateAfter: 'CANDIDATE' }),
+      frame({ timestamp: 1100, candidateId: 2, candidateOutcome: 'TIMED_OUT', stateBefore: 'CANDIDATE', stateAfter: 'WAIT_RETURN' }),
+      frame({ timestamp: 1500, candidateId: 3, candidateOutcome: 'STALE', stateBefore: 'CANDIDATE', stateAfter: 'WAIT_RETURN' }),
+    ];
+    expect(summarizeKickDiagnostics(samples, [{ ...stage(), events: [samples[1].event!] }])[0]).toMatchObject({
+      candidateCount: 3, confirmedCandidateCount: 1, timedOutCandidateCount: 1, staleCandidateCount: 1,
+      confirmationLatenciesMs: [60], medianConfirmationLatencyMs: 60,
+    });
   });
 });

@@ -20,6 +20,7 @@ export class KneeKickAnalysis {
   processFrame(frame: PoseFrame, neutral: PoseFeatureView): void {
     if (neutral.collectionState === 'IDLE' || (this.sealed && neutral.collectionState !== 'FROZEN')) this.reset();
     if (this.lastFrameAt !== null && frame.timestamp <= this.lastFrameAt) return;
+    const inferenceGapMs = this.lastFrameAt === null ? null : frame.timestamp - this.lastFrameAt;
     this.lastFrameAt = frame.timestamp;
     const features = extractKneeMotionFeatures(frame.landmarks);
     if (!this.sealed && neutral.collectionState !== 'IDLE') {
@@ -30,13 +31,23 @@ export class KneeKickAnalysis {
       this.counts = { left: this.samples.filter((sample) => sample.leftOffset !== null).length, right: this.samples.filter((sample) => sample.rightOffset !== null).length };
       if (neutral.collectionState === 'FROZEN') this.freeze();
     }
-    const poseFresh = neutral.collectionState === 'FROZEN' && neutral.smoothed.validNow;
-    const usable = usableKnees(features, poseFresh);
+    // Neutral FROZEN is enforced by baseline collection above, not by STEP 4A runtime validity.
+    const usable = usableKnees(features);
+    const poseFresh = usable.left || usable.right;
     const stateBefore = this.detector.getStateForDiagnostics();
-    const event = this.detector.processFrame(features, frame.timestamp, poseFresh);
+    this.test.advance(frame.timestamp, stateBefore === 'ARMED' && poseFresh && (usable.left || usable.right));
+    const event = this.detector.processFrame(features, frame.timestamp);
     const values = this.detector.getValuesForDiagnostics();
     this.test.recordDiagnosticFrame({
+      ...values,
       timestamp: frame.timestamp, poseFresh, usableLeft: usable.left, usableRight: usable.right,
+      inferenceGapMs, neutralSmoothedValidNow: neutral.smoothed.validNow,
+      kickHipsUsable: usable.hips, kickLeftUsable: usable.left, kickRightUsable: usable.right, kickValidityReasons: usable.reasons,
+      rawLeftHipVisibility: features.leftHipVisibility, rawRightHipVisibility: features.rightHipVisibility,
+      rawLeftKneeVisibility: features.leftKneeVisibility, rawRightKneeVisibility: features.rightKneeVisibility,
+      rawHipCenterX: features.hipCenterX, rawLeftKneeX: features.leftKneeX, rawRightKneeX: features.rightKneeX,
+      rawLeftKneeCenterOffsetX: features.leftKneeCenterOffsetX, rawRightKneeCenterOffsetX: features.rightKneeCenterOffsetX,
+      rawLeftKneeHipDistance: features.leftKneeHipDistance, rawRightKneeHipDistance: features.rightKneeHipDistance,
       stateBefore, stateAfter: values.state,
       hipCenterX: features.hipCenterX, hipWidth: features.hipWidth,
       leftKneeVisibility: features.leftKneeVisibility, rightKneeVisibility: features.rightKneeVisibility,
@@ -48,7 +59,7 @@ export class KneeKickAnalysis {
     this.test.record(event);
   }
   private collect(features: KneeMotionFeatures, timestamp: number): void {
-    const usable = usableKnees(features, true);
+    const usable = usableKnees(features);
     this.samples.push({ timestamp, leftOffset: usable.left ? features.leftKneeCenterOffsetX : null, rightOffset: usable.right ? features.rightKneeCenterOffsetX : null,
       leftDistance: usable.left ? features.leftKneeHipDistance : null, rightDistance: usable.right ? features.rightKneeHipDistance : null,
       hipCenterX: features.hipCenterX, leftKneeVisibility: features.leftKneeVisibility, rightKneeVisibility: features.rightKneeVisibility });
@@ -66,22 +77,27 @@ export class KneeKickAnalysis {
     this.samples = [];
   }
   getView(now: number) {
-    return { detector: this.detector.getView(now), baselineCounts: { ...this.counts }, baselineSealed: this.sealed, test: this.test.getView(now) };
+    const detector = this.detector.getView(now);
+    return { detector, baselineCounts: { ...this.counts }, baselineSealed: this.sealed,
+      test: this.test.getView(now, detector.ready && detector.validNow && detector.state === 'ARMED') };
   }
   getTestStages() { return this.test.getStages(); }
   getDiagnosticSummary() { return this.test.getDiagnosticSummary(); }
   exportDiagnosticsJson(): string { return this.test.exportDiagnosticsJson(); }
   startTest(now: number): boolean {
     const view = this.detector.getView(now);
-    const started = this.test.start(now, view.ready && view.validNow);
-    if (started) this.test.beginDiagnostics({
-      createdAt: new Date().toISOString(), startedAt: now,
-      baseline: { detector: view.baseline, diagnostics: this.neutralDiagnostics },
-      testStart: { detectorState: view.state, ready: view.ready, valid: view.validNow },
-    });
+    const started = this.test.start(now, view.ready);
+    if (started) {
+      this.detector.restartTrial();
+      this.test.beginDiagnostics({
+        createdAt: new Date().toISOString(), startedAt: now,
+        baseline: { detector: view.baseline, diagnostics: this.neutralDiagnostics },
+        testStart: { detectorState: this.detector.getStateForDiagnostics(), ready: view.ready, valid: view.validNow },
+      });
+    }
     return started;
   }
-  resetTest(): void { this.test.reset(); }
+  resetTest(): void { this.test.reset(); this.detector.restartTrial(); }
   reset(): void {
     this.detector.reset(); this.test.reset(); this.samples = []; this.sealed = false; this.counts = { left: 0, right: 0 }; this.lastFrameAt = null;
     this.neutralDiagnostics = null;
