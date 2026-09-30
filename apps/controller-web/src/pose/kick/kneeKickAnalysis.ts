@@ -4,7 +4,7 @@ import type { PoseFeatureView } from '../features/poseFeatureTypes';
 import { extractKneeMotionFeatures, type KneeMotionFeatures } from '../motion/kneeMotionFeatures';
 import { robustStats } from '../motion/kneeMotionAnalyzer';
 import { GuidedDetectorTest } from './guidedDetectorTest';
-import { KneeKickDetector, usableKnees } from './kneeKickDetector';
+import { KneeKickDetector, usableKnees, type KneeKickBaseline } from './kneeKickDetector';
 import { summarizeNeutralDiagnostics, type NeutralKickDiagnosticSample, type NeutralKickDiagnostics, type KickDiagnosticDataset } from './kneeKickDiagnostics';
 
 /** Collect only during the existing Neutral window; never learn from later movement. */
@@ -36,6 +36,22 @@ export class KneeKickAnalysis {
       this.counts = { left: this.samples.filter((sample) => sample.leftOffset !== null).length, right: this.samples.filter((sample) => sample.rightOffset !== null).length };
       if (neutral.collectionState === 'FROZEN') this.freeze();
     }
+    this.analyzeFrame(frame, features, neutral.smoothed.validNow, inferenceGapMs);
+  }
+  /** Isolated replay instance: stored calibration, unchanged production downstream analysis. */
+  static forReplay(baseline: KneeKickBaseline): KneeKickAnalysis {
+    const analysis = new KneeKickAnalysis();
+    analysis.sealed = true;
+    analysis.detector.setBaseline({ ...baseline });
+    return analysis;
+  }
+  processReplayFrame(frame: PoseFrame): void {
+    if (this.lastFrameAt !== null && frame.timestamp <= this.lastFrameAt) return;
+    const gap = this.lastFrameAt === null ? null : frame.timestamp - this.lastFrameAt;
+    this.lastFrameAt = frame.timestamp;
+    this.analyzeFrame(frame, extractKneeMotionFeatures(frame.landmarks), false, gap);
+  }
+  private analyzeFrame(frame: PoseFrame, features: KneeMotionFeatures, neutralSmoothedValidNow: boolean, inferenceGapMs: number | null): void {
     // Neutral FROZEN is enforced by baseline collection above, not by STEP 4A runtime validity.
     const usable = usableKnees(features);
     const poseFresh = usable.left || usable.right;
@@ -46,7 +62,7 @@ export class KneeKickAnalysis {
     this.test.recordDiagnosticFrame({
       ...values,
       timestamp: frame.timestamp, poseFresh, usableLeft: usable.left, usableRight: usable.right,
-      inferenceGapMs, neutralSmoothedValidNow: neutral.smoothed.validNow,
+      inferenceGapMs, neutralSmoothedValidNow,
       kickHipsUsable: usable.hips, kickLeftUsable: usable.left, kickRightUsable: usable.right, kickValidityReasons: usable.reasons,
       rawLeftHipVisibility: features.leftHipVisibility, rawRightHipVisibility: features.rightHipVisibility,
       rawLeftKneeVisibility: features.leftKneeVisibility, rawRightKneeVisibility: features.rightKneeVisibility,
@@ -86,6 +102,9 @@ export class KneeKickAnalysis {
     return { detector, baselineCounts: { ...this.counts }, baselineSealed: this.sealed,
       test: this.test.getView(now, detector.state), diagnosticsDownload: this.getDownloadInfo() };
   }
+  getReplaySnapshot() {
+    return { detector: this.detector.getReplaySnapshot(), guided: this.test.getReplaySnapshot() };
+  }
   getTestStages() { return this.test.getStages(); }
   getDiagnosticSummary() { return this.test.getDiagnosticSummary(); }
   private getDownloadInfo() {
@@ -105,9 +124,12 @@ export class KneeKickAnalysis {
     const dataset = this.test.snapshotDiagnostics();
     if (dataset) this.savedDiagnostics = dataset;
   }
-  startTest(now: number): boolean {
+  startTest(now: number, onClock?: () => void): boolean {
     const view = this.detector.getView(now);
-    if (!this.sealed || !view.ready || this.test.getView(now, view.state).status === 'ACTIVE') return false;
+    const blocked = !this.sealed || !view.ready || this.test.getView(now, view.state).status === 'ACTIVE';
+    // Observe the existing guard clock before a new trial clears the previous result.
+    onClock?.();
+    if (blocked) return false;
     this.preserveDiagnostics(now, 'NEW_TRIAL');
     const started = this.test.start(now, view.ready);
     if (started) {

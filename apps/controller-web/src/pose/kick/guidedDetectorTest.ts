@@ -162,6 +162,11 @@ export class GuidedDetectorTest {
       waitingForArmed: false,
       eventCount: this.seen.size, summary: this.status === 'COMPLETED' ? this.summary() : null };
   }
+  /** Observation only; capture must not introduce getView/advance calls. */
+  getReplaySnapshot() {
+    return { status: this.status, startedAt: this.startedAt, summary: this.startedAt === null ? null : this.summary(),
+      timings: this.timings.map((timing) => ({ ...timing })) };
+  }
   getStages(): DetectorTestStage[] { return this.stages.map((stage) => ({ ...stage, events: stage.events.map((event) => ({ ...event })) })); }
   reset(): void {
     this.startedAt = null; this.status = 'IDLE'; this.stages = []; this.seen.clear();

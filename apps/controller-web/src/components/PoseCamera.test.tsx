@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePoseCamera } from '../camera/usePoseCamera';
 import { PoseCamera } from './PoseCamera';
+import { MockMediaRecorder, captureCamera, mockRecorder } from '../replay/testFixtures';
 import { PoseFeatureAnalysis } from '../pose/features/poseFeatureAnalysis';
 
 vi.mock('../camera/usePoseCamera', () => ({ usePoseCamera: vi.fn() }));
@@ -38,6 +39,7 @@ describe('Pose signal debug panel', () => {
       videoRef: createRef<HTMLVideoElement>(),
       canvasRef: createRef<HTMLCanvasElement>(),
       status: 'RUNNING', error: null, delegate: 'CPU', start: vi.fn(), stop: vi.fn(),
+      getCaptureContext: vi.fn(() => null),
       getRecordingContext: vi.fn(() => null),
       metrics: {
         cameraFps: 30, renderFps: 60, inferenceFps: 30, averageInferenceMs: 12.3,
@@ -64,6 +66,50 @@ describe('Pose signal debug panel', () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it.each(['camera-stop', 'unmount'] as const)('stops raw replay capture on %s and preserves live metrics', async (method) => {
+    vi.stubGlobal('MediaRecorder', mockRecorder);
+    const context = captureCamera();
+    vi.mocked(camera.getCaptureContext).mockReturnValue(context);
+    await act(async () => button('Start Replay Capture').click());
+    const media = MockMediaRecorder.instances.at(-1)!;
+    expect(media.stream).toBe(context.stream);
+    const renders = vi.mocked(usePoseCamera).mock.calls.length;
+    for (let index = 0; index < 5; index++) { now += 20; sendFrame(); }
+    expect(vi.mocked(usePoseCamera).mock.calls.length).toBe(renders);
+    await advance(250);
+    const panel = container.querySelector('[aria-label="STEP 4F Replay Capture"]')!;
+    expect(panel.textContent).toContain('Pose frames: 5');
+    expect(container.textContent).toContain('Pose inference FPS30.0');
+    if (method === 'unmount') await act(async () => root.unmount());
+    else {
+      camera.stop = vi.fn(() => callbacks?.onCameraStopped?.());
+      await act(async () => root.render(<PoseCamera />));
+      await act(async () => button('Stop Camera').click());
+      await advance(250);
+      expect(panel.textContent).toContain('RECORDED');
+      expect(button('Download Replay JSON').disabled).toBe(false);
+    }
+    expect(media.stops).toBe(1);
+  });
+
+  it('revokes capture download URLs on unmount and leaves files local until explicit download', async () => {
+    vi.stubGlobal('MediaRecorder', mockRecorder);
+    const create = vi.fn(() => 'blob:capture'), revoke = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL: create, revokeObjectURL: revoke });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.mocked(camera.getCaptureContext).mockReturnValue(captureCamera());
+    await act(async () => button('Start Replay Capture').click());
+    sendFrame();
+    await act(async () => button('Stop Replay Capture').click());
+    await advance(250);
+    expect(create).not.toHaveBeenCalled();
+    await act(async () => button('Download Replay JSON').click());
+    expect(create).toHaveBeenCalledOnce();
+    await act(async () => root.unmount());
+    expect(revoke).toHaveBeenCalledWith('blob:capture');
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('formats the four hip/knee rows to three decimals, preserving zero, sign, and missing fields', () => {

@@ -73,6 +73,14 @@ describe('Pose initialization diagnostics and fallback', () => {
     expect(console.info).not.toHaveBeenCalledWith('[Pose] POSE_READY', expect.anything());
   });
 
+  it('initializes CPU directly when video replay requests the recorded CPU delegate', async () => {
+    vi.mocked(PoseLandmarker.createFromOptions).mockResolvedValueOnce(landmarker);
+    await expect(createPoseLandmarker('CPU')).resolves.toEqual({ landmarker, delegate: 'CPU' });
+    expect(PoseLandmarker.createFromOptions).toHaveBeenCalledOnce();
+    expect(vi.mocked(PoseLandmarker.createFromOptions).mock.calls[0][1]?.baseOptions?.delegate).toBe('CPU');
+    expect(console.info).not.toHaveBeenCalledWith('[Pose] GPU_INITIALIZING');
+  });
+
   it('propagates a WASM resolver error before attempting either delegate', async () => {
     const wasmError = new Error('WASM resolver failed');
     vi.mocked(FilesetResolver.forVisionTasks).mockRejectedValueOnce(wasmError);

@@ -1,3 +1,6 @@
+import { ReplayCapture } from '../replay/replayCapture';
+import { MockMediaRecorder, mockRecorder } from '../replay/testFixtures';
+import { KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
 import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +17,7 @@ import { motionContext } from '../pose/motion/testFixtures';
 const drawing = vi.hoisted(() => ({
   drawConnectors: vi.fn(), drawLandmarks: vi.fn(), close: vi.fn(),
 }));
-vi.mock('../pose/createPoseLandmarker', () => ({ createPoseLandmarker: vi.fn() }));
+vi.mock('../pose/createPoseLandmarker', async (original) => ({ ...await original<typeof import('../pose/createPoseLandmarker')>(), createPoseLandmarker: vi.fn() }));
 vi.mock('@mediapipe/tasks-vision', () => ({
   PoseLandmarker: { POSE_CONNECTIONS: [{ start: 11, end: 12 }] },
   DrawingUtils: class {
@@ -369,6 +372,37 @@ describe('Pose camera lifecycle and measurement', () => {
     result = { ...result, landmarks: [], worldLandmarks: [] };
     await frame(200, 2);
     expect(camera.getRecordingContext()).toBeNull();
+  });
+
+  it('exposes the existing raw MediaStream only when ready, even without a detected pose', async () => {
+    expect(camera.getCaptureContext()).toBeNull();
+    await act(async () => camera.start());
+    expect(camera.getCaptureContext()?.stream).toBe(stream);
+    expect(camera.getCaptureContext()).toMatchObject({ delegate: 'GPU', width: 1280, height: 720 });
+    result = { ...result, landmarks: [], worldLandmarks: [] };
+    await frame(100, 1);
+    expect(camera.getCaptureContext()?.stream).toBe(stream);
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    await act(async () => camera.stop());
+    expect(camera.getCaptureContext()).toBeNull();
+  });
+
+  it('copies Replay raw inference data before the actual MediaPipe result.close lifecycle', async () => {
+    await act(async () => camera.start());
+    const context = camera.getCaptureContext()!;
+    Object.defineProperty(track, 'readyState', { value: 'live', configurable: true });
+    Object.defineProperty(track, 'getSettings', { value: () => ({ frameRate: 30 }), configurable: true });
+    const capture = new ReplayCapture(), kick = new KneeKickAnalysis();
+    expect(capture.start(context, true, now, mockRecorder)).toBe(true);
+    onValidationFrame = (raw) => capture.observe({ kind: 'FRAME', timestamp: raw.timestamp, frame: raw, neutral: motionContext().neutral }, () => kick.getReplaySnapshot());
+    vi.mocked(result.close).mockImplementationOnce(() => { result.landmarks[0][0].x = 999; });
+    await frame(100, 1);
+    await capture.stop(now);
+    expect(JSON.parse(capture.getFiles().json).poseFrames[0].landmarks[0].x).toBe(0.5);
+    expect(result.close).toHaveBeenCalledOnce();
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    expect(MockMediaRecorder.instances.at(-1)?.stream).toBe(stream);
+    expect(track.stop).not.toHaveBeenCalled();
   });
 
   it('records every inference without extra renders and closes every result while recording', async () => {

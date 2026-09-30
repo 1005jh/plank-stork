@@ -4,6 +4,8 @@ import { createPoseLandmarker, type PoseDelegate } from '../pose/createPoseLandm
 import { INFERENCE_SAMPLE_COUNT, KEY_LANDMARKS, METRICS_INTERVAL_MS, SIGNAL_LANDMARKS } from '../pose/poseConstants';
 import type { PoseFrame, RecordingCameraContext } from '../recorder/poseRecorderTypes';
 
+import type { CaptureCamera } from '../replay/replayTypes';
+
 interface CameraCallbacks {
   /** Must consume the raw frame synchronously, before result.close(). */
   onFrame?: (frame: PoseFrame) => void;
@@ -137,6 +139,13 @@ export function usePoseCamera(callbacks: CameraCallbacks = {}) {
         countersRef.current.landmarks.length === 0 || !video || video.readyState < 2 ||
         video.videoWidth === 0 || video.videoHeight === 0) return null;
     return { delegate: readyDelegate, videoWidth: video.videoWidth, videoHeight: video.videoHeight };
+  }, []);
+
+  const getCaptureContext = useCallback((): CaptureCamera | null => {
+    const video = videoRef.current, stream = streamRef.current, readyDelegate = readyDelegateRef.current;
+    if (!activeRef.current || !landmarkerRef.current || !readyDelegate || !stream || !video ||
+        video.readyState < 2 || !video.videoWidth || !video.videoHeight) return null;
+    return { stream, delegate: readyDelegate, width: video.videoWidth, height: video.videoHeight, videoTime: video.currentTime };
   }, []);
 
   async function start() {
@@ -298,5 +307,5 @@ export function usePoseCamera(callbacks: CameraCallbacks = {}) {
     }
   }
 
-  return { videoRef, canvasRef, status, error, delegate, metrics, start, stop, getRecordingContext };
+  return { videoRef, canvasRef, status, error, delegate, metrics, start, stop, getRecordingContext, getCaptureContext };
 }

@@ -231,6 +231,12 @@ export class KneeKickDetector {
     };
   }
 
+  /** Detached, read-only capture snapshot. Never advances the detector clock. */
+  getReplaySnapshot() {
+    return { baseline: this.baseline ? { ...this.baseline } : null, state: this.state,
+      eventsLast: this.lastEvent ? { ...this.lastEvent } : null, counts: { ...this.counts } };
+  }
+
   /** Independent trial: only the frozen Neutral baseline survives. */
   restartTrial(): void {
     const baseline = this.baseline;

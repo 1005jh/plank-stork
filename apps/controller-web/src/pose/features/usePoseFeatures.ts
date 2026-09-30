@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FEATURE_UI_INTERVAL_MS, PoseFeatureAnalysis } from './poseFeatureAnalysis';
 import type { FeatureLandmarks } from './poseFeatureTypes';
 
-export function usePoseFeatures() {
+export function usePoseFeatures(onCalibrationStarted?: (timestamp: number) => void) {
+  const observerRef = useRef(onCalibrationStarted); observerRef.current = onCalibrationStarted;
   const analysisRef = useRef<PoseFeatureAnalysis | null>(null);
   if (analysisRef.current === null) analysisRef.current = new PoseFeatureAnalysis();
   const analysis = analysisRef.current;
@@ -23,7 +24,9 @@ export function usePoseFeatures() {
 
   function calibrate(cameraHasPose: boolean) {
     if (!cameraHasPose) return;
-    analysis.startCalibration(performance.now());
+    const now = performance.now();
+    analysis.startCalibration(now);
+    observerRef.current?.(now);
     setView(analysis.getView(performance.now()));
   }
 

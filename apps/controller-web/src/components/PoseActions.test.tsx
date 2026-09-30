@@ -74,6 +74,7 @@ describe('action panel and live camera integration', () => {
       videoRef: createRef<HTMLVideoElement>(), canvasRef: createRef<HTMLCanvasElement>(),
       status: 'RUNNING', error: null, delegate: 'CPU', start: vi.fn(),
       stop: vi.fn(() => { callbacks?.onCameraStopped?.(); }),
+      getCaptureContext: vi.fn(() => null),
       getRecordingContext: () => ({ delegate: 'CPU', videoWidth: 1280, videoHeight: 720 }),
       metrics: { cameraFps: 30, renderFps: 60, inferenceFps: 30, averageInferenceMs: 15,
         detected: true, visibility: Array(8).fill(0.9), signalLandmarks: Array(4).fill(null), width: 1280, height: 720 },

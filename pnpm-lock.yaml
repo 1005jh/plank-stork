@@ -178,6 +178,9 @@ importers:
       '@plank-stork/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      mediabunny:
+        specifier: 1.61.0
+        version: 1.61.0
       react:
         specifier: ^19.2.0
         version: 19.3.0
@@ -762,6 +765,12 @@ packages:
 
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
+
+  '@types/dom-mediacapture-transform@0.1.12':
+    resolution: {integrity: sha512-d7/QsLRwF864A5mgIM/YrfiglHoYn7zgCcAoJgW404r+2DwnNr7EBbLnCWpmOMgH8y0te73L1AV6H1bmauaWFw==}
+
+  '@types/dom-webcodecs@0.1.13':
+    resolution: {integrity: sha512-O5hkiFIcjjszPIYyUSyvScyvrBoV3NOEEZx/pMlsu44TKzWNkLVBBxnxJz42in5n3QIolYOcBYFCPZZ0h8SkwQ==}
 
   '@types/eslint-scope@3.7.7':
     resolution: {integrity: sha512-MzMFlSLBqNF2gcHWO0G1vP/YQyfvrxZ0bF+u7mzUdZ1/xK4A4sru+nraZz5i3iEIk1l1uyicaDVTB4QbbEkAYg==}
@@ -1549,6 +1558,9 @@ packages:
   media-typer@1.1.1:
     resolution: {integrity: sha512-yz3xRaG20c6/BOzvYoDaGtPmGscs7YivItZEEqe6GbwNfHuxu9YNmvnEkMzKldAGY4/80pRcQRZSEnhquk9XuQ==}
     engines: {node: '>= 0.8'}
+
+  mediabunny@1.61.0:
+    resolution: {integrity: sha512-WciPOYwKZwgYkoBKcEK6JzzIf+w5whypPzFdOihOylZ/5Qv19FmNfRnTcaprH+jD136YpEASU30Eb6VNCJiz3A==}
 
   memfs@3.5.3:
     resolution: {integrity: sha512-UERzLsxzllchadvbPs5aolHh65ISpKpM+ccLbOJ8/vvpBKmAWf+la7dXFy7Mr0ySHbdHrFv5kGFCUHHe6GFEmw==}
@@ -2648,6 +2660,12 @@ snapshots:
 
   '@types/deep-eql@4.0.2': {}
 
+  '@types/dom-mediacapture-transform@0.1.12':
+    dependencies:
+      '@types/dom-webcodecs': 0.1.13
+
+  '@types/dom-webcodecs@0.1.13': {}
+
   '@types/eslint-scope@3.7.7':
     dependencies:
       '@types/eslint': 9.6.1
@@ -3487,6 +3505,11 @@ snapshots:
   media-typer@0.3.0: {}
 
   media-typer@1.1.1: {}
+
+  mediabunny@1.61.0:
+    dependencies:
+      '@types/dom-mediacapture-transform': 0.1.12
+      '@types/dom-webcodecs': 0.1.13
 
   memfs@3.5.3:
     dependencies:

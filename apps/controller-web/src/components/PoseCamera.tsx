@@ -1,3 +1,6 @@
+import { useReplayCapture } from '../replay/useReplayCapture';
+import { ReplayCapturePanel } from './ReplayCapturePanel';
+import { ReplayRunner } from './ReplayRunner';
 import { useKneeKick } from '../pose/kick/useKneeKick';
 import { KneeKickDetectorPanel } from './KneeKickDetector';
 import { useState } from 'react';
@@ -21,13 +24,14 @@ import { KneeMotionValidationPanel } from './KneeMotionValidation';
 const SIGNAL_FIELDS = ['x', 'y', 'z', 'visibility', 'worldX', 'worldY', 'worldZ'] as const;
 
 export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
+  const capture = useReplayCapture();
   const recorder = usePoseRecorder();
-  const features = usePoseFeatures();
+  const features = usePoseFeatures(capture.neutralStarted);
   const actions = usePoseActions(features.getCurrent);
   const validation = useActionValidation();
   const motion = useKneeMotionValidation();
-  const kick = useKneeKick();
-  const { videoRef, canvasRef, status, error, delegate, metrics, start, stop, getRecordingContext } = usePoseCamera({
+  const kick = useKneeKick(capture.observe);
+  const { videoRef, canvasRef, status, error, delegate, metrics, start, stop, getRecordingContext, getCaptureContext } = usePoseCamera({
     onFrame: (frame) => {
       recorder.recordFrame(frame);
       const currentFeatures = features.processFrame(frame.landmarks, frame.worldLandmarks, frame.timestamp);
@@ -43,6 +47,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
       validation.reset();
       motion.reset();
       kick.reset('CAMERA_STOP');
+      void capture.stop();
       remote.publishStopped();
     },
   });
@@ -116,6 +121,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
       </div>
       {status === 'STARTING' && <p>카메라 권한을 확인하고 모델을 불러오는 중입니다…</p>}
       {error && <p className="camera-error" role="alert">{error}</p>}
+      <ReplayCapturePanel capture={capture} canStart={status === 'RUNNING'} onStart={() => capture.start(getCaptureContext(), mirrored)} />
       <PoseRecorder
         recorder={recorder}
         canStart={status === 'RUNNING' && metrics.detected}
@@ -197,6 +203,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
       <PoseValidation validation={validation} canStart={validationReady(status === 'RUNNING', features.view, actions.view)} onStart={startValidation} />
       <KneeKickDetectorPanel kick={kick} canStart={status === 'RUNNING' && kick.view.detector.ready} onStart={startDetectorTest} />
       <KneeMotionValidationPanel motion={motion} canStart={kneeMotionReady(status === 'RUNNING', metrics.detected, features.view)} onStart={startMotion} />
+      <ReplayRunner />
     </section>
   );
 }

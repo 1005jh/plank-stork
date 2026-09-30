@@ -55,6 +55,7 @@ describe('controller remote lifecycle', () => {
     camera = {
       videoRef: createRef(), canvasRef: createRef(), status: 'RUNNING', error: null, delegate: 'CPU', start: vi.fn(),
       stop: vi.fn(() => { camera.status = 'STOPPED'; callbacks?.onCameraStopped?.(); }),
+      getCaptureContext: vi.fn(() => null),
       getRecordingContext: vi.fn(() => ({ delegate: 'CPU' as const, videoWidth: 1280, videoHeight: 720 })),
       metrics: { cameraFps: 30, renderFps: 60, inferenceFps: 30, averageInferenceMs: 15, detected: true,
         visibility: [], signalLandmarks: [], width: 1280, height: 720 },

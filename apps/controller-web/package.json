@@ -13,6 +13,7 @@
   "dependencies": {
     "@mediapipe/tasks-vision": "1.0.1",
     "@plank-stork/protocol": "workspace:*",
+    "mediabunny": "1.61.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "socket.io-client": "^4.8.3"

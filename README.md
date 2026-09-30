@@ -728,6 +728,127 @@ Reset Detector Test는 Neutral baseline을 유지하고 현재 guided summary/di
 
 자동 회귀 테스트는 진단 활성/비활성에 동일 synthetic frame sequence를 넣어 v2 event 방향·시각·개수·최종 상태가 일치하는지 확인합니다. v1의 즉시 확정 기대값은 v2 temporal confirmation 기대값으로 갱신했습니다. 실제 간헐적 miss의 원인은 다음 실측 JSON을 통해 판단합니다.
 
+## STEP 4F — Raw Webcam Capture / Pose Replay
+
+Controller에 개발용 **Replay Capture**와 **Replay Runner**를 추가했습니다. 현재 recovery detector의 임계값, candidate/WAIT_CLEAR/WAIT_RETURN, pose-loss 동작은 그대로입니다. 이번 단계는 저장된 입력으로 변경 전후를 비교하는 도구입니다.
+
+### 실제 Capture → Replay 순서
+
+1. `pnpm dev`로 실행하고 Chrome/macOS의 노트북에서 `http://localhost:5173`을 엽니다. 기존 폰 remote를 함께 사용해도 됩니다.
+2. **Start Camera**를 누릅니다. 카메라는 발쪽에서 머리 방향을 바라보는 기존 실험 배치를 사용합니다. Capture 전 Pose FPS / Average inference ms를 확인합니다.
+3. **STEP 4F — Replay Capture → Start Replay Capture**를 누릅니다. `RECORDING`, duration, video size, pose frame count가 증가하는지 확인합니다. 사람이 아직 감지되지 않아도 Camera RUNNING이면 녹화할 수 있습니다.
+4. **Capture가 시작된 후 Calibrate Neutral**을 다시 누르고 Neutral FROZEN / Kick READY까지 기본 자세를 유지합니다. 이 순서가 calibration replay에 필요합니다. Action Calibration은 필요하지 않습니다.
+5. 기존 **Start Guided Detector Test**를 실행하고 폰의 고정 22초 안내를 따릅니다. Capture는 stage, event, 실시간 inference 결과를 계속 관찰합니다. 완료 후 1초 정도 더 기다립니다.
+6. **Stop Replay Capture**를 누르고 `RECORDED`를 확인합니다. **Download Replay WebM**, **Download Replay JSON**을 각각 눌러 같은 capture ID의 두 파일을 저장합니다. Capture 중 Camera Stop도 녹화를 종료합니다. 탭을 닫기 전에 필요한 파일을 다운로드하세요.
+7. 성능 비교를 위해 Capture ON 상태의 기존 Pose FPS / inference ms를 OFF 때와 비교합니다. Capture 종료 후 **Stop Camera**를 권장합니다. 별도의 live/Replay 모델을 동시에 실행하면 GPU/CPU 부하가 늘어납니다.
+8. **STEP 4F — Replay Runner → Replay JSON**에서 저장한 JSON을 선택하고 trial을 고릅니다. **LANDMARK REPLAY**를 두 번 실행합니다. 같은 코드 버전에서는 LIVE와 Events/time, Summary, Final state가 MATCH인지 확인합니다. 영상 파일은 필요하지 않습니다.
+9. **CALIBRATION REPLAY**를 누르고 Neutral / Kick baseline MATCH 및 baseline 숫자를 확인합니다. Neutral 시작 marker가 없는 녹화는 calibration replay를 실행할 수 없습니다.
+10. 같은 capture ID의 파일을 **Replay WebM**에 선택하고 **VIDEO REPLAY**를 누릅니다. 영상의 decoded frame을 순차 추론하는 동안 frame count를 확인합니다. 실시간보다 느려도 프레임 처리를 기다립니다. 이 모드는 모델 초기화/다운로드가 필요할 수 있습니다. 완료 후 LIVE / LANDMARK / VIDEO의 usable frames, 좌우 event 수, Twist/Neutral false kick, knee detected/direction, 최종 상태를 비교합니다.
+11. **Download Replay Results JSON**으로 비교 결과와 재생 detector config, baseline 비교를 저장합니다. 재생 취소/새 파일 선택은 이전 video 작업과 결과를 정리합니다. raw video를 결과 JSON에 다시 넣지 않습니다.
+
+### 저장 구조와 시간 기준
+
+- 기존 `getUserMedia` **동일 MediaStream**을 preview/MediaPipe와 `MediaRecorder`가 공유합니다. 카메라를 추가로 열거나 canvas를 녹화하지 않습니다. WebM에는 skeleton, UI, 텍스트, CSS mirror가 들어가지 않습니다.
+- `MediaRecorder.isTypeSupported`로 `video/webm;codecs=vp8` → `video/webm` 순서로 확인합니다. 미지원이면 오류를 표시합니다. 개발용 초기 요청 bitrate는 **4 Mbps**이며 실제 recorder의 `mimeType`, `videoBitsPerSecond`와 track frame rate를 metadata에 저장합니다.
+- 모든 live inference에서 `result.close()` **전에** 33개 image/world landmark의 primitive를 복사합니다. 미검출 frame은 빈 배열이고 없는 visibility는 `null`입니다. Mirror는 표시 metadata에만 남으며 좌표 변환을 하지 않습니다. UI용 250/500ms snapshot을 recording 입력으로 사용하지 않습니다.
+
+```text
+version: 1
+captureId, createdAt
+video: filename, mimeType, width, height, nominalFrameRate, videoBitsPerSecond,
+       sourceVideoTimeAtStart
+pose: model, modelUrl, delegate, settings
+display: mirrorEnabled
+timing: durationMs, captureStartPerformanceMs
+markers: [{ type, tMs, order, trialId?, stageIndex?, expected? }]
+poseFrames: [{ tMs, order,
+   landmarks: [{ x, y, z, visibility }],
+   worldLandmarks: [{ x, y, z, visibility }] }]
+clockSamples: [{ tMs, order, trialId }]
+liveResult:
+   neutralBaseline, kickBaseline, detectorConfig, guidedSummary, events
+   trials: [{ id, startMs, endMs, startOrder, endOrder,
+              neutralBaseline, baseline, result }]
+```
+
+`CAPTURE_START/STOP`, `NEUTRAL_CALIBRATION_START/FROZEN`, `GUIDED_TEST_START/STAGE_CHANGE/COMPLETE/STOP` marker를 중복 없이 기록합니다. `tMs = inference timestamp − captureStartPerformanceMs`로 원래 inference gap을 보존하고 `order`로 같은 시각의 관측 순서를 구분합니다. 영상과 JSON은 `plank-stork-replay-<ISO timestamp>` 파일명을 공유합니다. 여러 Guided trial을 녹화하면 trial별 frozen baseline과 결과를 별도로 비교합니다.
+
+기존 detector의 `getView()`도 inference 사이에 stale/candidate timeout을 처리하므로, **실제로 호출된** clock의 상대 시각을 `clockSamples`에 추가 기록합니다. Capture 때문에 새로운 detector clock을 호출하지 않습니다. Landmark replay는 저장한 frame/clock 순서만 빠른 loop로 실행합니다. `performance.now()`나 처리 속도를 detector 시간으로 사용하거나 실제 22초를 기다리지 않습니다. 중복 timestamp frame은 첫 frame만 사용하고 out-of-order 입력은 시간/관측 순서로 정렬합니다. 이벤트 시각 비교 허용 오차는 상대시간 뺄셈의 부동소수점 차이만 위한 **0.000001ms**입니다.
+
+### 코어 공유와 Video replay 차이
+
+- Detector replay는 trial의 저장된 **kick baseline**으로 별도의 `KneeKickAnalysis`를 생성하고, live와 같은 feature extraction / `analyzeFrame` / `KneeKickDetector` / Guided Test 코어를 통과합니다. React 상태를 재현하거나 live 인스턴스를 초기화하지 않습니다.
+- Calibration replay는 Neutral 시작 marker부터 실제 `PoseFeatureAnalysis`와 `KneeKickAnalysis`에 recorded frame을 넣어 baseline을 다시 만듭니다. 저장된 trial baseline과 비교하며 calibration 수식은 바꾸지 않습니다.
+- Video replay는 별도의 PoseLandmarker에서 같은 Full model URL, 저장된 GPU/CPU delegate, VIDEO/1 pose/confidence 설정을 사용합니다. 설정이 다르거나 저장된 delegate를 사용할 수 없으면 명시적으로 중단합니다.
+- STEP 4F.1부터 Video는 자연 재생 대신 WebCodecs decoded sample의 **presentation timestamp × 1000**을 사용합니다. 중복/역행 timestamp를 별도 집계하고 callback `now`를 사용하지 않습니다. 재추론한 frame을 같은 분석 코어에 넣고, Guided 구간의 결과를 비교합니다.
+- WebM의 첫 encoded frame과 live capture 시작 사이의 지연 및 압축/decoding 차이 때문에 video Pose는 live와 bit-identical하지 않습니다. Video 시간축은 컨테이너에 저장된 presentation timestamp이며 임의로 live에 맞추는 offset은 더하지 않습니다. 결과 차이는 위 표에서 functional behavior로 검토합니다. 비교 표의 frame count는 선택한 Guided trial 구간, 재생 progress의 count는 영상 전체 inference 수입니다.
+
+### 자원과 로컬 저장
+
+`dataavailable`에서는 Blob chunk만 보관합니다. 고빈도 frame/clock은 React 밖의 메모리에 쌓고 Capture UI는 250ms마다 갱신합니다. MediaPipe inference 호출/시각/기존 지표 계산 순서는 유지합니다. ON 시 snapshot 복사와 인코딩 비용은 있으므로 실제 기기의 ON/OFF FPS로 확인해야 하며, 장시간 녹화는 메모리/JSON 크기를 증가시킵니다. 우선 Neutral + 한 번의 22초 trial 정도로 검증하세요.
+
+WebM/JSON은 사용자가 다운로드 버튼을 누를 때만 Blob/ObjectURL로 로컬 파일을 만듭니다. backend upload, Socket 전송, cloud/persistent 저장은 추가하지 않습니다. 기존 MediaPipe 모델/WASM 로드는 기존 URL을 사용합니다. Camera stop/unmount 시 recorder를 종료하고, 완료 시 listener를 해제합니다. 다운로드 URL은 정리하며, 취소/새 파일/unmount 시 decoder iterator와 전용 모델도 해제합니다. 4F.1 Video replay는 ObjectURL이나 재생 callback을 만들지 않습니다. 브라우저 새로고침/탭 종료 후 메모리 기록은 복구되지 않습니다.
+
+자동 테스트에는 MediaRecorder mock, 실제 camera callback의 result.close 전 복사, Capture ON/OFF live 동등성, clock 포함 live/replay 동등성, calibration 비교, mediaTime/중복 frame, 취소/파일 교체/자원 정리를 포함합니다. **candidate → NO_LANDMARKS → 400ms 이내 Neutral 복귀 → 이전 evidence로 false KNEE_RIGHT**는 의도적으로 보존한 regression fixture입니다. 이번 STEP에서는 detector bug나 threshold를 수정하지 않습니다.
+
+## STEP 4F.1 — Frame-Complete Video Replay
+
+### 변경 이유와 방식
+
+기존 4F는 `video.play()` 상태에서 rVFC를 받고 `detectForVideo()`가 끝난 뒤 다음 callback을 등록했습니다. 그동안 compositor/media clock은 계속 진행하므로, main thread 추론이 느리면 다음 callback은 이미 더 뒤의 presented frame을 전달합니다. rVFC는 모든 source frame을 보관하는 queue가 아니며 callback은 best-effort입니다. ([MDN API](https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback)) 따라서 기존 VIDEO의 Guided 375 frames / 345 usable / event 0은 coverage 문제와 detector 결과를 분리해 봐야 합니다. 과거 run에는 source timestamp 진단이 없어 286개의 차이 전부가 어디에서 생겼는지 역으로 단정할 수는 없습니다.
+
+고정 `1 / nominalFPS` seek는 VFR/불규칙 timestamp에서 같은 frame을 반복하거나 짧은 frame을 지나칠 수 있습니다. pause/rVFC도 compositor에 이미 전달된 다음 frame을 정확히 열거하는 보장이 없습니다. source completeness를 위해 **WebM demux + WebCodecs 순차 decode**가 필요하다고 판단했습니다. 직접 컨테이너 parser/codec을 구현하는 대신 `mediabunny@1.61.0`의 `BlobSource` / `VideoSampleSink.samples()`만 사용합니다. 라이브러리는 Video Replay를 시작할 때 동적으로 불러오고, 입력은 사용자가 고른 로컬 File입니다. ([순차 sample API](https://mediabunny.dev/guide/media-sinks))
+
+```text
+local WebM → bounded decoder queue (backpressure)
+          → next decoded sample
+          → raw frame canvas
+          → await detectForVideo(canvas, sample.timestamp × 1000)
+          → Pose primitive snapshot → result.close() → sample.close()
+          → UI/Cancel에 실행 기회 제공 → next decoded sample
+```
+
+샘플은 presentation 순서로 소비하고 **동시 Pose inference는 1개**입니다. Decoder가 미리 읽은 소수의 frame은 소비자가 느리면 queue에 보존하고 더 읽기를 기다립니다. 별도의 playback clock은 없습니다. Cancel 버튼을 처리하기 위한 event-loop yield의 대기 시간은 Pose/detector timestamp와 무관합니다. 영상 시간이 22초여도 처리 시간이 그보다 길 수 있습니다. 모델/설정/delegate와 detector/threshold, LANDMARK 경로는 유지합니다.
+
+WebCodecs `VideoDecoder`가 없는 환경이나 지원하지 않는 codec은 명시적으로 실패합니다. 프레임을 다시 놓칠 수 있는 자연 재생 fallback은 제공하지 않습니다. localhost/HTTPS의 Chrome을 사용하세요. UI preview는 처리 중인 원본 frame canvas로 변경했고 mirror/overlay는 적용하지 않습니다. 새 구현에는 pending seek/rVFC/video listener/ObjectURL이 없습니다. Cancel/새 파일/unmount 시 pending `next()`를 깨우고 reader/decoder/queue를 dispose하며, 현재 sample 및 MediaPipe result/model을 해제합니다. 이미 실행 중인 동기 MediaPipe 추론은 끝난 직후 정리하고 다음 추론은 시작하지 않습니다.
+
+파일 선택과 VIDEO REPLAY 실행 직전에 source 일치를 검사합니다. 현재는 파일명/파싱 가능한 capture ID 검증이며 WebM 내부 metadata를 읽거나 삽입하지 않습니다. identity 추출과 비교를 작은 별도 함수로 분리했으므로, 향후 파일명 변경을 지원할 때 검증된 container metadata를 입력으로 확장할 수 있습니다.
+
+### Frame completeness 진단
+
+VIDEO 결과 화면과 Download Replay Results JSON의 `video.videoDiagnostics`에 저장합니다.
+
+| 항목 | 의미 |
+| --- | --- |
+| `decodedFrameCount` | 순차 iterator에서 소비자에게 전달된 decoded sample 수 |
+| `processedFrameCount`, `videoProcessedFrameCount` | 실제 Pose 추론과 snapshot을 완료한 frame 수 |
+| `duplicateFrameCount`, `duplicateMediaTimestampCount` | 이미 관측한 동일 media timestamp의 sample 수. 두 필드는 같은 값 |
+| `skippedFrameCount` | 잘못된/음수 timestamp 또는 역행 timestamp 때문에 제외한 decoded sample 수. Duplicate는 포함하지 않음 |
+| `outOfOrderMediaTimestampCount`, `invalidMediaTimestampCount` | skipped의 사유별 수 |
+| `firstMediaTimestampMs`, `lastMediaTimestampMs` | 처리한 media timestamp의 처음/마지막 |
+| `medianFrameIntervalMs`, `maxFrameIntervalMs` | 연속 처리 timestamp 간격의 중앙값/최댓값. 2개 미만이면 null |
+| `expectedApproxFrameCount` | capture duration × nominal FPS의 추정값. 컨테이너의 exact frame count가 아님 |
+| `recordedPoseFrameCount`, `recordedTimestamps` | 전체 Capture JSON의 inference 수와 시간 분포 |
+| `guidedInterval` | 선택한 Guided trial의 recorded/video count 및 각각의 처음/마지막/median/max 간격 |
+
+정상 완료 시 `decoded = processed + duplicate + skipped`입니다. 이 등식은 소비한 decoded sample을 빠짐없이 계산했다는 뜻이며 **촬영/인코딩 전에 빠진 source frame 수를 복원했다는 뜻이 아닙니다.** 중복 timestamp를 missing source frame으로 세지 않고 nominal FPS와의 차이를 임의의 skipped 수로 만들지 않습니다. 전체 frame 수와 Guided frame 수를 혼동하지 마세요.
+
+Guided 범위는 기존 LANDMARK replay와 동일하게 trial의 관측된 시작/종료 경계를 사용합니다(`GUIDED_TEST_START` / `GUIDED_TEST_STOP`, 동일 시각에는 기록된 order 반영). 예정된 22초 `GUIDED_TEST_COMPLETE`보다 실제 완료를 관측한 inference/clock이 조금 늦을 수 있으며, 기존 661-frame 비교의 그 경계를 바꾸지 않습니다. live inference와 encoded video는 1:1이 아닐 수 있으므로 두 timeline의 count와 first/last/median/max를 함께 비교합니다. 별도의 timestamp offset 보정은 하지 않습니다.
+
+### clean fixture 재검증
+
+대용량 사용자 WebM/JSON은 repo에 넣지 않습니다. 실제 clean 파일은 로컬에서 아래 순서로 검증하세요.
+
+1. `pnpm install` → `pnpm dev` 후 노트북 Chrome의 `http://localhost:5173`에서 Camera를 정지합니다.
+2. Replay JSON에 **clean인가요.json**을 선택하고 기존 clean Guided trial을 고릅니다.
+3. LANDMARK REPLAY를 두 번 실행해 **661 frames / 657 usable / KNEE_LEFT @ 20377.09999847412ms / final ARMED**, Events/time·Summary·Final state MATCH가 유지되는지 확인합니다.
+4. Replay WebM에서 같은 recording의 WebM을 선택하고 VIDEO REPLAY를 실행합니다. **clean인가.webm**으로 이름을 바꿨다면 먼저 JSON의 `video.filename`(화면의 Expected video)과 같은 원래 파일명으로 되돌리세요. 선택한 파일명이 다르면 `Replay JSON과 다른 capture의 WebM입니다.`를 표시하고 Video 실행을 차단합니다. Recorder의 표준 파일명에서 capture ID를 파싱할 수 있으면 JSON의 `captureId`(결과의 `sourceCaptureId`)와도 비교합니다. Landmark Replay는 WebM mismatch와 무관하게 실행할 수 있습니다.
+5. 완료 시 전체 count와 별도로 **Guided Recorded Pose Frames: 661 / Video Processed Frames: N**을 확인합니다. 기존 약 375보다 coverage가 개선됐는지, duplicate/skipped가 있는지, timestamp 처음/끝/간격에 큰 차이가 있는지 확인합니다. N을 661로 강제하거나 성공 기준으로 하드코딩하지 않습니다.
+6. 기능 결과는 **LEFT detected/correct, RIGHT miss, Twist/Neutral false kick 0**에 가까워지는지 비교합니다. coverage가 충분한지 먼저 확인하고 남은 차이를 detector miss로 단정하지 않습니다. RIGHT miss나 pose-loss detector 수정은 이번 단계 범위에 없습니다.
+7. Download Replay Results JSON으로 진단과 비교 결과를 저장합니다. 다시 실행해서 같은 source timestamp 분포/count가 유지되는지도 확인합니다. Video decode/Pose의 수치적 bit-identical은 별도 보장이 아닙니다.
+
+자동 테스트는 50ms/frame 처리에서도 `[0, 33, 66, 100, 133]` 전부 처리, concurrency 1, wall-clock/presentation callback 독립성, duplicate/역행/간격 집계, decoder 취소 및 자원 정리, 전체/Guided UI·export를 확인합니다. 661/657/정확한 LEFT timestamp/ARMED를 재현하는 **작은 synthetic landmark regression**도 추가했습니다. 이는 제공된 결과 요약을 검증하는 fixture이며 사용자의 실제 clean raw 데이터를 대신한다고 주장하지 않습니다.
+
 ## 검증 및 빌드
 
 ```sh
