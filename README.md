@@ -849,6 +849,148 @@ Guided 범위는 기존 LANDMARK replay와 동일하게 trial의 관측된 시�
 
 자동 테스트는 50ms/frame 처리에서도 `[0, 33, 66, 100, 133]` 전부 처리, concurrency 1, wall-clock/presentation callback 독립성, duplicate/역행/간격 집계, decoder 취소 및 자원 정리, 전체/Guided UI·export를 확인합니다. 661/657/정확한 LEFT timestamp/ARMED를 재현하는 **작은 synthetic landmark regression**도 추가했습니다. 이는 제공된 결과 요약을 검증하는 fixture이며 사용자의 실제 clean raw 데이터를 대신한다고 주장하지 않습니다.
 
+## STEP 4G — Kick Feature Discovery / Limb-Relative Motion Analysis
+
+저장된 **STEP 4F version 1 Replay Capture JSON**의 landmark를 분석하는 Controller 개발 도구입니다. Camera 시작, 새 운동 촬영, WebM, MediaPipe 재추론이 필요하지 않습니다. Diagnostic version 3 / Replay 결과 JSON은 입력 대상이 아닙니다. 여러 파일의 모든 Guided trial을 `filename + captureId + trialId`로 구분합니다. 원본 파일은 repo에 넣지 않습니다.
+
+### Ground truth / Neutral / 측정 규칙
+
+- Label은 `GUIDED_STAGE_CHANGE`의 expected stage입니다. detector miss/wrong event와 관계없이 NEUTRAL → TWIST_LEFT → NEUTRAL → TWIST_RIGHT → NEUTRAL → KNEE_LEFT → NEUTRAL → KNEE_RIGHT → NEUTRAL을 분석합니다. Marker 시각을 우선하며 경계는 **[start, end)**, 정확히 경계에 있는 frame은 다음 stage입니다. 마지막 stage는 COMPLETE/STOP/trial 종료로 제한합니다. 전체 stage marker가 없을 때만 trial 시작 + 기존 22초 sequence로 추정하고 경고를 표시합니다. 일부 marker 누락/잘못된 순서는 입력 오류로 표시합니다.
+- 각 trial의 **첫 NEUTRAL stage**에서 usable frame의 component별 median으로 analysis-only reference를 만듭니다. 이후 Neutral/Twist/Knee는 reference를 바꾸지 않습니다. component별 valid count도 내보내며 baseline이 없으면 delta는 null입니다. 기존 production Neutral/Kick baseline, detector state, smoothing에 쓰지 않습니다.
+- Image normalization의 `bodyScale`은 trial에 저장된 frozen `baseline.bodyScale`을 그대로 사용해 기존 X control과 같은 단위를 유지합니다. 새 relative vector/distance/angle/world 기준값은 위 analysis-only reference입니다. World normalization은 첫 Neutral의 **same-side world hip-knee length median**입니다. 0에 가까운 분모는 null입니다.
+- Usability: image hip visibility ≥ 0.7, knee ≥ 0.5. Hip-center 후보는 양쪽 hip, same-side 후보는 해당 hip/knee만 필요합니다. World는 해당 image hip/knee의 visibility를 확인하고, world visibility가 있으면 같은 기준을 적용합니다(null이면 image visibility 사용). World 누락은 image 후보를 무효화하지 않습니다. Angle은 image XY hip-knee-ankle 각도(도)이며 ankle ≥ 0.5도 필요합니다. Angle/world의 reference가 없으면 해당 delta만 null입니다.
+- 좌표를 mirror하거나 좌표 부호로 limb를 바꾸지 않습니다. Image XY는 기존 detector와 같은 MediaPipe normalized image 좌표이며 pixel aspect 보정은 하지 않습니다. World/angle은 탐색 후보입니다.
+
+### 후보와 통계
+
+| 분류 | 계산값 |
+| --- | --- |
+| Existing control | per-side `kneeCenterOffsetX`, `normalizedXDisplacement`, GLOBAL `dominantNormalizedXDisplacement` (저장된 Kick baseline, 기존 usability/부호/동률 규칙) |
+| Hip-center image | `dx/dy`, `deltaDx/deltaDy`, `deltaDxNorm/deltaDyNorm`, `hipCenterRelative2DDisplacement = hypot(deltaDx, deltaDy) / bodyScale` |
+| Same-side hip image | `sameHipDeltaXNorm/YNorm`, `sameHip2DDisplacementNorm` |
+| Hip-knee distance | current/neutral distance, signed change, absolute change, 각각 bodyScale normalized change |
+| World exploratory | same-hip `worldDx/Dy/Dz`, Neutral 대비 `deltaWorldX/Y/Z`, 각 abs delta, `world3DDisplacement`; delta/abs delta/3D magnitude의 neutral world length normalized 버전 |
+| Angle exploratory | `kneeFlexionAngle`, `kneeFlexionAngleChange`; 자체 coverage |
+| Translation diagnostic | `hipCenterXChange`, `hipCenterYChange` |
+
+LEFT evidence는 **LEFT limb의 Neutral 대비 변화량**, RIGHT evidence는 **RIGHT limb의 변화량**입니다. Signed motion 후보도 evidence에는 절댓값을 사용합니다. Raw 위치/현재 길이/현재 angle/hip translation은 진단용이며 kick separation/direction 값을 만들지 않습니다. 기존 dominant X는 GLOBAL control로 separation만 계산하고 limb direction은 N/A입니다. 자동 BEST/WINNER 선정은 없습니다.
+
+Dataset × stage × feature × side별 `frameCount`, `usableFrameCount`, `coverage`, `median`, `p90`, `p95`, `max`, `peak`, `peakAbsVelocity`, `velocitySampleCount`를 저장합니다. Median은 가운데 2개 평균, p90/p95는 nearest-rank입니다. Signed feature의 median/percentile/max는 **signed 원값**, peak는 **max absolute value**입니다. Separation/direction은 evidence magnitude를 사용하므로 signed stage p95와 구분해야 합니다.
+
+주요 hip-center 2D / same-hip 2D / absolute distance change / world3D displacement 및 기존 normalized X에 대해 `(current − previous) / ((tMs − previous.tMs) / 1000)`으로 velocity를 계산합니다. Wall-clock이나 재생 속도는 사용하지 않습니다. 연속 관측 중 하나라도 missing, dt ≤ 0, dt ≥ **400ms**, stage 변경이면 velocity는 null입니다. Missing frame을 뛰어넘어 이전 값에 연결하지 않습니다. 기존 Replay와 같이 timestamp 정렬 후 동일 timestamp는 첫 frame만 분석하며 landmark 배열 자체를 복제하지 않습니다.
+
+각 dataset 및 aggregate에 다음을 표시합니다.
+
+- `nonKickP95/Max`: NEUTRAL + TWIST_LEFT + TWIST_RIGHT의 양쪽 limb evidence를 pool. `kneeLeftPeak`: KNEE_LEFT의 LEFT evidence peak, `kneeRightPeak`: KNEE_RIGHT의 RIGHT evidence peak. `minKickPeak = min(L, R)`.
+- `sampleSeparationMargin = minKickPeak − nonKickMax`, `robustSeparationMargin = minKickPeak − nonKickP95`. Aggregate는 usable sample을 pool하므로 긴 trial의 비중이 커지고, 각 label의 peak는 선택한 trial 전체의 peak입니다. 따라서 aggregate만으로 STRESS 결과를 판단하지 않습니다.
+- 각 실제 KNEE stage에 leftPeak/rightPeak/correctSideMargin을 보존합니다. KNEE_LEFT는 `left − right`, KNEE_RIGHT는 `right − left`입니다. 표의 Direction L/R Margin은 해당 label의 **모든 trial 중 최소 margin**입니다. `directionConsistentAcrossObservedKicks`는 모든 관측 stage의 margin이 양수이며 두 kick label이 모두 존재할 때 true, 하나라도 0 이하이면 false, 비교할 limb/label이 없으면 null(UNKNOWN)입니다. 양수인 CLEAN으로 음수/누락 STRESS를 덮지 않습니다.
+- `overallCoverage`, `neutralCoverage`, `twistCoverage`, `kneeLeftCoverage`, `kneeRightCoverage`: **usable side-frame / 기록된 stage side-frame**. 양쪽 후보의 분모는 frame 수 × 2, GLOBAL은 × 1입니다. Pose가 없는 recorded frame도 분모에 포함합니다. 원본 카메라 FPS 대비 coverage는 아닙니다. 한 항목이라도 **80% 미만 또는 관측 없음**이면 LOW / MISSING COVERAGE를 표시합니다. 이는 coverage 표시 기준이며 detector threshold가 아닙니다. World/angle은 LOW여도 다른 후보 계산에 영향을 주지 않습니다. Stage details에서 좌우 각각의 coverage를 확인하세요.
+
+이 통계는 **현재 small fixture set**의 기술 통계입니다. Universal threshold, 최종 feature 선택, 실제 kick 검출 정확도를 의미하지 않습니다. 이번 단계에서는 ENTER/CONFIRM/velocity threshold, WAIT_RETURN/WAIT_CLEAR, production calibration, 기존 LANDMARK/VIDEO Replay를 수정하지 않습니다.
+
+### CLEAN / STRESS 실행 절차
+
+1. `pnpm dev:controller-web`을 실행하고 노트북 브라우저에서 `http://localhost:5173`을 엽니다. 카메라는 시작하지 않습니다. 기존 Socket 기능과 별개로 이 분석에는 서버/휴대폰이 필요하지 않습니다.
+2. **STEP 4G — Kick Feature Discovery** → **Feature Discovery Replay JSON**에서 기존 로컬 **clean인가요.json**, **3차검증2.json**을 동시에 선택합니다. Capture JSON만 필요합니다. 선택 즉시 파일 단위로 분석하며, 잘못된 파일은 이름과 오류를 표시하고 aggregate에서 제외합니다.
+3. 각 파일의 captureId / trialId / stage source를 먼저 확인합니다. CLEAN 표에서 기존 `normalizedXDisplacement` RIGHT와 `deltaDyNorm`, `hipCenterRelative2DDisplacement`, `sameHip2DDisplacementNorm`, distance/world 후보의 KNEE_RIGHT peak를 비교합니다. 숫자가 커도 NonKick p95/max와 correct-side margin을 함께 확인합니다.
+4. **Stage / limb details**를 펼치고 후보를 선택해 KNEE_LEFT/KNEE_RIGHT 각각의 LEFT/RIGHT usable count, coverage, peak, velocity를 확인합니다. Analysis-only Neutral reference의 valid count도 볼 수 있습니다.
+5. STRESS 표에서 pose-loss/visibility 구간의 coverage 저하와 null을 확인합니다. World/angle의 LOW coverage 및 반대 limb 반응도 비교합니다. CLEAN과 STRESS를 먼저 따로 보고 Aggregate의 sample/robust margin과 `directionConsistentAcrossObservedKicks`를 확인합니다. 현재 제공된 설명만으로 새 후보가 RIGHT miss를 해결한다고 단정할 수 없습니다.
+6. **Download Feature Discovery JSON**으로 summary를 저장합니다. **Reset Feature Discovery**는 분석 결과/진행 중 파일 읽기를 폐기합니다. 다른 파일 선택은 이전 결과를 대체합니다. 촬영·운동을 다시 수행하지 않습니다.
+
+Export는 `{ version: 1, createdAt, inputs: [{ filename, captureId, trialId }], features: { definitions, settings }, perDataset, aggregate }`입니다. `perDataset`에는 stage 범위/label, Neutral reference/valid counts, stage summaries, feature coverage/separation/direction이 들어갑니다. **Full landmarks, per-frame scalar 배열, 영상, detector event는 export하지 않습니다.** 파일 처리 중 raw JSON과 percentile 계산용 scalar pool만 일시적으로 보유하고, 분석 완료 후 React state에는 summary만 저장합니다. 파일 사이에 UI에 실행 기회를 주고 per-frame state update는 하지 않습니다. Blob/ObjectURL 로컬 다운로드만 사용하며 upload/Socket/DB 저장은 없습니다.
+
+자동 테스트는 XY translation invariance, 작은 X + 큰 Y, world depth-only, LEFT/RIGHT limb evidence, scale normalization, ankle/world/반대 hip 누락 격리, Neutral median, recorded velocity/gap, stage 경계, multiple trial, signed 통계/separation/direction, STRESS coverage, mirror 독립성, input/live detector immutability 및 기존 LIVE↔LANDMARK parity, 다중 파일 UI/invalid input/reset/unmount/summary export를 검증합니다. Synthetic test는 사용자의 실제 CLEAN/STRESS 측정 결과를 대신하지 않습니다.
+
+## STEP 4G.1 — Temporal Validation for Knee-Y Kick Evidence
+
+STEP 4G의 같은 Capture JSON 선택으로 시간 축 분석도 실행합니다. PRIMARY는 `abs(deltaDyNorm)`, SECONDARY는 `hipCenterRelative2DDisplacement`, CONTROL은 `normalizedXDisplacement`입니다. Raw Y 값과 velocity는 부호를 유지하되 **direction은 신체 LEFT/RIGHT limb의 적분 evidence로 비교**합니다. World/angle은 4G.1 평가 대상이 아닙니다. 위 STEP 4G의 analysis-only 첫 Neutral reference와 recorded bodyScale을 재사용하며 production calibration/detector에는 쓰지 않습니다.
+
+### 계산 및 해석
+
+- Y threshold: **0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.60**. Dwell: **0, 50, 80, 100, 150, 200, 300ms**. 각 stage/side에 framesAbove, fractionAbove(usable frame 분모), longestContiguousRunFrames/Ms, first/lastCrossingMs, lastAboveMs, crossingCount를 저장합니다. Crossing은 above run의 **진입**이며 시각은 capture-relative `tMs`입니다.
+- 연속 시간은 마지막 above frame − 첫 above frame입니다. 한 frame spike는 **0ms**입니다. Trigger는 dwell을 만족한 **첫 실제 관측 frame의 시각**이며 사이 시각을 보간하지 않습니다. Below-threshold, missing, 비양수 dt, **dt ≥ 400ms**, stage/window 경계에서 run을 끊습니다. Gap 전 candidate를 reacquisition 뒤에 이어붙이지 않습니다.
+- `deltaDyNormVelocity = (signed Y[n] − signed Y[n−1]) / recorded dt seconds`. Stage/window별 `peakAbsVelocity`, `p95AbsVelocity`, valid velocity sample count를 제공합니다. Missing 또는 400ms 이상 gap을 건너뛰지 않습니다. Peak/p95 evidence는 절댓값, velocity는 signed Y의 변화량의 절댓값 통계입니다.
+- Direction candidate window는 **양쪽 Y가 usable**이며 한쪽이라도 threshold 이상인 연속 구간입니다. 각 limb에 `max(0, abs(Y) − threshold)`를 recorded dt로 사다리꼴 적분합니다(단위: evidence × seconds). Window 첫/마지막 관측 바깥으로 연장하지 않습니다. Missing/400ms gap은 window와 적분도 끊습니다. 좌우 peak, integrated evidence, KNEE_LEFT의 `left − right`, KNEE_RIGHT의 `right − left` margin을 출력합니다. 양쪽 적분이 같거나 수치 오차 범위(1e-8)이면 AMBIGUOUS입니다. 한 frame의 적분은 0이며 방향을 확정하지 않습니다.
+- 제한된 2D confirmation **OFF / 0.30 / 0.40 / 0.50**도 비교합니다. Y contiguous dwell을 만족한 frame에서 **같은 limb의 2D ≥ confirmation**이면 trigger입니다. 2D 자체의 별도 dwell이나 production rule을 추가하지 않습니다. 2D는 abs(Y) 이상이므로 Y threshold보다 낮은 2D 기준은 수학적으로 중복일 수 있습니다. 추가 이득은 OFF와 더 높은 2D 기준의 실제 결과를 비교해야 합니다.
+- FULL은 기존 `[stageStart, stageEnd)`, TRIMMED는 **[stageStart+200ms, stageEnd−200ms)**입니다. 양쪽을 독립 계산하고, trim 뒤 첫 frame에 trim 전 velocity/dwell/적분을 이어받지 않습니다. Trim은 stage-edge contamination 실험이며 production latency가 아닙니다.
+
+### CLEAN 평가와 STRESS 관측성
+
+모든 파일은 **UNASSIGNED**로 시작합니다. UI의 **Dataset roles**에서 각 trial을 CLEAN/STRESS로 명시적으로 지정하세요. 파일명(Unicode 표기/이름 변경 포함)으로 role을 추론하지 않습니다. **Run Temporal Validation**을 실행할 때 CLEAN이 없으면 **No CLEAN dataset selected**를 표시하고 export에도 warnings로 남깁니다. 역할은 Feature 표시/export, Temporal, Shadow에서 공유하며, role 변경은 기존 Shadow 결과를 무효화합니다.
+
+`observableStage = usable coverage ≥ 80% AND 최대 usable gap < 400ms`입니다. 이는 **분석용 관측성 기준**이며 detector threshold가 아닙니다. 누락 frame, 400ms 이상 inference gap, window 시작/종료의 긴 무관측 시간을 `usableGaps { startMs, endMs, durationMs, reason }`에 남깁니다. Coverage는 기록된 frame 기준이므로 높은 coverage라도 긴 시간 gap이 있으면 observable=false일 수 있습니다. 관측 가능한 구간에서 실제 trigger를 봤다면 `observedTrigger=true`로 남깁니다. Trigger가 없고 관측 불가이면 `triggered=null (UNKNOWN)`이며 false-negative로 바꾸지 않습니다.
+
+**CLEAN으로 지정한 모든 trial**의 모든 대상 stage를 관측할 수 있을 때만 조합을 평가합니다. Non-kick은 어느 limb든 trigger가 있으면 해당 stage를 false-trigger stage로 집계하고, KNEE_LEFT/RIGHT는 각각 올바른 limb에서 모든 해당 stage가 trigger되어야 detected=true입니다. 필요한 label이나 관측성이 부족하면 INSUFFICIENT_EVIDENCE입니다. STRESS/UNASSIGNED는 CLEAN rule 평가에서 제외합니다.
+
+`viableRulesClean`은 Neutral/Twist L/Twist R false-trigger stage 수가 전부 0이고 양쪽 Knee가 모두 detected인 조합을 **전부** 나열합니다. FULL/TRIMMED × threshold 7 × dwell 7 × confirmation 4 = **392개**를 비교합니다. Direction/AUC는 별도 진단이며 viable 판정에 숨은 조건으로 사용하지 않습니다. 자동 BEST/WINNER, production threshold 추천 또는 자동 결론은 없습니다. STRESS는 표의 observable/coverage/gap 및 usable non-kick의 observed trigger를 따로 검토합니다.
+
+### 기존 fixture로 실행
+
+1. `pnpm dev:controller-web` → `http://localhost:5173`. Camera나 새 운동 테스트 없이 기존 **clean인가요.json / 3차검증2.json**을 STEP 4G 입력에서 동시에 선택합니다.
+2. **STEP 4G.1**에서 capture/trial을 확인하고 CLEAN/STRESS role을 직접 선택한 뒤 **Run Temporal Validation**을 누릅니다.
+3. Window **FULL**, confirmation **OFF**로 시작합니다. 49개 threshold+dwell 표와 **All viable combinations**를 확인합니다. 0개일 때 각 조합이 REJECTED인지 관측 부족인지 구분합니다.
+4. Y threshold/dwell을 바꿔 non-kick의 높은 peak가 짧은 run인지, kick의 유지시간은 충분한지 확인합니다. Stage별 peak/p95, longest duration, fraction/crossing count, Y velocity를 함께 봅니다. Peak 하나로 spike/sustained를 단정하지 않습니다.
+5. Paired candidate windows에서 Left/Right integrated evidence와 correct-side margin을 비교합니다. 방향이 AMBIGUOUS이거나 paired usable frame이 없는 경우를 임의로 LEFT/RIGHT로 채우지 않습니다.
+6. 2D confirmation을 **0.30 / 0.40 / 0.50**으로 바꿔 OFF 대비 false triggers 감소와 양쪽 Kick 유지 여부를 비교합니다. Window를 **TRIMMED**로 바꿔 stage-edge tail의 영향과 viable 조합 차이도 확인합니다.
+7. STRESS의 KNEE_RIGHT coverage/observable 및 usable gaps를 확인합니다. UNKNOWN은 failure가 아닙니다. Tracking loss 전후 candidate가 다른 window로 분리되고, missing/gap을 포함한 dwell이 이어지지 않는지 start/end와 gap 목록을 비교합니다.
+8. **Download Feature Temporal Discovery JSON**으로 결과를 로컬 저장합니다. 기존 Feature Discovery JSON 다운로드도 유지됩니다. Reset Feature Discovery/다른 파일 선택은 두 분석 결과를 모두 초기화합니다.
+
+Export는 `{ version: 1, createdAt, feature: "deltaDyNorm", inputs: [{ filename, captureId, trialId, role }], settings, perDataset, rulesClean, viableRulesClean, warnings }`입니다. `perDataset.stages`에 FULL/TRIMMED별 sides의 coverage/observability, Y/2D/X 요약, Y velocity, visibility median, thresholds/dwellResults, usable gaps, candidate directionEvidence가 들어갑니다. **Raw landmarks 및 per-frame temporal series는 React state/export에 넣지 않습니다.** STEP 4G.2 반복 실행용 scalar timeline만 ref에 보관하고, Reset/새 파일/unmount 시 폐기합니다. 원본 JSON/landmarks는 보관하지 않습니다. 서버 upload/Socket/game 연결은 없습니다.
+
+실제 측정 결과와 synthetic 자동 테스트 결과는 구분해야 합니다. STEP 4G.2 작업에서 기존 Desktop CLEAN/STRESS Capture JSON을 찾아 명시적 role로 Temporal/Shadow를 로컬 재실행했으며, 아래에 Shadow 결과를 기록합니다.
+
+## STEP 4G.2 — Stateful Y-Kick Shadow Detector Simulation
+
+기존 4G/4G.1과 함께 동작하는 **분석 전용** `YKickShadowDetector`입니다. 각 trial의 전체 Guided timeline을 한 번에 replay하며 **stage 경계에서 detector를 reset하지 않습니다.** Guided expected label은 사후 평가에만 쓰고 detector에는 전달하지 않습니다. 따라서 KNEE_LEFT 이후 Neutral에 남는 return tail도 동일한 WAIT_RETURN의 일부로 처리합니다. 기존 production `KneeKickDetector`, X constants, Neutral calibration 및 LIVE/LANDMARK/VIDEO 경로는 변경하지 않습니다.
+
+### State / side usability / direction
+
+- Evidence는 4G의 같은 `discoveryFeatures` 계산에서 추출한 **abs(left/right deltaDyNorm)**입니다. 첫 Neutral 분석 기준값과 recorded bodyScale을 그대로 공유합니다. Hips visibility ≥ 0.7, 해당 knee ≥ 0.5이며, **반대쪽 knee는 필요하지 않습니다.** 2D와 velocity는 진입/확정 조건으로 사용하지 않습니다.
+- `ARMED → CANDIDATE`: 한쪽이라도 ENTER 이상이면 시작합니다. Side별 run 시작/eligible 시각/peak/적분을 독립적으로 기록합니다. 기본 ENTER **0.4**, dwell **50ms**입니다. 실제 recorded timestamp에서 연속 dwell을 만족해야 하며 frame 수를 시간으로 바꾸지 않습니다.
+- **FIRST_DWELL**: 먼저 실제 관측 frame에서 dwell을 충족한 side를 사용합니다. 동시에 두 side가 충족하면 임의 방향 event를 내지 않고 AMBIGUOUS cancellation → WAIT_CLEAR로 갑니다.
+- **INTEGRATED_WINDOW**: 첫 dwell을 충족한 시각부터 **100ms** decision window의 `max(0, abs(Y) − ENTER)`를 초 단위 사다리꼴 적분합니다. 마지막 interval이 window 끝을 넘으면 recorded sample 간 보간으로 deadline까지만 적분하고, event는 deadline 이상인 첫 실제 frame에서 냅니다. Window deadline까지 dwell을 충족한 side만 방향 후보입니다. Opponent가 missing이거나 dwell을 충족하지 못하면 단독 eligible limb를 막지 않습니다. 두 eligible side의 적분이 같으면(수치 오차 1e-8) AMBIGUOUS입니다. FIRST_DWELL의 적분은 candidate 시작~확정 구간, INTEGRATED_WINDOW의 적분은 decision window이므로 값의 시간 범위를 구분하세요.
+- Event에는 좌우 적분/peak, `absoluteMargin = abs(L−R)`, `ratio = max(L,R)/(L+R)`를 저장합니다. Ratio는 균등 0.5, 단독 1, 합이 0이면 null입니다. Margin/ratio를 production gate로 선택하지 않습니다.
+- Candidate owner가 unusable이면 **즉시 evidence 폐기 → WAIT_CLEAR(owner)**, reason=POSE_LOSS입니다. dt ≥ **400ms**도 cancellation + WAIT_CLEAR이며 reason=TIMESTAMP_GAP입니다. Opponent loss는 그쪽 run/eligible/peak/적분만 지우고 owner를 막지 않습니다. WAIT_CLEAR는 owner가 usable한 상태로 `abs(Y) < EXIT`를 return dwell만큼 유지해야 끝납니다. Pose loss 자체는 clear가 아닙니다. Candidate seed는 먼저 관측한 above limb이며 동시 onset에는 큰 evidence 쪽(동률 LEFT)을 **clear owner로만** 고릅니다. 이 규칙으로 event 방향을 결정하지 않습니다.
+- Event 후 **WAIT_RETURN(triggeredSide)**: **event를 발생시킨 limb만** EXIT 미만인지 확인합니다. Opponent가 missing/high여도 triggered limb가 연속 return dwell을 만족하면 ARMED입니다. Triggered limb가 missing이면 기다리며, 이전 return dwell은 폐기합니다. 긴 gap 뒤 below 관측도 그 frame부터 새 dwell입니다. 평소 threshold 아래로 끝난 미확정 candidate는 BELOW_ENTER 취소 후 ARMED로 돌아갑니다.
+- 모든 판단은 recorded frame에서만 일어납니다. 중복/역행 timestamp는 전처리/코어에서 제외하며 wall-clock, synthetic tick, classifier/game 상태를 사용하지 않습니다.
+
+### 비교 범위 / 평가
+
+ENTER **0.35/0.40/0.45** × entry dwell **33/50/80ms** × EXIT **0.15/0.20/0.25/0.30** × return/clear dwell **100/150/180/200ms** × 두 방향 strategy = **288개**입니다. 기본 표는 0.4/50의 32개 return/strategy 조합을 보여주며 checkbox로 모든 이웃을 표시합니다. 자동 BEST 선택은 없습니다.
+
+각 조합은 dataset/trial별 event, cancellation reason, 상태 전이, rearm timestamp/return latency, 다음 action 시작 전 ARMED 여부, final state, stage별 관측성/정답/중복을 보존합니다. 다음 action 준비 상태는 경계 이전 마지막 실제 관측 state이며 `lastObservedFrameAt`을 함께 기록합니다. 새로운 frame/clock을 생성하지 않습니다. 최종 Neutral 내 ARMED 복귀 여부는 final state로 확인합니다.
+
+KNEE_LEFT observability는 **LEFT만**, KNEE_RIGHT는 **RIGHT만** 평가합니다. 반대쪽 knee가 가려져도 expected kick을 unobservable로 만들지 않습니다. 기존 coverage ≥ 80%, usable gap < 400ms는 **통계 평가용** 관측성 기준이며, runtime shadow event는 이 stage 요약값을 gate로 사용하지 않습니다. Non-kick의 안전성 평가에는 양쪽 관측성을 확인합니다.
+
+`viableStatefulConfigs`는 모든 CLEAN trial에 필요한 label과 **expected kick side의 관측성**이 있고, KNEE_LEFT/RIGHT 각각 올바른 event 1개, Neutral/Twist false 0, wrong/duplicate 0인 조합입니다. Non-kick coverage는 별도 `nonKickCoverageLimited` 진단이며 관측된 timeline의 event count를 추가로 veto하지 않습니다. 따라서 viable도 누락된 frame의 안전성을 증명하지 않습니다. STRESS는 recall을 판정에 넣지 않으며 unobservable miss는 UNOBSERVABLE로 남깁니다. STRESS의 cross-gap confirmation 또는 pose-loss recovery-associated false/wrong event가 있으면 viable로 표시하지 않습니다.
+
+Cross-gap은 event에 보존한 **evidence epoch와 현재 side epoch**로 검사합니다. Pose loss/긴 gap으로 취소된 candidate의 ID, clear 완료 시각을 이후 첫 새 event의 `recovery`에 남깁니다. 별도로 **첫 reacquired frame에서 above run을 시작한 경우** `entryReacquisition {timestamp, lossAt, reason}`을 보존합니다. `poseLossGeneratedFalseEvents`는 이 두 연결 중 하나가 있는 unexpected/wrong event 수를 보수적으로 집계하며, **인과관계가 증명되었다는 뜻은 아닙니다.** ARMED 상태에서 loss 후 완전히 새 dwell을 모은 false event와 이전 candidate evidence 재사용을 구분할 수 있습니다. STRESS의 다른 usable false events도 별도 집계합니다. ARMED에서의 pose loss에 새로운 clear gate를 임의로 추가하지 않으므로, fresh reacquisition false가 남는지도 이 실험의 결과로 드러납니다.
+
+### 기존 CLEAN/STRESS 파일로 실행
+
+1. `pnpm dev:controller-web` → `http://localhost:5173`. Camera를 시작하거나 운동을 다시 촬영하지 않습니다.
+2. STEP 4G 입력에서 기존 **clean인가요.json**, **3차검증2.json** Capture JSON을 함께 선택합니다.
+3. **Dataset roles**에서 각 CLEAN trial은 CLEAN, STRESS trial은 STRESS를 직접 선택합니다. 파일명에 따른 자동 지정은 없습니다. CLEAN이 없으면 Temporal/Shadow 모두 **No CLEAN dataset selected**를 표시합니다. UNASSIGNED trial은 진단 출력에는 남지만 viability 평가에서는 제외합니다.
+4. **Run Temporal Validation**으로 기존 stage-independent 통계를 확인하고, **STEP 4G.2 → Run Shadow Validation**을 누릅니다. Shadow는 같은 scalar timeline을 ref에서 읽고 8개 config마다 UI에 실행 기회를 줍니다. 진행 중 Cancel, role 변경, Reset, 새 파일, unmount 시 오래된 결과를 폐기합니다.
+5. 기본 0.4/50 표에서 FIRST_DWELL/INTEGRATED_WINDOW의 Clean L/R, false/wrong/duplicate, Stress Cross-Gap/Recovery False, final state를 비교합니다. **Inspect**에서 event별 margin/ratio, cancellation, return latency/다음 action readiness를 확인합니다. 특히 LEFT 후 Neutral tail과 RIGHT-only visibility, STRESS POSE_LOSS cancellation을 봅니다.
+6. **모든 이웃 조합 표시**로 0.35/0.45와 33/80ms 안정성을 비교하고, **All viable stateful configurations**에서 조건을 만족한 조합 전체를 확인합니다. 0개면 INSUFFICIENT_EVIDENCE와 REJECTED를 구분하세요.
+7. **Download Y Kick Shadow Result JSON**으로 저장합니다. Schema는 `{ version:1, createdAt, inputs:[{filename,captureId,trialId,role}], settings, configs, perConfig, viableStatefulConfigs, warnings }`입니다. 각 perConfig에는 clean/stress의 집계 및 개별 dataset/trial 진단과 unassigned 결과가 있습니다. 원본 landmark/영상/per-frame scalar arrays는 내보내지 않으며 upload/Socket 전송도 없습니다.
+
+자동 회귀는 33ms spike 차단 / 67ms dwell / 양쪽 sustained kick / 700ms tail 단발 / opponent missing return / POSE_LOSS cancellation / reacquisition 전후 evidence 격리 / WAIT_RETURN loss / RIGHT-only usable / A/B 방향 차이·동률 / EXIT equality·400ms gap / deterministic replay / 4G Y 값 일치 / 기존 production LIVE↔LANDMARK parity를 검증합니다. **합성 fixture 결과와 사용자 실제 CLEAN/STRESS 결과를 구분해야 합니다.**
+
+### 기존 실제 fixture 실행 결과 (2026-10-02)
+
+Desktop의 CLEAN(약 10.3MB) / STRESS(약 14.8MB) 원본 Capture를 **읽기만** 하고 두 role을 직접 지정해 전체 288개 config를 실행했습니다. 한글 파일명이 분해형 Unicode(NFD)여서 기존 정확한 파일명 비교가 role을 지정하지 못한 상황도 확인했습니다. 원본은 repo에 복사하지 않았습니다.
+
+- **CLEAN 0.4 / 50ms의 32개 EXIT/RETURN/strategy 조합 모두** LEFT 1, RIGHT 1, false 0, wrong 0, duplicate 0, final ARMED였습니다. RIGHT는 해당 knee 90/90 usable이며 반대 LEFT의 57/90 coverage가 검출을 막지 않았습니다.
+- FIRST_DWELL event: LEFT **20576.600ms**, RIGHT **25910.400ms**. INTEGRATED_WINDOW event: LEFT **20676.600ms**, RIGHT **26042.900ms**. 기본 EXIT 0.20 / RETURN 180ms에서 A의 적분 absolute margin은 LEFT **0.008288**, RIGHT **0.002645**; B는 LEFT **0.002050**, RIGHT **0.000955**였습니다. 적분 시간 범위가 다르므로 숫자 크기만으로 strategy 우열을 정하지 않습니다.
+- Return sweep에서 LEFT rearm은 **23410.700–24044.000ms**, 다음 RIGHT stage 시작 **24333.200ms** 전에 모두 ARMED였습니다. RIGHT rearm은 A **26042.900–26176.200ms**, B **26176.200–26309.500ms**였습니다. LEFT 이후 Neutral tail은 중복 event로 기록되지 않았습니다.
+- **STRESS cross-gap confirmations 0**, 37094.800ms의 POSE_LOSS candidate 취소 및 WAIT_CLEAR 유지가 확인됐습니다. Expected RIGHT는 usable 0/90이므로 UNOBSERVABLE로 표시합니다.
+- 그러나 STRESS에는 **ARMED 상태의 pose loss 이후 새 evidence로 시작한 RIGHT false event 1회**가 남았습니다. Loss **30227.100ms**, first reacquisition/candidate **30293.100ms**, event A **30361.500ms** / B **30494.700ms**, expected NEUTRAL입니다. 이는 pre-loss candidate 재사용과 별개의 문제이며 `entryReacquisition`으로 드러납니다.
+- 따라서 **viableStatefulConfigs = 0 / 288**입니다. CLEAN 중심 조합 통과를 STRESS까지 해결한 것으로 보고하지 않습니다. 자동으로 새 ARMED recovery gate나 threshold를 추가하지 않았으며 이 결과가 다음 설계 판단 자료입니다. 일부 CLEAN non-kick의 낮은 LEFT coverage도 별도 진단에 남겨 관측된 false 0의 한계를 표시합니다.
+
+로컬 산출물은 Desktop의 `plank-stork-shadow-analysis/`에 `step-4g2-shadow-results.json`, `step-4g2-central-summary.json`, `step-4g1-temporal-results.json`, `step-4g2-findings.md`로 저장했습니다. 결과 JSON에는 raw landmark를 포함하지 않습니다.
+
 ## 검증 및 빌드
 
 ```sh

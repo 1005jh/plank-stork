@@ -1,6 +1,7 @@
 import { useReplayCapture } from '../replay/useReplayCapture';
 import { ReplayCapturePanel } from './ReplayCapturePanel';
 import { ReplayRunner } from './ReplayRunner';
+import { KickFeatureDiscovery } from './KickFeatureDiscovery';
 import { useKneeKick } from '../pose/kick/useKneeKick';
 import { KneeKickDetectorPanel } from './KneeKickDetector';
 import { useState } from 'react';
@@ -204,6 +205,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
       <KneeKickDetectorPanel kick={kick} canStart={status === 'RUNNING' && kick.view.detector.ready} onStart={startDetectorTest} />
       <KneeMotionValidationPanel motion={motion} canStart={kneeMotionReady(status === 'RUNNING', metrics.detected, features.view)} onStart={startMotion} />
       <ReplayRunner />
+      <KickFeatureDiscovery />
     </section>
   );
 }
