@@ -1,4 +1,5 @@
 import type { ReplaySession } from './replayTypes';
+import { validKneeKickBaselineV3 } from '../pose/kick/kneeKickDetectorV3';
 
 /** Validate local inputs before letting malformed times/coordinates enter the production core. */
 export function readReplaySession(json: string): ReplaySession {
@@ -30,7 +31,9 @@ export function readReplaySession(json: string): ReplaySession {
       throw new Error('invalid');
     }
     // The table reads summaries; reject missing/incorrect nested keys here, not during render.
+    if (data.liveResult.kickBaselineV3 != null && !validKneeKickBaselineV3(data.liveResult.kickBaselineV3)) throw new Error('V3 baseline');
     for (const trial of data.liveResult.trials) {
+      if (trial.baselineV3 != null && !validKneeKickBaselineV3(trial.baselineV3)) throw new Error('V3 baseline');
       const summary = trial.result.guidedSummary;
       if (!summary) continue;
       for (const name of ['NEUTRAL', 'TWIST_LEFT', 'TWIST_RIGHT'] as const) if (!nonnegative(summary[name].falseKickCount)) throw new Error('summary');

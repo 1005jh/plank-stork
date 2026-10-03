@@ -105,6 +105,7 @@ export class ReplayCapture {
         this.finishTrial(event.timestamp);
         const id = session.liveResult.trials.length + 1;
         this.trial = { id, startMs: tMs, startOrder: order, endMs: null, endOrder: null, baseline: { ...snapshot.detector.baseline }, neutralBaseline: session.liveResult.neutralBaseline ? { ...session.liveResult.neutralBaseline } : null,
+          baselineV3: snapshot.baselineV3 ? { ...snapshot.baselineV3 } : null,
           result: { poseFrameCount: 0, poseUsableFrameCount: 0, events: [], finalState: snapshot.detector.state, guidedSummary: snapshot.guided.summary } };
         session.liveResult.trials.push(this.trial); this.lastEventKey = '';
         this.marker('GUIDED_TEST_START', event.timestamp, `start-${id}`, { trialId: id });
@@ -124,6 +125,7 @@ export class ReplayCapture {
         }
       }
       session.liveResult.kickBaseline = snapshot.detector.baseline ? { ...snapshot.detector.baseline } : session.liveResult.kickBaseline;
+      session.liveResult.kickBaselineV3 = snapshot.baselineV3 ? { ...snapshot.baselineV3 } : null;
       const trial = this.trial;
       if (event.kind === 'CLOCK' && trial && trial.endMs === null) session.clockSamples.push({ tMs, order, trialId: trial.id });
       const last = snapshot.detector.eventsLast;

@@ -5,6 +5,7 @@ import type { PoseDelegate } from '../pose/createPoseLandmarker';
 import type { NeutralCalibration, PoseFeatureView } from '../pose/features/poseFeatureTypes';
 import type { KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
 import type { KneeKickBaseline } from '../pose/kick/kneeKickDetector';
+import type { KneeKickBaselineV3 } from '../pose/kick/kneeKickDetectorV3';
 import type { diagnosticConfig } from '../pose/kick/kneeKickDiagnostics';
 
 export type KickSnapshot = ReturnType<KneeKickAnalysis['getReplaySnapshot']>;
@@ -24,6 +25,8 @@ export interface ReplayResult {
 export interface ReplayTrial {
   id: number; startMs: number; endMs: number | null; startOrder: number; endOrder: number | null;
   baseline: KneeKickBaseline; neutralBaseline: NeutralCalibration | null; result: ReplayResult;
+  /** Optional STEP 4H extension; legacy X baseline/result remain unchanged. */
+  baselineV3?: KneeKickBaselineV3 | null;
 }
 export interface ReplaySession {
   version: 1; captureId: string; createdAt: string;
@@ -36,6 +39,7 @@ export interface ReplaySession {
   clockSamples: { tMs: number; order: number; trialId: number }[];
   liveResult: {
     neutralBaseline: NeutralCalibration | null; kickBaseline: KneeKickBaseline | null;
+    kickBaselineV3?: KneeKickBaselineV3 | null;
     detectorConfig: ReturnType<typeof diagnosticConfig>; guidedSummary: DetectorTestSummary | null;
     events: (ReplayEvent & { trialId: number | null })[]; trials: ReplayTrial[];
   };

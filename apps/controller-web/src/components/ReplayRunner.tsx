@@ -8,6 +8,7 @@ import { useLocalDownload } from '../replay/useLocalDownload';
 import { inferReplayVideo } from '../replay/videoReplay';
 import { diagnosticConfig } from '../pose/kick/kneeKickDiagnostics';
 import { replayVideoSourceError, replayVideoSourceFromFilename } from '../replay/replayVideoSource';
+import { replayKneeKickV3, type KneeKickV3Replay } from '../replay/kneeKickV3Replay';
 
 const message = (cause: unknown) => cause instanceof Error ? cause.message : String(cause);
 function ResultRow({ name, result }: { name: string; result: ReplayResult | null }) {
@@ -24,6 +25,7 @@ export function ReplayRunner() {
   const [file, setFile] = useState<File | null>(null), [trialId, setTrialId] = useState(1);
   const [landmark, setLandmark] = useState<ReplayOutput | null>(null), [videoResult, setVideoResult] = useState<ReplayOutput | null>(null);
   const [calibration, setCalibration] = useState<ReturnType<typeof replayCalibration> | null>(null);
+  const [v3, setV3] = useState<KneeKickV3Replay | null>(null);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false), [progress, setProgress] = useState('');
   const video = useRef<HTMLCanvasElement>(null), abort = useRef<AbortController | null>(null), generation = useRef(0), mounted = useRef(false);
   const videoInput = useRef<HTMLInputElement>(null);
@@ -34,7 +36,7 @@ export function ReplayRunner() {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; abort.current?.abort(); }; }, []);
   function resetResults() {
     generation.current++; abort.current?.abort(); downloads.clear();
-    setLandmark(null); setVideoResult(null); setCalibration(null); setError(null); setProgress('');
+    setLandmark(null); setVideoResult(null); setCalibration(null); setV3(null); setError(null); setProgress('');
   }
   async function loadJson(file: File | undefined) {
     resetResults(); setSession(null); setFile(null);
@@ -56,6 +58,11 @@ export function ReplayRunner() {
     if (!session) return;
     try { setError(null); setCalibration(replayCalibration(session, trialId)); }
     catch (cause) { setError(message(cause)); }
+  }
+  function runV3() {
+    if (!session) return;
+    try { setError(null); setV3(replayKneeKickV3(session, trialId)); }
+    catch (cause) { setV3(null); setError(message(cause)); }
   }
   async function runVideo() {
     if (!session || !file || !video.current || busy) return;
@@ -84,7 +91,7 @@ export function ReplayRunner() {
   const canRun = !!trial && trial.endMs !== null && !busy;
   function downloadResults() {
     if (!session) return;
-    downloads.download(new Blob([JSON.stringify({ sourceCaptureId: session.captureId, landmark, video: videoResult, calibration }, null, 2)], { type: 'application/json' }), `${session.captureId}-results.json`);
+    downloads.download(new Blob([JSON.stringify({ sourceCaptureId: session.captureId, landmark, video: videoResult, calibration, v3 }, null, 2)], { type: 'application/json' }), `${session.captureId}-results.json`);
   }
   return <section aria-label="STEP 4F Replay Runner">
     <h3>STEP 4F.1 — Replay Runner</h3>
@@ -101,6 +108,7 @@ export function ReplayRunner() {
     {session && !trial && <p>Capture에 Guided Test 시작이 없습니다. Capture를 먼저 시작한 뒤 Neutral 재보정과 Guided Test를 진행하세요.</p>}
     <p><button disabled={!canRun} onClick={runLandmark}>LANDMARK REPLAY</button>{' '}
       <button disabled={!canRun} onClick={runCalibration}>CALIBRATION REPLAY</button>{' '}
+      <button disabled={!canRun} onClick={runV3}>Y V3 LANDMARK REPLAY</button>{' '}
       <button disabled={!canRun || !file || videoSourceError !== null} onClick={() => void runVideo()}>VIDEO REPLAY</button>{' '}
       <button disabled={!busy} onClick={() => abort.current?.abort()}>Cancel Video Replay</button></p>
     {progress && <p role="status">{progress}</p>}{error && <p role="alert">{error}</p>}
@@ -110,9 +118,22 @@ export function ReplayRunner() {
       {['Source', 'Pose frames', 'Usable frames', 'LEFT events', 'RIGHT events', 'Twist L / R false', 'Neutral false', 'Knee L detected / correct', 'Knee R detected / correct', 'Final state'].map((name) => <th key={name}>{name}</th>)}
     </tr></thead><tbody>
       <ResultRow name="LIVE" result={trial?.result ?? null} /><ResultRow name="LANDMARK" result={landmark?.result ?? null} /><ResultRow name="VIDEO" result={videoResult?.result ?? null} />
+      <ResultRow name="Y V3 LANDMARK" result={v3?.result ?? null} />
     </tbody></table></div>
     {[landmark, videoResult].map((result) => result && <p key={result.replayMode}>{result.replayMode}: Events/time {result.comparison.eventsEqual ? 'MATCH' : 'DIFFER'} · Summary {result.comparison.guidedSummaryEqual ? 'MATCH' : 'DIFFER'} · Final state {result.comparison.finalStateEqual ? 'MATCH' : 'DIFFER'}</p>)}
     {calibration && <details open><summary>Calibration: Neutral {calibration.neutralBaselineEqual ? 'MATCH' : 'DIFFER'} · Kick baseline {calibration.kickBaselineEqual ? 'MATCH' : 'DIFFER'}</summary><pre>{JSON.stringify(calibration, null, 2)}</pre></details>}
-    <button disabled={!landmark && !videoResult && !calibration} onClick={downloadResults}>Download Replay Results JSON</button>
+    <p>STEP 4H — Y V3는 EXPERIMENTAL / one-user limited-fixture candidate입니다. 이 버튼의 LANDMARK 경로만 V3를 사용합니다. Live controller/mobile과 기존 LANDMARK/VIDEO는 X reference를 유지합니다.</p>
+    {v3 && <section aria-label="Y V3 replay diagnostics">
+      <p>Baseline: {v3.baseline.source} · Calibration-only frames: {v3.calibrationOnlyFrameCount} · Cross-gap: {v3.counts.crossGapConfirmations} · Reacquisition false: {v3.counts.reacquisitionFalseEvents}</p>
+      {v3.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+      <p>Clean acceptance: {String(v3.cleanAcceptance)} · Stress safety: {String(v3.stressAcceptance)} · Wrong: {v3.counts.wrongDirection} · Duplicate: {v3.counts.duplicates}</p>
+      <table className="visibility-table"><caption>V3 stage results (expected-side observability)</caption>
+        <thead><tr>{['Stage', 'Left usable', 'Right usable', 'Outcome', 'False'].map((s) => <th key={s}>{s}</th>)}</tr></thead>
+        <tbody>{v3.stages.map((s) => <tr key={s.stageIndex}><th>{s.expected}</th><td>{s.leftUsableFrames}</td><td>{s.rightUsableFrames}</td><td>{s.outcome}</td><td>{s.falseEvents}</td></tr>)}</tbody>
+      </table>
+      <details><summary>V3 baseline / events / final tracking diagnostics / X comparison</summary><pre>{JSON.stringify({ baseline: v3.baseline,
+        events: v3.events, final: v3.finalDiagnostics, legacyX: v3.legacyX }, null, 2)}</pre></details>
+    </section>}
+    <button disabled={!landmark && !videoResult && !calibration && !v3} onClick={downloadResults}>Download Replay Results JSON</button>
   </section>;
 }

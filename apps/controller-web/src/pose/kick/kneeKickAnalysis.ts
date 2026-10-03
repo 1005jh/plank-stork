@@ -5,6 +5,8 @@ import { extractKneeMotionFeatures, type KneeMotionFeatures } from '../motion/kn
 import { robustStats } from '../motion/kneeMotionAnalyzer';
 import { GuidedDetectorTest } from './guidedDetectorTest';
 import { KneeKickDetector, usableKnees, type KneeKickBaseline } from './kneeKickDetector';
+import { buildKneeKickBaselineV3 } from './kneeKickBaselineV3';
+import type { KneeKickBaselineV3 } from './kneeKickDetectorV3';
 import { summarizeNeutralDiagnostics, type NeutralKickDiagnosticSample, type NeutralKickDiagnostics, type KickDiagnosticDataset } from './kneeKickDiagnostics';
 
 /** Collect only during the existing Neutral window; never learn from later movement. */
@@ -12,7 +14,8 @@ export class KneeKickAnalysis {
   private detector = new KneeKickDetector();
   private test = new GuidedDetectorTest();
   private sealed = false;
-  private samples: ({ timestamp: number; leftOffset: number | null; rightOffset: number | null; leftDistance: number | null; rightDistance: number | null } & NeutralKickDiagnosticSample)[] = [];
+  private baselineV3: KneeKickBaselineV3 | null = null;
+  private samples: ({ timestamp: number; features: KneeMotionFeatures; leftOffset: number | null; rightOffset: number | null; leftDistance: number | null; rightDistance: number | null } & NeutralKickDiagnosticSample)[] = [];
   private neutralDiagnostics: NeutralKickDiagnostics | null = null;
   private counts = { left: 0, right: 0 };
   private lastFrameAt: number | null = null;
@@ -81,12 +84,14 @@ export class KneeKickAnalysis {
   }
   private collect(features: KneeMotionFeatures, timestamp: number): void {
     const usable = usableKnees(features);
-    this.samples.push({ timestamp, leftOffset: usable.left ? features.leftKneeCenterOffsetX : null, rightOffset: usable.right ? features.rightKneeCenterOffsetX : null,
+    this.samples.push({ timestamp, features: { ...features }, leftOffset: usable.left ? features.leftKneeCenterOffsetX : null, rightOffset: usable.right ? features.rightKneeCenterOffsetX : null,
       leftDistance: usable.left ? features.leftKneeHipDistance : null, rightDistance: usable.right ? features.rightKneeHipDistance : null,
       hipCenterX: features.hipCenterX, leftKneeVisibility: features.leftKneeVisibility, rightKneeVisibility: features.rightKneeVisibility });
   }
   private freeze(): void {
     this.sealed = true;
+    // Same Neutral timing/visibility window as X; never update this after FROZEN.
+    this.baselineV3 = buildKneeKickBaselineV3(this.samples.map((s) => s.features));
     // Diagnostic-only statistics over the same bounded Neutral window; never used by setBaseline().
     this.neutralDiagnostics = summarizeNeutralDiagnostics(this.samples);
     if (this.counts.left >= CALIBRATION_MIN_SAMPLES && this.counts.right >= CALIBRATION_MIN_SAMPLES) {
@@ -99,11 +104,11 @@ export class KneeKickAnalysis {
   }
   getView(now: number) {
     const detector = this.detector.getView(now);
-    return { detector, baselineCounts: { ...this.counts }, baselineSealed: this.sealed,
+    return { detector, baselineV3: this.baselineV3 ? { ...this.baselineV3 } : null, baselineCounts: { ...this.counts }, baselineSealed: this.sealed,
       test: this.test.getView(now, detector.state), diagnosticsDownload: this.getDownloadInfo() };
   }
   getReplaySnapshot() {
-    return { detector: this.detector.getReplaySnapshot(), guided: this.test.getReplaySnapshot() };
+    return { detector: this.detector.getReplaySnapshot(), baselineV3: this.baselineV3 ? { ...this.baselineV3 } : null, guided: this.test.getReplaySnapshot() };
   }
   getTestStages() { return this.test.getStages(); }
   getDiagnosticSummary() { return this.test.getDiagnosticSummary(); }
@@ -151,5 +156,6 @@ export class KneeKickAnalysis {
     this.preserveDiagnostics(now, reason);
     this.detector.reset(); this.test.reset(); this.samples = []; this.sealed = false; this.counts = { left: 0, right: 0 }; this.lastFrameAt = null;
     this.neutralDiagnostics = null;
+    this.baselineV3 = null;
   }
 }

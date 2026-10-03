@@ -11,9 +11,14 @@ export const CORRIDOR_FEATURES = [
 export type CorridorFeature = typeof CORRIDOR_FEATURES[number];
 export type KneeMotionFeatures = Record<CorridorFeature, number | null> & {
   hipCenterX: number | null;
+  hipCenterY: number | null;
   hipWidth: number | null;
   leftKneeX: number | null;
   rightKneeX: number | null;
+  leftKneeY: number | null;
+  rightKneeY: number | null;
+  leftKneeCenterOffsetY: number | null;
+  rightKneeCenterOffsetY: number | null;
   leftHipVisibility: number | null;
   rightHipVisibility: number | null;
   leftKneeVisibility: number | null;
@@ -52,6 +57,9 @@ export function extractKneeMotionFeatures(landmarks: FeatureLandmarks): KneeMoti
   const visibility = (index: number) => finite(landmarks[index]?.visibility) ? landmarks[index]!.visibility! : null;
   return {
     hipCenterX: center?.x ?? null, hipWidth: width, leftKneeX: lk?.x ?? null, rightKneeX: rk?.x ?? null,
+    hipCenterY: center?.y ?? null, leftKneeY: lk?.y ?? null, rightKneeY: rk?.y ?? null,
+    leftKneeCenterOffsetY: lk && center ? lk.y - center.y : null,
+    rightKneeCenterOffsetY: rk && center ? rk.y - center.y : null,
     leftKneeCenterOffsetX: leftOffset, rightKneeCenterOffsetX: rightOffset,
     maxAbsKneeCenterOffsetX: leftOffset !== null && rightOffset !== null ? Math.max(Math.abs(leftOffset), Math.abs(rightOffset)) : null,
     leftKneeHipOffsetX: lk && lh ? lk.x - lh.x : null, rightKneeHipOffsetX: rk && rh ? rk.x - rh.x : null,

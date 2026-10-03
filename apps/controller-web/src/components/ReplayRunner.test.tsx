@@ -110,3 +110,27 @@ describe('Replay Runner isolation and file lifecycle', () => {
     expect(button('LANDMARK REPLAY').disabled).toBe(true);
   });
 });
+
+describe('STEP 4H candidate selection', () => {
+  it('runs V3 only on the explicit LANDMARK button, exports X reference and clears it on file replacement', async () => {
+    let blob: Blob | null = null;
+    vi.stubGlobal('URL', { createObjectURL: vi.fn((value: Blob) => { blob = value; return 'blob:v3'; }), revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await choose(0, jsonFile());
+    expect(button('Y V3 LANDMARK REPLAY').disabled).toBe(false);
+    await act(async () => button('Y V3 LANDMARK REPLAY').click());
+    const panel = container.querySelector('[aria-label="Y V3 replay diagnostics"]');
+    expect(panel?.textContent).toContain('STORED_V3'); expect(panel?.textContent).toContain('Cross-gap: 0');
+    expect(inferReplayVideo).not.toHaveBeenCalled();
+    await act(async () => button('Download Replay Results JSON').click());
+    const json = await new Promise<string>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsText(blob!); });
+    const exported = JSON.parse(json);
+    expect(exported.v3.detector).toBe('Y_KICK_V3'); expect(exported.v3.config.experimental).toBe(true);
+    expect(exported.v3.legacyX.result.events).toHaveLength(2); // This fixture moves X only.
+    expect(exported.v3.result.events).toHaveLength(0);
+    expect(exported.landmark).toBeNull(); expect(exported.video).toBeNull();
+    await choose(0, jsonFile({ ...session, captureId: 'replacement' }));
+    expect(container.querySelector('[aria-label="Y V3 replay diagnostics"]')).toBeNull();
+    expect(button('Download Replay Results JSON').disabled).toBe(true);
+  });
+});

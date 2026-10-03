@@ -1049,6 +1049,68 @@ Event의 `NORMAL_TRACKING / POST_REACQUISITION`은 최종 event 방향 side의 e
 4. **False reacquisition trace**에서 gap/trigger/peak/median/visibility/clear availability를 확인합니다. 표는 50개씩 보며 Viable filter 또는 **Inspect gate**에서 event source, side/hip continuity, cancellation, stage outcome, latency를 확인합니다.
 5. **Download Reacquisition Analysis JSON**으로 전체 결과를 저장합니다. 파일/role 변경, Reset, Cancel, unmount는 진행 중 결과를 폐기합니다. 서버 upload/Socket 전송은 없습니다.
 
+## STEP 4H — Y Kick Detector V3 Production Candidate
+
+`pose/kick/kneeKickDetectorV3.ts`에 별도 production core를 구현했습니다. **EXPERIMENTAL / one-user / limited-fixture** 후보이며 universal threshold가 아닙니다. 기존 X `KneeKickDetector`, LANDMARK/VIDEO replay 및 X calibration 비교 경로를 보존합니다.
+
+### Feature / baseline
+
+Production `KneeMotionFeatures`에 `hipCenterY`, `leftKneeY/rightKneeY`, `leftKneeCenterOffsetY/rightKneeCenterOffsetY`를 추가했습니다. `hipCenterY = (leftHip.y + rightHip.y)/2`, offset은 `knee.y - hipCenterY`입니다. Raw extractor는 좌표와 visibility를 보존하며, V3 소비 시 hips ≥ 0.7 / 해당 knee ≥ 0.5 및 finite image geometry를 검사합니다. 반대 knee, world Z, STEP 4A smoothing validity는 entry 조건이 아닙니다.
+
+`KneeKickBaselineV3`는 `version:3`, `leftXMedian/rightXMedian`, `leftYMedian/rightYMedian`, `leftDistanceMedian/rightDistanceMedian`, `bodyScale`입니다. Y는 usable Neutral frame의 knee-center offset component median으로 STEP 4G와 같은 정의입니다. 기존 `KneeKickAnalysis`가 **동일 Neutral 수집·1초 rolling window·최소 20 usable samples·기존 freeze/grace 시점**에 Y를 함께 수집합니다. Freeze 이후 movement로 갱신하지 않고 재보정/reset 때 비웁니다. Trial reset에는 보존합니다. Body scale은 두 knee-hip 거리 median의 평균입니다. 기존 X baseline 필드는 변경하지 않았습니다.
+
+새 Capture에는 optional `trials[].baselineV3`, `liveResult.kickBaselineV3`를 저장합니다. 원래 version1/X baseline/result/config 계약은 유지합니다. 이전 JSON에 이 필드가 없어도 읽으며, 필드가 있는데 유효하지 않으면 조용히 대체하지 않고 오류로 처리합니다.
+
+### Detector 동작
+
+- `sideY = (sideKneeCenterOffsetY - sideYMedian) / bodyScale`; evidence는 `abs(sideY)`입니다. Direction은 **landmark limb identity**이며 Y 부호/Mirror/X 값으로 결정하지 않습니다.
+- 상수: ENTER **0.40**, ENTER_DWELL **50ms**, CLEAR **0.25**, CLEAR_DWELL **100ms**, TRACKING_LOSS_MIN **33ms**, STALE **400ms**. 모두 초기 experimental 값입니다.
+- ARMED/CANDIDATE에서 side별 연속 entry run을 유지합니다. `abs(Y) >= 0.40`을 recorded/inference timestamp 기준 ≥50ms 관측하면 event입니다. Frame count로 계산하지 않습니다. Missing/unusable 또는 dt ≥400ms는 그 side의 run/적분을 즉시 폐기합니다.
+- FIRST_DWELL은 **관측 frame에서 먼저 완료한 side**를 즉시 선택합니다. 둘 다 같은 관측 timestamp에 완료하면 각 연속 above run의 trapezoidal `max(0,abs(Y)-ENTER)` 시간 적분을 비교합니다. 적분도 정확히 같으면 event 없이 **WAIT_CLEAR BOTH**입니다. 임의 LEFT tie-break나 sub-frame 추정은 없습니다.
+- Event 후 WAIT_RETURN은 **triggered side만** `abs(Y) < 0.25`를 ≥100ms 유지했는지 검사합니다. Opposite knee가 missing이어도 복귀합니다. Triggered side missing, threshold equality, dt ≥400ms는 return dwell을 다시 시작하며 pose loss만으로 rearm하지 않습니다. 긴 hold/return tail에서 재발행하지 않습니다.
+- Tracking loss duration은 **첫 unusable → 첫 usable 관측**입니다. ≥33ms면 복귀해도 REACQUIRED_NOT_READY이며 CLEAR_ONLY를 만족해야 READY입니다. 짧은 dropout도 이전 entry run은 지우지만 새 full gate를 만들지 않습니다. 이미 disarmed인 경우에는 짧은 재손실도 clear를 초기화하며 disarm을 해제하지 않습니다. dt ≥400ms는 이전 관측부터 gap episode입니다.
+- Hip geometry/visibility loss는 양 side 기준점을 무효화합니다. 복귀한 뒤에는 각자 clear를 만족해야 READY입니다. 한쪽 knee만 missing이면 반대 side는 계속 entry 가능합니다.
+- **Gate는 side input만 temporarily unavailable로 만듭니다. Guided/game timeline을 멈추거나 사용자에게 기다리라는 blocking UI를 표시하지 않습니다.** Tracking 중 놓친 실제 kick은 MISS가 될 수 있습니다.
+
+V3 view는 기존 `ready/validNow/state/currentEvent/lastEvent/counts` 구조를 유지합니다. `ready`는 baseline 준비, `validNow`는 400ms 내 현재 usable geometry입니다. Gate/entry 가능 여부는 `left/rightTrackingState`와 `left/rightEligibleNow`로 구분합니다. 따라서 global ARMED만 보고 두 입력이 모두 가능한 것으로 해석하면 안 됩니다. UI clock read는 core를 advance하지 않으며 stale 값은 표시에서 숨깁니다.
+
+Diagnostics에는 normalized Y/X, side별 run ms/적분, triggered side, tracking/loss/reacquisition/clear 시각, hip loss, run reset/ambiguity count, event source와 candidate/confirmation latency가 있습니다. `POST_REACQUISITION`은 해당 side의 마지막 loss 이후 연속 tracking 구간을 뜻하며 인과관계나 일정 시간의 위험 판정이 아닙니다. Event epoch 비교로 cross-gap confirmation도 검사합니다.
+
+### Rollout / Replay 사용
+
+**실제 V3 switch는 `ReplayRunner → Y V3 LANDMARK REPLAY → replayKneeKickV3 → KneeKickDetectorV3` 경로뿐입니다.** Live controller `KneeKickAnalysis`의 detector와 mobile wire snapshot, 기존 LANDMARK/VIDEO 버튼은 X reference입니다. 이번 STEP의 rollout 범위가 LANDMARK 검증까지이므로 live switch/end-to-end 검증은 다음 STEP에 남깁니다. Production calibration에서는 Y baseline을 함께 준비·저장하지만 V3 event를 live/Socket/game으로 전송하지 않습니다.
+
+1. `pnpm dev:controller-web` → `http://localhost:5173`에서 Replay Runner를 엽니다. 카메라/WebM은 필요하지 않습니다.
+2. 기존 CLEAN 또는 STRESS Capture JSON을 선택하고 Guided trial을 고릅니다.
+3. **Y V3 LANDMARK REPLAY**를 실행합니다. 내부에서 원래 X LANDMARK도 실행해 `legacyX` 결과를 함께 보존합니다.
+4. Y V3 row, baseline source, stage별 expected-side observability, false/wrong/duplicate, final tracking, event latency를 확인합니다.
+5. **Download Replay Results JSON**으로 `v3`와 기존 결과를 저장합니다. Trial/파일 변경 시 결과를 지웁니다. 새 녹화·재추론·업로드는 하지 않습니다.
+
+Baseline 선택 순서는 다음과 같습니다.
+
+- **STORED_V3:** 해당 trial에 저장된 V3 baseline 사용.
+- **CALIBRATION_REPLAY:** V3 metadata가 없으면 기록된 마지막 Neutral calibration start부터 trial 전까지 기존 production 수집 flow를 재생해 복원. Samples가 부족하면 실패하며 movement로 채우지 않습니다.
+- **FIRST_NEUTRAL_RECONSTRUCTION:** calibration start/frame이 없는 legacy capture는 STEP 4G와 같은 첫 Neutral에서 Y median을 재구성하고 기존 X/distance/bodyScale을 유지합니다. 첫 Neutral은 **calibration-only / NOT_EVALUATED**로 표시하고 candidate 평가에서 제외합니다. 이는 원래 live calibration parity를 증명하지 않습니다. 이후 Neutral/Twist/Kick 구간만 독립 검증 대상입니다.
+
+### 기존 파일 실측 결과
+
+| Fixture | V3 baseline source | X reference | Y V3 | False / Wrong / Duplicate | Final |
+| --- | --- | --- | --- | --- | --- |
+| clean인가요.json | FIRST_NEUTRAL_RECONSTRUCTION | LEFT 1, RIGHT miss | LEFT 1, RIGHT 1 | 0 / 0 / 0 | ARMED, both READY |
+| 3차검증2.json | CALIBRATION_REPLAY | LEFT 구간에서 wrong RIGHT 1 | events 0 | 0 / 0 / 0 | ARMED, both LOST |
+
+- **CLEAN:** TWIST_LEFT/RIGHT false 각각 0, 두 KNEE 모두 detected=true/directionCorrect=true, duplicate 0입니다. LEFT event **20576.600ms**, entry dwell **66.800ms**; RIGHT event **25910.400ms**, dwell **67.700ms**입니다. LEFT 이후 긴 return tail에도 duplicate가 없습니다. RIGHT expected side는 **90/90 usable**이며 반대 LEFT 57/90이 entry를 막지 않았습니다. 총 661 frames 중 처음 60 frames는 calibration-only입니다.
+- CLEAN Y medians는 LEFT **0.349470556**, RIGHT **0.376803191**, bodyScale **0.374090382**입니다. 원래 calibration frame이 없으므로 live calibration 성공을 주장하지 않습니다.
+- **STRESS:** cross-gap confirmation **0**, reacquisition false **0**입니다. KNEE_RIGHT usable **0/90**, KNEE_LEFT도 low coverage라 UNOBSERVABLE이며 이 miss는 safety failure로 계산하지 않습니다. 문제의 66ms loss 이후 큰 RIGHT evidence가 clear 없이 event를 만들지 못했습니다. 최종 global ARMED지만 양 side는 LOST로 입력 불가입니다.
+- STRESS production Neutral 복원 Y medians는 LEFT **0.206138954**, RIGHT **0.184644565**, bodyScale **0.195944247**입니다. STEP 4G의 첫 Neutral reference와 수집 구간은 다르지만 공식·visibility guard는 같습니다. 해당 production baseline에서도 safety regression이 통과했습니다.
+- 기존 X reference의 CLEAN RIGHT miss와 STRESS wrong RIGHT event는 비교 데이터에 그대로 남겼습니다. 두 실제 파일은 각각 두 번 실행해 deterministic 결과와 원본 JSON 불변을 확인했습니다. 두 파일 모두 기존 X LIVE↔LANDMARK의 event/time·guided summary·final state 비교가 MATCH입니다.
+
+검증은 `pnpm typecheck`, `pnpm build`, `pnpm --filter @plank-stork/controller-web test` 모두 통과했습니다. 기존 515개 테스트를 유지하고 31개를 추가해 **46 files / 546 tests**가 통과했습니다. 기존 X, LANDMARK, VIDEO, Calibration Replay 회귀도 포함합니다. Controller main chunk **647.76kB**의 500kB 초과 경고는 남습니다.
+
+산출물은 Desktop `plank-stork-shadow-analysis/step-4h-v3-landmark-results.json`, `step-4h-summary.json`, `step-4h-findings.md`입니다. 원본 Capture를 repo에 넣지 않습니다.
+
+Live validation 전 남은 위험은 제한된 한 사용자/카메라 fixture, 원래 calibration 기록이 없는 CLEAN의 baseline 재구성, clear gate가 실제 mid-kick reacquisition을 의도적으로 MISS 처리하는 점, 아직 수행하지 않은 controller/mobile end-to-end입니다. Runtime은 한쪽 knee만으로 검출하지만 최초 bodyScale/Neutral baseline 준비에는 기존처럼 양 side의 충분한 usable samples가 필요합니다. 이 단계에서는 새 운동 테스트, live switch, MediaPipe 설정 변경, game 연결을 하지 않습니다.
+
 ## 검증 및 빌드
 
 ```sh
