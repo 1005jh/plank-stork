@@ -991,6 +991,64 @@ Desktop의 CLEAN(약 10.3MB) / STRESS(약 14.8MB) 원본 Capture를 **읽기만*
 
 로컬 산출물은 Desktop의 `plank-stork-shadow-analysis/`에 `step-4g2-shadow-results.json`, `step-4g2-central-summary.json`, `step-4g1-temporal-results.json`, `step-4g2-findings.md`로 저장했습니다. 결과 JSON에는 raw landmark를 포함하지 않습니다.
 
+## STEP 4G.3 — Pose Reacquisition Gate Analysis
+
+Production detector/calibration, MediaPipe, original LANDMARK/VIDEO replay는 그대로 두고 **analysis-only Y shadow**에 side별 entry eligibility를 추가했습니다. UI의 STEP 4G 입력/명시적 CLEAN·STRESS role/scalar timeline을 재사용하며, 새 촬영이나 재추론 없이 기존 JSON을 분석합니다.
+
+### Gate 정의와 비교 범위
+
+- LEFT/RIGHT의 `tracking: USABLE | LOST`와 `state: LOST | REACQUIRED_NOT_READY | READY`를 별도로 관리합니다. 반대 knee의 loss는 현재 knee의 eligibility를 막지 않습니다. Hip visibility loss는 별도 episode로 남기고 양 side에 반영합니다. Physical usability는 기존 cancellation/return/epoch 계산에 그대로 전달하며, gate가 닫힌 값을 가짜 pose loss로 바꾸지 않습니다.
+- Loss duration은 **첫 unusable 관측 → 첫 usable 관측**입니다. 마지막 usable → 다음 usable 간격도 별도 기록합니다. `lossMinMs`는 **0/33/67/100/150/200/300/400**이며 경계값을 포함합니다. 0은 한 frame loss도 포함합니다. 첫 관측부터 missing인 경우도 기록하고, dt ≥ 400ms는 이전 관측 시각부터 timestamp gap으로 취급합니다.
+- **FIXED_SETTLE**: 재추적 후 **0/50/100/150/200/300/400/500ms**가 지나야 entry를 허용합니다.
+- **CLEAR_ONLY**: usable `abs(deltaDyNorm) < 0.15/0.20/0.25/0.30`를 **50/100/150/180/200/300ms** 연속 관측해야 허용합니다. Equality는 clear가 아닙니다. 이미 kick 자세로 재등장하면 실제 clear 복귀 전까지 disarm합니다.
+- **SETTLE_AND_CLEAR**: settle **100/150/200ms** AND clear **0.20/0.25/0.30**, dwell **50/100/150ms**입니다. 두 시계는 동시에 진행할 수 있지만 READY 시점에 현재 clear run도 dwell을 충족해야 합니다. 과거 완료 후 끊긴 clear run은 사용할 수 없습니다.
+- Missing/dt ≥ 400ms가 clear 연속성을 끊습니다. READY가 되기 전 재손실하면 복귀 시 settle도 다시 시작합니다. 이미 disarmed인 side는 짧은 재손실이 lossMin보다 작아도 unlock되지 않습니다.
+- **Gate는 해당 side 입력만 일시적으로 막습니다. 게임/timeline을 pause하거나 사용자에게 기다리도록 요구하는 UX가 아닙니다. Tracking loss 중 발생한 gesture는 의도적으로 MISS가 될 수 있습니다.** 이번 코드는 game/mobile에 연결하지 않습니다.
+
+이 sweep에서는 기존 CLEAN 중심 조합 중 **ENTER 0.4 / dwell 50ms / EXIT 0.2 / return 180ms**를 고정합니다. 8 loss minima × (8 fixed + 24 clear + 27 combined) × FIRST_DWELL/INTEGRATED_WINDOW = **944 configs**입니다. 4G.2의 288개 grid와 곱하지 않습니다. Strategy complexity는 fixed/clear=1, combined=2이며 **자동 BEST 선택이나 production threshold 적용은 없습니다.**
+
+### Trace / 진단 / 판정
+
+Sweep 전에 ungated false reacquisition trace를 두 방향 전략으로 계산합니다. Capture 기준 timestamp, last usable/gap/reacquisition/candidate/event, 50/100/200/300/500ms peak, hip/knee visibility 및 첫 1초의 제한된 scalar 관측을 export합니다. Raw landmark/이미지/영상은 export하지 않습니다.
+
+50/100/200/300/500/1000ms evidence는 **재추적부터 checkpoint까지의 누적 median**과 **checkpoint 직전 50ms median**을 함께 기록합니다. 둘 다 stage 안의 usable 관측만 쓰고 count를 표시하며 보간/0 채우기를 하지 않습니다. 따라서 1초 누적 median이 높아도 그 시점 tracking이 missing이면 지속적인 baseline drift로 단정하지 않습니다. `driftDiagnostic`은 다음 loss 전 continuous evidence가 ENTER 아래로 돌아왔는지를 표시합니다. 자동 re-baseline은 하지 않습니다.
+
+각 threshold/dwell의 `firstClearStartMs`, `firstClearSatisfiedMs`, `satisfiedRunStartMs`, `timeToClearMs`를 reacquisition부터 해당 stage 끝까지만 계산합니다. Clear 자체가 없으면 **NO_CLEAR_OBSERVED**, clear 관측은 있지만 dwell이 부족하면 **CLEAR_DWELL_NOT_SATISFIED**입니다. Runtime shadow gate는 stage 경계에서 리셋하지 않고 다음 stage에서도 실제 clear를 기다립니다.
+
+Event의 `NORMAL_TRACKING / POST_REACQUISITION`은 최종 event 방향 side의 evidence가 시작된 연속 tracking 구간을 뜻합니다. 마지막 loss 이후 구간의 모든 candidate가 POST이며, `candidateStartedTrackingAgeMs`는 마지막 재추적부터 candidate까지의 시간입니다. Loss가 lossMin 미만이어도 source는 POST입니다. 반대 side가 먼저 시작한 candidate에 복귀한 side가 합류해 이기는 경우 candidate age는 음수일 수 있으며, 해당 side의 `sideEvidenceStartedAt / sideEvidenceStartedTrackingAgeMs`를 따로 기록합니다. 이것은 시간적 연결이며 인과관계 판정이나 임의의 post-reacquisition timeout이 아닙니다.
+
+각 config는 CLEAN L/R/false/wrong/duplicate/final, STRESS cancellation/cross-gap/pose-loss false/reacquisition false/post events/final을 보존합니다. 각 CLEAN trial이 expected kick side의 관측성을 충족하고 L=1/R=1/false=wrong=duplicate=0/final ARMED이며, STRESS cross-gap/pose-loss false/reacquisition false가 모두 0일 때 viable입니다. CLEAN/STRESS 둘 다 있어야 판정합니다. STRESS unobservable expected kick miss는 제외하며 non-kick coverage 제한은 계속 진단합니다.
+
+`addedEligibilityLatencyMs`는 gated episode의 reacquisition → 실제 READY 관측까지입니다. CLEAN/STRESS별 완료 count/median/max와 unresolved count를 함께 표시합니다. 도중 재손실 또는 trial 종료로 READY를 관측하지 못한 episode는 **censored/null이며 0ms가 아닙니다.** LossMin 미만이라 즉시 허용한 episode는 added latency 집계에 포함하지 않습니다.
+
+### 기존 실제 CLEAN/STRESS 실행 결과 (2026-10-03)
+
+원본 `clean인가요.json`과 `3차검증2.json`을 읽기만 하고 동일 timeline에 944개 조합을 실행했습니다.
+
+- Ungated RIGHT false: last usable **30193.700ms**, loss start **30227.100ms**, reacquisition/candidate **30293.100ms**. Loss **66.000ms**, usable-to-usable gap **99.400ms**입니다. Candidate latency **0ms**; FIRST_DWELL trigger **30361.500ms (+68.400ms)**, INTEGRATED_WINDOW **30494.700ms (+201.600ms)**입니다.
+- 재추적 RIGHT Y **1.178251**; 첫 50/100/200/300/500ms peak는 **1.194546 / 1.196189 / 1.349907 / 1.349907 / 1.349907**입니다. LEFT는 visibility 부족으로 전부 null입니다. 재추적 visibility는 hips **0.999714 / 0.999826**, LEFT knee **0.344041**, RIGHT knee **0.869608**입니다.
+- 누적 RIGHT median(50/100/200/300/500/1000ms)은 **1.186399 / 1.194546 / 1.241580 / 1.258779 / 1.258779 / 1.258779**입니다. 그러나 마지막 usable은 **30527.200ms (+234.100ms)**이고 **30560.800ms (+267.700ms)**부터 다시 loss입니다. 300/500/1000ms 직전 50ms usable count는 0이므로 해당 local median은 null입니다. 관측 가능한 구간에서 ENTER 아래로의 decay는 없었지만, 장기 baseline drift는 이 자료로 확정할 수 없습니다.
+- 모든 **24 clear threshold/dwell**에서 이 Neutral stage 끝까지 **NO_CLEAR_OBSERVED**입니다. Clear gate가 계속 disarmed인 것은 의도된 결과입니다. 이후 다른 stage의 새 tracking 구간에서는 다시 clear를 만족하면 READY로 돌아옵니다.
+- **CLEAN은 모든 944개 조합에서 L=1/R=1/false=wrong=duplicate=0/final ARMED**입니다. 이 fixture의 brief dropout 때문에 정상 kick이 막힌 조합은 없었습니다. 별도 합성 회귀에서는 kick 직전 dropout으로 MISS가 생기는 경우도 검증합니다.
+- **FIXED_SETTLE: 20 / 128 viable.** lossMin **0 또는 33ms**에서 FIRST_DWELL은 settle **200/300/400/500ms**, INTEGRATED_WINDOW는 **100/150/200/300/400/500ms**가 통과했습니다. 짧은 settle의 통과는 후속 loss가 dwell/decision 중 candidate를 취소한 영향입니다. 높은 Y가 500ms 계속되는 합성 회귀에서는 settle100 이후 false event가 가능하므로, 이 통과를 neutral recovery 증명으로 해석하면 안 됩니다.
+- **CLEAR_ONLY: 96 / 384 viable.** lossMin **0 또는 33ms**, 모든 요청 clear threshold/dwell, 두 방향 전략이 통과했습니다.
+- **SETTLE_AND_CLEAR: 108 / 432 viable.** lossMin **0 또는 33ms**, 모든 요청 bounded 조합/방향 전략이 통과했습니다.
+- **총 viableReacquisitionConfigs = 224 / 944.** lossMin **67ms 이상**은 실제 66ms episode를 gate하지 않아 false를 제거하지 못했습니다.
+
+가장 단순한 후보군은 complexity 1인 fixed/clear입니다. 예를 들어 lossMin33 + FIRST_DWELL + fixed200의 READY latency median은 CLEAN **216.7ms**, STRESS **201.6ms**(unresolved **10/12**)입니다. lossMin33 + FIRST_DWELL + clear0.25/dwell100은 CLEAN **125.9ms**, STRESS **133.2ms**(unresolved **7/12**)이며 문제의 재추적 구간 자체는 clear를 관측하지 못해 null입니다. 완료된 episode만의 median이므로 latency 숫자만으로 우열을 정하지 않습니다. 어떤 조합도 자동 선택하지 않았습니다.
+
+결과는 Desktop `plank-stork-shadow-analysis/`의 `step-4g3-exact-traces.json`, `step-4g3-reacquisition-results.json`, `step-4g3-config-summary.json`, `step-4g3-findings.md`에 저장합니다. 원본 Capture는 repo에 복사하지 않습니다.
+
+검증: `pnpm typecheck`, `pnpm build`, `pnpm --filter @plank-stork/controller-web test` 모두 통과했습니다. 기존 테스트를 유지하며 **43 files / 515 tests**가 통과했습니다. 실제 944 configs를 두 번 실행해 결과 일치도 확인했습니다. Controller main chunk **631.38kB**의 기존 500kB 초과 경고는 남아 있습니다.
+
+### 재실행
+
+1. `pnpm dev:controller-web` → `http://localhost:5173`. Camera를 시작하지 않습니다.
+2. STEP 4G 입력에서 기존 CLEAN/STRESS Capture JSON 두 개를 선택하고 **Dataset roles**를 각각 CLEAN/STRESS로 지정합니다.
+3. **STEP 4G.3 → Run Reacquisition Analysis**를 누릅니다. Ungated trace를 먼저 표시하고, 8 configs마다 UI에 실행 기회를 주며 sweep합니다.
+4. **False reacquisition trace**에서 gap/trigger/peak/median/visibility/clear availability를 확인합니다. 표는 50개씩 보며 Viable filter 또는 **Inspect gate**에서 event source, side/hip continuity, cancellation, stage outcome, latency를 확인합니다.
+5. **Download Reacquisition Analysis JSON**으로 전체 결과를 저장합니다. 파일/role 변경, Reset, Cancel, unmount는 진행 중 결과를 폐기합니다. 서버 upload/Socket 전송은 없습니다.
+
 ## 검증 및 빌드
 
 ```sh

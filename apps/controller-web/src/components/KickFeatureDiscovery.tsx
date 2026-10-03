@@ -6,6 +6,7 @@ import { useLocalDownload } from '../replay/useLocalDownload';
 import { prepareTemporalDatasets, summarizeTemporalDatasets, createTemporalReport, type PreparedTemporalDataset, type TemporalDataset, type TemporalDiscoveryReport } from '../discovery/analyzeTemporal';
 import { TemporalFeatureDiscovery } from './TemporalFeatureDiscovery';
 import { YKickShadowPanel } from './YKickShadowPanel';
+import { ReacquisitionAnalysis } from './ReacquisitionAnalysis';
 
 const number = (value: number | null) => value === null ? '-' : value.toFixed(3);
 const percent = (value: number | null) => value === null ? '-' : `${(value * 100).toFixed(1)}%`;
@@ -129,6 +130,7 @@ export function KickFeatureDiscovery() {
       </section>)}
     </>}
     <TemporalFeatureDiscovery report={temporal} onChange={setTemporal} />
+    <ReacquisitionAnalysis key={`reacquisition-${JSON.stringify(temporal?.inputs ?? [])}`} temporal={temporal} getPrepared={() => prepared.current} />
     <YKickShadowPanel key={JSON.stringify(temporal?.inputs ?? [])} temporal={temporal} getPrepared={() => prepared.current} />
   </section>;
 }

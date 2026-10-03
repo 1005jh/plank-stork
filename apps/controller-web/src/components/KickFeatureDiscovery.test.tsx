@@ -154,3 +154,52 @@ describe('local Feature Discovery UI', () => {
     expect(download).not.toHaveBeenCalled(); expect(container.textContent).toBe('');
   });
 });
+
+describe('reacquisition analysis UI', () => {
+  it('shares roles, exports trace/sweep/latency and invalidates results on role change', async () => {
+    const session = JSON.stringify(await discoveryFixture());
+    await select([file('a.json', async () => session), file('b.json', async () => session)]); await settled();
+    expect(container.textContent).toContain('No STRESS dataset selected');
+    const roles = [...container.querySelectorAll<HTMLSelectElement>('select[aria-label^="Temporal role"]')];
+    await act(async () => roles.forEach((r, i) => { r.value = i === 0 ? 'CLEAN' : 'STRESS'; r.dispatchEvent(new Event('change', { bubbles: true })); }));
+    await act(async () => button('Run Reacquisition Analysis').click());
+    // Sweep yields after each eight configs; no per-frame React updates.
+    for (let i = 0; i < 300 && button('Download Reacquisition Analysis JSON').disabled; i++) {
+      await act(async () => { await new Promise((done) => setTimeout(done, 5)); });
+    }
+    expect(button('Download Reacquisition Analysis JSON').disabled).toBe(false);
+    expect(container.textContent).toContain('False reacquisition trace');
+    expect(container.textContent).toContain('944'); expect(container.textContent).toContain('Eligibility latency');
+    await act(async () => button('Next configurations').click());
+    expect(container.textContent).toContain('51–100 / 944');
+    await act(async () => button('Download Reacquisition Analysis JSON').click());
+    const exported = await new Promise<string>((resolve) => {
+      const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsText(download.mock.calls[0][0]);
+    });
+    const data = JSON.parse(exported);
+    expect(data.inputs.map((i: { role: string }) => i.role)).toEqual(['CLEAN', 'STRESS']);
+    expect(data.perConfig).toHaveLength(944); expect(data.falseReacquisitionTrace).toEqual([]);
+    expect(data.perConfig[0].clean.addedEligibilityLatencyMs).toHaveProperty('unresolvedCount');
+    expect(exported).not.toMatch(/"(landmarks|worldLandmarks|frames)":/);
+    await act(async () => { roles[0].value = 'UNASSIGNED'; roles[0].dispatchEvent(new Event('change', { bubbles: true })); });
+    expect(button('Download Reacquisition Analysis JSON').disabled).toBe(true);
+  });
+  it('cancels and discards pending sweep on reset, replacement input and unmount', async () => {
+    const session = JSON.stringify(await discoveryFixture());
+    await select([file('a.json', async () => session)]); await settled();
+    await act(async () => button('Run Reacquisition Analysis').click());
+    await act(async () => button('Cancel Reacquisition Analysis').click());
+    await settled(); expect(button('Download Reacquisition Analysis JSON').disabled).toBe(true);
+    await act(async () => button('Run Reacquisition Analysis').click());
+    await act(async () => button('Reset Feature Discovery').click());
+    await settled(); expect(button('Run Reacquisition Analysis').disabled).toBe(true);
+    await select([file('again.json', async () => session)]); await settled();
+    await act(async () => button('Run Reacquisition Analysis').click());
+    await select([file('replacement.json', async () => session)]); await settled();
+    expect(button('Download Reacquisition Analysis JSON').disabled).toBe(true);
+    await act(async () => button('Run Reacquisition Analysis').click());
+    await act(async () => root!.unmount()); root = null;
+    await act(async () => { await new Promise((done) => setTimeout(done, 10)); });
+    expect(download).not.toHaveBeenCalled(); expect(container.textContent).toBe('');
+  });
+});

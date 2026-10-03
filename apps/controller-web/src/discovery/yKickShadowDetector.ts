@@ -4,7 +4,7 @@ export type ShadowState = 'ARMED' | 'CANDIDATE' | 'WAIT_RETURN' | 'WAIT_CLEAR';
 export type DirectionStrategy = 'FIRST_DWELL' | 'INTEGRATED_WINDOW';
 export interface ShadowConfig { enter: number; dwellMs: number; exit: number; returnDwellMs: number; directionStrategy: DirectionStrategy; decisionWindowMs: number }
 export const DEFAULT_SHADOW_CONFIG: ShadowConfig = { enter: 0.4, dwellMs: 50, exit: 0.2, returnDwellMs: 180, directionStrategy: 'FIRST_DWELL', decisionWindowMs: 100 };
-export interface ShadowFrame { timestamp: number; LEFT: number | null; RIGHT: number | null }
+export interface ShadowFrame { timestamp: number; LEFT: number | null; RIGHT: number | null; entryEligible?: Record<Limb, boolean> }
 interface SideEvidence {
   runStartedAt: number | null; eligibleAt: number | null; integrated: number; peak: number | null;
   previous: number | null; epoch: number;
@@ -137,7 +137,7 @@ export class YKickShadowDetector {
       this.cancel(now, values[this.candidate.side] === null ? 'POSE_LOSS' : 'TIMESTAMP_GAP'); return;
     }
     if (this.state === 'ARMED') {
-      const active = SIDES.filter((side) => values[side] !== null && values[side]! >= this.config.enter);
+      const active = SIDES.filter((side) => input.entryEligible?.[side] !== false && values[side] !== null && values[side]! >= this.config.enter);
       if (!active.length) return;
       // Seed/clear owner only; equal simultaneous onset never chooses an EVENT direction here.
       const side = active.length === 1 || values.LEFT! >= values.RIGHT! ? active[0] : 'RIGHT';
@@ -149,7 +149,9 @@ export class YKickShadowDetector {
     const c = this.candidate!;
     for (const side of SIDES) {
       const s = c[side], current = values[side];
-      if (current === null) {
+      if (current === null || input.entryEligible?.[side] === false) {
+        // Analysis-only reacquisition eligibility. Physical usability still controls loss epochs,
+        // cancellation and WAIT_RETURN/CLEAR; a disarmed opponent cannot contribute evidence.
         // Opponent loss does not cancel the owner, but none of that side's earlier evidence survives.
         s.runStartedAt = null; s.eligibleAt = null; s.integrated = 0; s.peak = null; s.previous = null; s.epoch = this.epochs[side]; s.entryReacquisition = null; continue;
       }
@@ -185,7 +187,7 @@ export class YKickShadowDetector {
       if (eligible.length === 1) this.emit(eligible[0], now);
       else if (Math.abs(c.LEFT.integrated - c.RIGHT.integrated) <= 1e-8) this.cancel(now, 'AMBIGUOUS');
       else this.emit(c.LEFT.integrated > c.RIGHT.integrated ? 'LEFT' : 'RIGHT', now);
-    } else if (!eligible.length && SIDES.every((side) => values[side] === null || values[side]! < this.config.enter)) this.cancel(now, 'BELOW_ENTER');
+    } else if (!eligible.length && SIDES.every((side) => input.entryEligible?.[side] === false || values[side] === null || values[side]! < this.config.enter)) this.cancel(now, 'BELOW_ENTER');
   }
   getState(): ShadowState { return this.state; }
   getSnapshot() {

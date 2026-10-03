@@ -2,6 +2,8 @@ import type { DiscoveryInput } from './analyzeDiscovery';
 import type { PreparedTemporalDataset, TemporalDataset } from './analyzeTemporal';
 import { stageForTime, type DiscoveryLabel } from './discoveryStages';
 import { YKickShadowDetector, type DirectionStrategy, type ShadowConfig, type ShadowState } from './yKickShadowDetector';
+import type { EvidencePair } from './temporalEvidence';
+import type { Limb } from './discoveryFeatures';
 
 export const SHADOW_SETTINGS = {
   enter: [0.35, 0.4, 0.45], dwellMs: [33, 50, 80], exit: [0.15, 0.2, 0.25, 0.3], returnDwellMs: [100, 150, 180, 200], decisionWindowMs: 100,
@@ -31,7 +33,8 @@ export interface ShadowStageResult {
   eventCount: number; correct: number; wrongDirection: number; duplicates: number; falseEvents: number;
   outcome: 'CORRECT' | 'MISS' | 'UNOBSERVABLE' | 'FALSE_EVENT' | 'CLEAR' | 'WRONG_OR_DUPLICATE';
 }
-function replayShadow(prepared: PreparedTemporalDataset, temporal: TemporalDataset, config: ShadowConfig) {
+export function replayShadow(prepared: PreparedTemporalDataset, temporal: TemporalDataset, config: ShadowConfig,
+  entryEligibility?: (frame: EvidencePair) => Record<Limb, boolean>) {
   const detector = new YKickShadowDetector(config);
   const readiness: { stageIndex: number; expected: DiscoveryLabel; startMs: number; stateBefore: ShadowState; armedBeforeStart: boolean; lastObservedFrameAt: number | null }[] = [];
   let nextStage = 0, previousTime: number | null = null;
@@ -41,7 +44,8 @@ function replayShadow(prepared: PreparedTemporalDataset, temporal: TemporalDatas
       if (stage.expected !== 'NEUTRAL') readiness.push({ stageIndex: stage.stageIndex, expected: stage.expected, startMs: stage.startMs,
         stateBefore: detector.getState(), armedBeforeStart: detector.getState() === 'ARMED', lastObservedFrameAt: previousTime });
     }
-    detector.processFrame({ timestamp: frame.timestamp, LEFT: frame.LEFT.usable ? frame.LEFT.absY : null, RIGHT: frame.RIGHT.usable ? frame.RIGHT.absY : null });
+    detector.processFrame({ timestamp: frame.timestamp, LEFT: frame.LEFT.usable ? frame.LEFT.absY : null, RIGHT: frame.RIGHT.usable ? frame.RIGHT.absY : null,
+      entryEligible: entryEligibility?.(frame) });
     previousTime = frame.timestamp;
   }
   const result = detector.result();
