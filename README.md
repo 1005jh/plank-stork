@@ -1203,6 +1203,25 @@ Y_ONLY는 세 fixture 모두 false/wrong/duplicate/cross-gap/reacquisition false
 
 이번 STEP 완료에 새 운동은 필요하지 않았습니다. Production 채택 전에는 독립된 추가 실측으로 경계값 여유, ankle 가림, 복귀 유지, 반대쪽 spike를 확인해야 합니다. 이번에는 새 운동을 수행하거나 production 후보를 자동 선택하지 않았습니다.
 
+## STEP 4K.1 — Soft Tracking Discontinuity / Landmark Integrity Validation
+
+저장된 네 capture의 **analysis-only** guard 비교입니다. Production `KneeKickDetectorV3`, Y .40/50ms, MediaPipe, live primary는 변경하지 않습니다. 새 운동/촬영 없이 JSON만 사용합니다. 실제 결과와 상세 계산 정의는 [STEP 4K.1 분석 기록](docs/step-4k1-findings.md)에 있습니다.
+
+1. Controller의 **STEP 4K.1 — Landmark Integrity Validation**에서 기존 Replay JSON 네 개를 선택합니다. Camera Start는 필요하지 않습니다.
+2. UI에서 role을 직접 지정합니다: old CLEAN → `REFERENCE_OLD_CLEAN`, STRESS → `STRESS`, `2026-10-03T16-39-36-229Z` capture → `REFERENCE_LIVE_1`, `2026-10-05T14-37-39-718Z` capture → `REFERENCE_LIVE_2_INDEPENDENT`. 파일명으로 추정하지 않으며 동일 role에 reference를 추가할 수 있습니다.
+3. **Inspect Integrity Features**로 LIVE/replay parity를 먼저 검사합니다. Stage/side별 Y 속도·2D 속도·segment ratio 분포와 candidate entry ±500ms trace를 확인합니다. 실제 Neutral window의 segment median을 사용하며 setup 없는 old CLEAN의 첫 Neutral은 평가에서 제외합니다.
+4. **Download Integrity Traces CSV**는 false 두 개와 true kick 여섯 개의 frame table을 내보냅니다. 첫 LIVE의 RIGHT는 Y miss이므로 고정 flexion diagnostic anchor라고 명시합니다. **Download Integrity JSON**에는 signed feature, angle/visibility, optional world geometry와 모든 missing frame도 포함합니다.
+5. **Run Integrity Guard Comparison**은 분포 확인 후 **36개 guard + NONE**를 실행합니다. A Y velocity 7개, B normalized 2D velocity 7개, C segment-collapse 6개, D 작은 OR grid 16개입니다. 각각 Y_ONLY와 고정 flexion15°/67ms·clear5°/150ms를 실행하며 추가 flexion sweep이나 BEST 선택은 없습니다. Return policy는 기존 default `TRIGGER_CHANNEL_CLEAR`로 고정했습니다.
+6. 각 row의 **Inspect guard**에서 activation, entry 예방/기존 run 취소, recovery latency 및 미복귀 episode, false 제거/true 손실, event, stage 결과를 확인합니다. 결과 JSON은 `viableIntegrityConfigs`와 별도 `viableFixedFlexionDiagnosticConfigs`를 제공합니다. 역할 변경/새 파일/Reset/Cancel/unmount는 이전 작업을 폐기합니다.
+
+Velocity veto는 **candidate entry 현재/직전 usable frame**에서만 검사합니다. 모든 frame의 velocity cap이나 kick positive confirmation이 아닙니다. Segment-collapse는 현재 usable knee/ankle geometry를 연속 검사하며 ankle missing은 Y를 무효화하지 않습니다. Guard는 해당 side의 Y·flexion run만 버리고 `SUSPECT_NOT_READY`로 전환합니다. `abs(Y)<.25`를 100ms 연속 관측해야 복귀하며 missing/dt≥400ms는 clear/run 연속성을 끊습니다. 반대쪽 처리, 원래 hard-loss gate, Guided 시간은 계속 진행합니다. Neutral median은 이후 동작으로 갱신하지 않습니다. World는 진단 전용입니다.
+
+실제 결과: Independent의 LIVE↔replay는 event/time·summary·baseline·final 모두 MATCH입니다. Guard 없는 Y는 LEFT1/RIGHT1/NEUTRAL false2입니다. **Y velocity veto 10/12/15**, **2D velocity veto15**의 총 **4개**가 네 fixture 조건을 통과했습니다. 두 strategy에서 18 또는 20 이상은 두 번째 false를 남겼고, segment-collapse/OR는 정상 LEFT를 차단해 viable이 없었습니다. 고정 flexion diagnostic도 같은 네 guard가 통과했습니다. 이는 실패 자료를 본 뒤의 탐색 결과이며 새 guard에 대한 independent 검증이나 production 채택을 뜻하지 않습니다.
+
+실제 JSON/CSV는 Desktop `plank-stork-shadow-analysis/step-4k1-integrity-results.json`, `step-4k1-traces.csv`에 저장했습니다. Raw capture/WebM을 repo에 복사하지 않습니다. 이번 STEP에 추가 운동은 필요하지 않았고, production 변경 전에는 후보를 사전에 고정한 뒤 별도 자료로 검증해야 합니다.
+
+검증: `pnpm typecheck`, `pnpm build`, `pnpm --filter @plank-stork/controller-web test` 모두 성공했습니다. 기존608개를 유지하고30개를 추가해 **57 files / 638 tests**가 통과했습니다. 새 분석 패널은 카메라 metrics tick으로 큰 결과 표를 다시 렌더링하지 않도록 memo 처리했습니다. Controller main chunk **706.03kB**의 기존500kB 초과 경고는 남습니다.
+
 ## 검증 및 빌드
 
 ```sh

@@ -40,6 +40,10 @@ const empty = (): ChannelState => ({ value: null, tracking: 'LOST', lossAt: null
   clearAt: null, epoch: 0, runEpoch: 0, runAt: null, integrated: 0, previousEvidence: null, episode: null });
 const side = () => ({ Y: empty(), X: empty(), FLEXION: empty() });
 type State = 'ARMED' | 'CANDIDATE' | 'WAIT_RETURN' | 'WAIT_CLEAR';
+export interface ShadowGuardContext {
+  state: State;
+  sides: Record<Limb, { entryChannels: Channel[]; runs: Record<Channel, number | null> }>;
+}
 export interface MultiEvent {
   id: number; timestamp: number; side: Limb; direction: 'KNEE_LEFT' | 'KNEE_RIGHT';
   triggerSource: 'Y' | 'X' | 'FLEXION' | 'BOTH' | 'Y_X_BOTH'; channels: Channel[];
@@ -114,7 +118,7 @@ export class MultiSignalShadow {
       }).every(Boolean);
     }).every(Boolean);
   }
-  processFrame(frame: MultiFrame): MultiEvent | null {
+  processFrame(frame: MultiFrame, guard?: (context: ShadowGuardContext) => readonly Limb[]): MultiEvent | null {
     const now = frame.timestamp;
     if (!Number.isFinite(now) || this.previousAt !== null && now <= this.previousAt) return null;
     const dt = this.previousAt === null ? 0 : now - this.previousAt, gap = dt >= KICK_STALE_MS;
@@ -124,14 +128,28 @@ export class MultiSignalShadow {
     // Reset even channels currently optional for return so a later observation cannot bridge loss.
     for (const limb of LIMBS) for (const channel of ['Y', 'X', 'FLEXION'] as const)
       if (gap || this.sides[limb][channel].value === null) delete this.returnRuns[`${limb}/${channel}`];
+    const channels = activeChannels(this.config);
+    // Optional analysis-only integrity veto. Observe real availability first, then discard
+    // suspect evidence without fabricating visibility loss or changing the other side.
+    const blocked = new Set(guard?.({ state: this.state, sides: Object.fromEntries(LIMBS.map((limb) => [limb, {
+      entryChannels: this.state === 'ARMED' || this.state === 'CANDIDATE' ? channels.filter((c) => {
+        const s = this.sides[limb][c]; return s.tracking === 'READY' && s.runAt === null && s.value !== null && s.value >= this.enter(c);
+      }) : [],
+      runs: Object.fromEntries((['Y', 'X', 'FLEXION'] as const).map((c) => [c, this.sides[limb][c].runAt])),
+    }])) as ShadowGuardContext['sides'] }) ?? []);
+    for (const limb of blocked) for (const c of ['Y', 'X', 'FLEXION'] as const) {
+      this.resetRun(this.sides[limb][c]);
+    }
     if (this.state === 'WAIT_RETURN' || this.state === 'WAIT_CLEAR') {
-      if (this.returned(now, gap)) { this.state = 'ARMED'; this.latched = []; this.returnRuns = {}; }
+      // Keep observing actual return values during a veto. Do not add an artificial
+      // second clear dwell after integrity recovery, or arm a still-blocked owner.
+      const returned = this.returned(now, gap);
+      if (!this.latched.some((latch) => blocked.has(latch.side)) && returned) { this.state = 'ARMED'; this.latched = []; this.returnRuns = {}; }
       return null;
     }
-    const channels = activeChannels(this.config);
     for (const limb of LIMBS) for (const channel of channels) {
       const s = this.sides[limb][channel], threshold = this.enter(channel);
-      if (s.tracking !== 'READY' || s.value === null || s.value < threshold) { this.resetRun(s); continue; }
+      if (blocked.has(limb) || s.tracking !== 'READY' || s.value === null || s.value < threshold) { this.resetRun(s); continue; }
       if (s.runAt === null) { s.runAt = now; s.runEpoch = s.epoch; }
       else if (s.previousEvidence !== null) s.integrated +=
         (Math.max(0, s.previousEvidence / threshold - 1) + Math.max(0, s.value / threshold - 1)) / 2 * dt / 1000;

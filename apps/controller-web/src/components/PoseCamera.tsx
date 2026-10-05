@@ -1,4 +1,5 @@
 import { MultiSignalAnalysis } from './MultiSignalAnalysis';
+import { IntegrityAnalysis } from './IntegrityAnalysis';
 import { useReplayCapture } from '../replay/useReplayCapture';
 import { ReplayCapturePanel } from './ReplayCapturePanel';
 import { ReplayRunner } from './ReplayRunner';
@@ -208,6 +209,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
       <ReplayRunner />
       <KickFeatureDiscovery />
       <MultiSignalAnalysis />
+      <IntegrityAnalysis />
     </section>
   );
 }

@@ -122,8 +122,9 @@ function outcome(stage: DiscoveryStage, fixture: PreparedMultiFixture, config: M
     outcome: !frames.length ? 'NOT_EVALUATED' : !kick ? current.length ? 'FALSE_EVENT' : 'CLEAR' :
       correct === 1 && current.length === 1 ? 'CORRECT' : current.length ? 'WRONG_OR_DUPLICATE' : expectedObservable ? 'MISS' : 'UNOBSERVABLE' };
 }
-export function analyzeMultiFixture(fixture: PreparedMultiFixture, config: MultiConfig) {
-  const detector = new MultiSignalShadow(config), events: MultiEvent[] = [];
+export function analyzeMultiFixture(fixture: PreparedMultiFixture, config: MultiConfig,
+  detector: Pick<MultiSignalShadow, 'processFrame' | 'getView' | 'getEpisodes'> = new MultiSignalShadow(config)) {
+  const events: MultiEvent[] = [];
   for (const f of fixture.frames) {
     if (f.calibrationOnly) continue;
     const event = detector.processFrame(f);
