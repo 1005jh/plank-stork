@@ -6,12 +6,21 @@ import { robustStats } from '../motion/kneeMotionAnalyzer';
 import { GuidedDetectorTest } from './guidedDetectorTest';
 import { KneeKickDetector, usableKnees, type KneeKickBaseline } from './kneeKickDetector';
 import { buildKneeKickBaselineV3 } from './kneeKickBaselineV3';
-import type { KneeKickBaselineV3 } from './kneeKickDetectorV3';
+import { KneeKickDetectorV3, usableKneesV3, Y_KICK_V3_CONFIG, type KneeKickBaselineV3 } from './kneeKickDetectorV3';
+
 import { summarizeNeutralDiagnostics, type NeutralKickDiagnosticSample, type NeutralKickDiagnostics, type KickDiagnosticDataset } from './kneeKickDiagnostics';
+
+export type KickDetectorMode = 'Y_V3' | 'LEGACY_X';
+// Empty X candidate columns for V3 diagnostics; Y run/gate evidence lives in v3.
+const EMPTY_X_DIAGNOSTICS = new KneeKickDetector().getValuesForDiagnostics();
 
 /** Collect only during the existing Neutral window; never learn from later movement. */
 export class KneeKickAnalysis {
-  private detector = new KneeKickDetector();
+  private detectorV3 = new KneeKickDetectorV3();
+  private legacyDetector = new KneeKickDetector();
+  private legacyReferenceTest = new GuidedDetectorTest();
+  private agreement = { eventAgreement: true, directionAgreement: null as boolean | null };
+  private frameUsability = { primary: false, legacy: false };
   private test = new GuidedDetectorTest();
   private sealed = false;
   private baselineV3: KneeKickBaselineV3 | null = null;
@@ -21,9 +30,11 @@ export class KneeKickAnalysis {
   private lastFrameAt: number | null = null;
   private savedDiagnostics: KickDiagnosticDataset | null;
 
-  constructor(savedDiagnostics: KickDiagnosticDataset | null = null) {
+  constructor(savedDiagnostics: KickDiagnosticDataset | null = null, readonly detectorMode: KickDetectorMode = 'Y_V3') {
     this.savedDiagnostics = savedDiagnostics ? structuredClone(savedDiagnostics) : null;
   }
+
+  private get primary() { return this.detectorMode === 'Y_V3' ? this.detectorV3 : this.legacyDetector; }
 
   processFrame(frame: PoseFrame, neutral: PoseFeatureView): void {
     if (neutral.collectionState === 'IDLE' || (this.sealed && neutral.collectionState !== 'FROZEN')) this.reset(frame.timestamp, 'RECALIBRATION');
@@ -36,16 +47,16 @@ export class KneeKickAnalysis {
       const withinWindow = neutral.collectionState !== 'FROZEN' || (neutral.hipReadyAt !== null && frame.timestamp < neutral.hipReadyAt + KNEE_CALIBRATION_GRACE_MS);
       if (withinWindow) this.collect(features, frame.timestamp);
       this.samples = this.samples.filter((sample) => sample.timestamp > frame.timestamp - CALIBRATION_WINDOW_MS);
-      this.counts = { left: this.samples.filter((sample) => sample.leftOffset !== null).length, right: this.samples.filter((sample) => sample.rightOffset !== null).length };
+      this.counts = { left: this.samples.filter((sample) => (this.detectorMode === 'Y_V3' ? usableKneesV3(sample.features).left : sample.leftOffset !== null)).length, right: this.samples.filter((sample) => (this.detectorMode === 'Y_V3' ? usableKneesV3(sample.features).right : sample.rightOffset !== null)).length };
       if (neutral.collectionState === 'FROZEN') this.freeze();
     }
     this.analyzeFrame(frame, features, neutral.smoothed.validNow, inferenceGapMs);
   }
-  /** Isolated replay instance: stored calibration, unchanged production downstream analysis. */
+  /** Explicit legacy-only reference route for old LANDMARK/VIDEO captures. Live defaults to V3. */
   static forReplay(baseline: KneeKickBaseline): KneeKickAnalysis {
-    const analysis = new KneeKickAnalysis();
+    const analysis = new KneeKickAnalysis(null, 'LEGACY_X');
     analysis.sealed = true;
-    analysis.detector.setBaseline({ ...baseline });
+    analysis.legacyDetector.setBaseline({ ...baseline });
     return analysis;
   }
   processReplayFrame(frame: PoseFrame): void {
@@ -56,17 +67,31 @@ export class KneeKickAnalysis {
   }
   private analyzeFrame(frame: PoseFrame, features: KneeMotionFeatures, neutralSmoothedValidNow: boolean, inferenceGapMs: number | null): void {
     // Neutral FROZEN is enforced by baseline collection above, not by STEP 4A runtime validity.
-    const usable = usableKnees(features);
+    const legacyUsable = usableKnees(features);
+    const usable = this.detectorMode === 'Y_V3' ? usableKneesV3(features) : legacyUsable;
+    this.frameUsability = { primary: usable.left || usable.right, legacy: legacyUsable.left || legacyUsable.right };
     const poseFresh = usable.left || usable.right;
-    const stateBefore = this.detector.getStateForDiagnostics();
+    const stateBefore = this.primary.getStateForDiagnostics();
     this.test.advance(frame.timestamp, stateBefore);
-    const event = this.detector.processFrame(features, frame.timestamp);
-    const values = this.detector.getValuesForDiagnostics();
+    this.legacyReferenceTest.advance(frame.timestamp, this.legacyDetector.getStateForDiagnostics());
+    // One extraction, identical input/time, two independent state machines.
+    const v3Event = this.detectorV3.processFrame(features, frame.timestamp);
+    const legacyEvent = this.legacyDetector.processFrame(features, frame.timestamp);
+    this.legacyReferenceTest.record(legacyEvent); // Diagnostic reference only; never the primary Guided result.
+    const event = this.detectorMode === 'Y_V3' ? v3Event : legacyEvent;
+    const legacy = this.legacyDetector.getValuesForDiagnostics(), v3 = this.detectorV3.getValuesForDiagnostics();
+    this.agreement = { eventAgreement: Boolean(v3Event) === Boolean(legacyEvent),
+      directionAgreement: v3Event && legacyEvent ? v3Event.direction === legacyEvent.direction : null };
+    const dominantY = [v3.normalizedYLeft, v3.normalizedYRight].filter((v): v is number => v !== null).sort((a, b) => Math.abs(b) - Math.abs(a))[0] ?? null;
+    const values = this.detectorMode === 'LEGACY_X' ? legacy : { ...EMPTY_X_DIAGNOSTICS,
+      state: v3.state, normalizedLeft: v3.normalizedYLeft, normalizedRight: v3.normalizedYRight,
+      dominantNormalizedDisplacement: dominantY, confirmationLatencyMs: v3Event?.confirmationLatencyMs ?? null };
+
     this.test.recordDiagnosticFrame({
       ...values,
       timestamp: frame.timestamp, poseFresh, usableLeft: usable.left, usableRight: usable.right,
       inferenceGapMs, neutralSmoothedValidNow,
-      kickHipsUsable: usable.hips, kickLeftUsable: usable.left, kickRightUsable: usable.right, kickValidityReasons: usable.reasons,
+      kickHipsUsable: usable.hips, kickLeftUsable: usable.left, kickRightUsable: usable.right, kickValidityReasons: legacyUsable.reasons,
       rawLeftHipVisibility: features.leftHipVisibility, rawRightHipVisibility: features.rightHipVisibility,
       rawLeftKneeVisibility: features.leftKneeVisibility, rawRightKneeVisibility: features.rightKneeVisibility,
       rawHipCenterX: features.hipCenterX, rawLeftKneeX: features.leftKneeX, rawRightKneeX: features.rightKneeX,
@@ -78,7 +103,9 @@ export class KneeKickAnalysis {
       normalizedLeft: values.normalizedLeft, normalizedRight: values.normalizedRight,
       dominantNormalizedDisplacement: values.dominantNormalizedDisplacement,
       normalizedLeftVelocity: values.normalizedLeftVelocity, normalizedRightVelocity: values.normalizedRightVelocity,
-      event,
+      event, detectorMode: this.detectorMode,
+      v3: { ...v3, event: v3Event },
+      legacyShadow: { ...legacy, event: legacyEvent, counts: this.legacyDetector.getReplaySnapshot().counts, ...this.agreement },
     });
     this.test.record(event);
   }
@@ -92,23 +119,28 @@ export class KneeKickAnalysis {
     this.sealed = true;
     // Same Neutral timing/visibility window as X; never update this after FROZEN.
     this.baselineV3 = buildKneeKickBaselineV3(this.samples.map((s) => s.features));
+    this.detectorV3.setBaseline(this.baselineV3);
     // Diagnostic-only statistics over the same bounded Neutral window; never used by setBaseline().
     this.neutralDiagnostics = summarizeNeutralDiagnostics(this.samples);
-    if (this.counts.left >= CALIBRATION_MIN_SAMPLES && this.counts.right >= CALIBRATION_MIN_SAMPLES) {
+    if (this.samples.filter((s) => s.leftOffset !== null).length >= CALIBRATION_MIN_SAMPLES && this.samples.filter((s) => s.rightOffset !== null).length >= CALIBRATION_MIN_SAMPLES) {
       const median = (key: 'leftOffset' | 'rightOffset' | 'leftDistance' | 'rightDistance') => robustStats(this.samples.map((sample) => sample[key])).median!;
       const leftDistanceMedian = median('leftDistance'), rightDistanceMedian = median('rightDistance');
-      this.detector.setBaseline({ leftMedian: median('leftOffset'), rightMedian: median('rightOffset'), leftDistanceMedian, rightDistanceMedian,
+      this.legacyDetector.setBaseline({ leftMedian: median('leftOffset'), rightMedian: median('rightOffset'), leftDistanceMedian, rightDistanceMedian,
         bodyScale: (leftDistanceMedian + rightDistanceMedian) / 2 });
     }
     this.samples = [];
   }
   getView(now: number) {
-    const detector = this.detector.getView(now);
-    return { detector, baselineV3: this.baselineV3 ? { ...this.baselineV3 } : null, baselineCounts: { ...this.counts }, baselineSealed: this.sealed,
+    const legacyShadow = this.legacyDetector.getView(now), v3 = this.detectorV3.getView(now);
+    const detector = this.detectorMode === 'Y_V3' ? v3 : legacyShadow;
+    this.legacyReferenceTest.getView(now, legacyShadow.state);
+    return { detector, detectorMode: this.detectorMode, v3: v3.diagnostics, legacyShadow: { ...legacyShadow, ...this.agreement }, baselineV3: this.baselineV3 ? { ...this.baselineV3 } : null, baselineCounts: { ...this.counts }, baselineSealed: this.sealed,
       test: this.test.getView(now, detector.state), diagnosticsDownload: this.getDownloadInfo() };
   }
   getReplaySnapshot() {
-    return { detector: this.detector.getReplaySnapshot(), baselineV3: this.baselineV3 ? { ...this.baselineV3 } : null, guided: this.test.getReplaySnapshot() };
+    return { detectorMode: this.detectorMode, detector: this.primary.getReplaySnapshot(),
+      legacyShadow: { detector: this.legacyDetector.getReplaySnapshot(), guided: this.legacyReferenceTest.getReplaySnapshot() },
+      frameUsability: { ...this.frameUsability }, baselineV3: this.baselineV3 ? { ...this.baselineV3 } : null, guided: this.test.getReplaySnapshot() };
   }
   getTestStages() { return this.test.getStages(); }
   getDiagnosticSummary() { return this.test.getDiagnosticSummary(); }
@@ -125,12 +157,13 @@ export class KneeKickAnalysis {
     return JSON.stringify(dataset, null, 2);
   }
   private preserveDiagnostics(now: number, reason: string): void {
-    this.test.interrupt(now, reason, this.detector.getStateForDiagnostics());
+    this.test.interrupt(now, reason, this.primary.getStateForDiagnostics());
+    this.legacyReferenceTest.interrupt(now, reason, this.legacyDetector.getStateForDiagnostics());
     const dataset = this.test.snapshotDiagnostics();
     if (dataset) this.savedDiagnostics = dataset;
   }
   startTest(now: number, onClock?: () => void): boolean {
-    const view = this.detector.getView(now);
+    const view = this.getView(now).detector;
     const blocked = !this.sealed || !view.ready || this.test.getView(now, view.state).status === 'ACTIVE';
     // Observe the existing guard clock before a new trial clears the previous result.
     onClock?.();
@@ -138,23 +171,29 @@ export class KneeKickAnalysis {
     this.preserveDiagnostics(now, 'NEW_TRIAL');
     const started = this.test.start(now, view.ready);
     if (started) {
-      this.detector.restartTrial();
+      this.detectorV3.restartTrial(); this.legacyDetector.restartTrial();
+      this.legacyReferenceTest.start(now, this.legacyDetector.getReplaySnapshot().baseline !== null);
+      this.agreement = { eventAgreement: true, directionAgreement: null };
+      this.frameUsability = { primary: false, legacy: false };
       this.lastFrameAt = null;
       this.test.beginDiagnostics({
         createdAt: new Date().toISOString(), startedAt: now,
-        baseline: { detector: view.baseline, diagnostics: this.neutralDiagnostics },
-        testStart: { detectorState: this.detector.getStateForDiagnostics(), ready: view.ready, valid: false },
+        detectorMode: this.detectorMode, detectorConfigV3: Y_KICK_V3_CONFIG, baselineV3: this.baselineV3,
+        baseline: { detector: this.legacyDetector.getReplaySnapshot().baseline, diagnostics: this.neutralDiagnostics },
+        testStart: { detectorState: this.primary.getStateForDiagnostics(), ready: view.ready, valid: false },
       });
     }
     return started;
   }
   resetTest(now = this.lastFrameAt ?? 0): void {
     this.preserveDiagnostics(now, 'RESET_TEST');
-    this.test.reset(); this.detector.restartTrial(); this.lastFrameAt = null;
+    this.test.reset(); this.legacyReferenceTest.reset(); this.detectorV3.restartTrial(); this.legacyDetector.restartTrial(); this.lastFrameAt = null;
+    this.agreement = { eventAgreement: true, directionAgreement: null }; this.frameUsability = { primary: false, legacy: false };
   }
   reset(now = this.lastFrameAt ?? 0, reason = 'RESET'): void {
     this.preserveDiagnostics(now, reason);
-    this.detector.reset(); this.test.reset(); this.samples = []; this.sealed = false; this.counts = { left: 0, right: 0 }; this.lastFrameAt = null;
+    this.detectorV3.reset(); this.legacyDetector.reset(); this.test.reset(); this.legacyReferenceTest.reset();
+    this.agreement = { eventAgreement: true, directionAgreement: null }; this.frameUsability = { primary: false, legacy: false }; this.samples = []; this.sealed = false; this.counts = { left: 0, right: 0 }; this.lastFrameAt = null;
     this.neutralDiagnostics = null;
     this.baselineV3 = null;
   }

@@ -3,7 +3,7 @@ import { ReplayVideoDiagnostics } from './ReplayVideoDiagnostics';
 import { useEffect, useRef, useState } from 'react';
 import { replayCalibration, replayLandmarks } from '../replay/landmarkReplay';
 import { readReplaySession } from '../replay/readReplaySession';
-import type { ReplayOutput, ReplayResult, ReplaySession } from '../replay/replayTypes';
+import { replayDetectorMode, type ReplayOutput, type ReplayResult, type ReplaySession } from '../replay/replayTypes';
 import { useLocalDownload } from '../replay/useLocalDownload';
 import { inferReplayVideo } from '../replay/videoReplay';
 import { diagnosticConfig } from '../pose/kick/kneeKickDiagnostics';
@@ -99,7 +99,7 @@ export function ReplayRunner() {
     <p>Landmark는 JSON만 필요합니다. Video는 같은 capture ID의 WebM을 추가로 선택하세요. 재생 상태는 live와 분리됩니다.</p>
     <label>Replay JSON <input type="file" accept=".json,application/json" onChange={(event) => void loadJson(event.target.files?.[0])} /></label>{' '}
     <label>Replay WebM <input ref={videoInput} type="file" accept=".webm,video/webm" onChange={(event) => { resetResults(); setFile(event.target.files?.[0] ?? null); }} /></label>
-    {session && <p>Capture: {session.captureId} · Recorded delegate: {session.pose.delegate} · Expected video: {session.video.filename}</p>}
+    {session && <p>Capture: {session.captureId} · Detector: {replayDetectorMode(session)} · Recorded delegate: {session.pose.delegate} · Expected video: {session.video.filename}</p>}
     {videoSourceError && <p role="alert">{videoSourceError}</p>}
     {session && JSON.stringify(session.liveResult.detectorConfig) !== JSON.stringify(diagnosticConfig()) && <p>저장된 detector 설정과 현재 설정이 다릅니다. 비교 결과에 차이가 생길 수 있습니다.</p>}
     {session && <label>Guided trial <select value={trialId} onChange={(event) => { resetResults(); setTrialId(Number(event.target.value)); }}>
@@ -117,13 +117,17 @@ export function ReplayRunner() {
     <div className="signal-table-scroll"><table className="visibility-table"><thead><tr>
       {['Source', 'Pose frames', 'Usable frames', 'LEFT events', 'RIGHT events', 'Twist L / R false', 'Neutral false', 'Knee L detected / correct', 'Knee R detected / correct', 'Final state'].map((name) => <th key={name}>{name}</th>)}
     </tr></thead><tbody>
-      <ResultRow name="LIVE" result={trial?.result ?? null} /><ResultRow name="LANDMARK" result={landmark?.result ?? null} /><ResultRow name="VIDEO" result={videoResult?.result ?? null} />
+      <ResultRow name={session && replayDetectorMode(session) === 'Y_V3' ? 'LIVE V3' : 'LIVE X'} result={trial?.result ?? null} />
+      {session && replayDetectorMode(session) === 'Y_V3' && <ResultRow name="LIVE X SHADOW" result={trial?.legacyXShadow?.result ?? null} />}
+      <ResultRow name="LANDMARK X" result={landmark?.result ?? null} /><ResultRow name="VIDEO X" result={videoResult?.result ?? null} />
       <ResultRow name="Y V3 LANDMARK" result={v3?.result ?? null} />
     </tbody></table></div>
-    {[landmark, videoResult].map((result) => result && <p key={result.replayMode}>{result.replayMode}: Events/time {result.comparison.eventsEqual ? 'MATCH' : 'DIFFER'} · Summary {result.comparison.guidedSummaryEqual ? 'MATCH' : 'DIFFER'} · Final state {result.comparison.finalStateEqual ? 'MATCH' : 'DIFFER'}</p>)}
-    {calibration && <details open><summary>Calibration: Neutral {calibration.neutralBaselineEqual ? 'MATCH' : 'DIFFER'} · Kick baseline {calibration.kickBaselineEqual ? 'MATCH' : 'DIFFER'}</summary><pre>{JSON.stringify(calibration, null, 2)}</pre></details>}
-    <p>STEP 4H — Y V3는 EXPERIMENTAL / one-user limited-fixture candidate입니다. 이 버튼의 LANDMARK 경로만 V3를 사용합니다. Live controller/mobile과 기존 LANDMARK/VIDEO는 X reference를 유지합니다.</p>
+    {[landmark, videoResult].map((result) => result && <p key={result.replayMode}>{result.replayMode} X → {result.comparison.target ?? 'LIVE_X'}: {result.comparison.available === false ? 'No recorded X reference to compare' : `Events/time ${result.comparison.eventsEqual ? 'MATCH' : 'DIFFER'} · Summary ${result.comparison.guidedSummaryEqual ? 'MATCH' : 'DIFFER'} · Final state ${result.comparison.finalStateEqual ? 'MATCH' : 'DIFFER'}`}</p>)}
+    {calibration && <details open><summary>Calibration: Neutral {calibration.neutralBaselineEqual ? 'MATCH' : 'DIFFER'} · X baseline {calibration.kickBaselineEqual ? 'MATCH' : 'DIFFER'} · V3 baseline {calibration.kickBaselineV3Equal === null ? 'NO STORED V3' : calibration.kickBaselineV3Equal ? 'MATCH' : 'DIFFER'}</summary><pre>{JSON.stringify(calibration, null, 2)}</pre></details>}
+    <p>STEP 4I — Live controller/mobile은 Y V3 PRIMARY입니다. Y V3 LANDMARK는 새 capture의 LIVE V3와 비교합니다. 기존 LANDMARK/VIDEO는 X reference이며 shadow 불일치는 V3 실패가 아닙니다.</p>
     {v3 && <section aria-label="Y V3 replay diagnostics">
+      {v3.comparison ? <p>LIVE V3 ↔ LANDMARK V3: Events/time {v3.comparison.eventsEqual ? 'MATCH' : 'DIFFER'} · Summary {v3.comparison.guidedSummaryEqual ? 'MATCH' : 'DIFFER'} · Final state {v3.comparison.finalStateEqual ? 'MATCH' : 'DIFFER'}</p> : <p>Legacy X capture: V3 live parity는 비교 대상이 없습니다.</p>}
+      {v3.calibrationParity && <p>Actual calibration frames → V3 baseline: {v3.calibrationParity.kickBaselineV3Equal === null ? 'NO STORED V3' : v3.calibrationParity.kickBaselineV3Equal ? 'MATCH' : 'DIFFER'}</p>}
       <p>Baseline: {v3.baseline.source} · Calibration-only frames: {v3.calibrationOnlyFrameCount} · Cross-gap: {v3.counts.crossGapConfirmations} · Reacquisition false: {v3.counts.reacquisitionFalseEvents}</p>
       {v3.warnings.map((warning) => <p key={warning}>{warning}</p>)}
       <p>Clean acceptance: {String(v3.cleanAcceptance)} · Stress safety: {String(v3.stressAcceptance)} · Wrong: {v3.counts.wrongDirection} · Duplicate: {v3.counts.duplicates}</p>

@@ -117,7 +117,7 @@ export class CalibrationRemoteController {
       },
       kneeKick: { ready: detector.ready, validNow: detector.validNow, state: detector.state, currentEvent: detector.currentEvent,
         usableLeftNow: detector.usableLeftNow, usableRightNow: detector.usableRightNow,
-        lastEvent: detector.lastEvent ? { ...detector.lastEvent } : null, counts: { ...detector.counts } },
+        lastEvent: detector.lastEvent ? { id: detector.lastEvent.id, direction: detector.lastEvent.direction, timestamp: detector.lastEvent.timestamp } : null, counts: { ...detector.counts } },
       detectorTest: { status: test.status, expected: test.expected, remainingMs: test.remainingMs, waitingForArmed: test.waitingForArmed, eventCount: test.eventCount, summary: test.summary },
       lastCommandError: this.lastCommandError,
     };

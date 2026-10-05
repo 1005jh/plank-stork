@@ -88,6 +88,9 @@ export class GuidedDetectorTest {
     this.lastObservedState = frame.stateAfter;
     // Explicit primitive allow-list, including missing/stale frames and only NEW events.
     this.diagnosticFrames.push({
+      ...(frame.detectorMode ? { detectorMode: frame.detectorMode } : {}),
+      ...(frame.v3 ? { v3: structuredClone(frame.v3) } : {}),
+      ...(frame.legacyShadow ? { legacyShadow: structuredClone(frame.legacyShadow) } : {}),
       timestamp: frame.timestamp, stageIndex: current.index, expected: this.stages[current.index].expected,
       poseFresh: frame.poseFresh, usableLeft: frame.usableLeft, usableRight: frame.usableRight,
       inferenceGapMs: frame.inferenceGapMs, neutralSmoothedValidNow: frame.neutralSmoothedValidNow,

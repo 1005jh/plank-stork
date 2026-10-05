@@ -240,7 +240,7 @@ describe('controller remote lifecycle', () => {
   }
   async function kickFrame(delta = 0) {
     await advance(50);
-    const frame = motionFrame(now); frame.landmarks[26].x += delta;
+    const frame = motionFrame(now); frame.landmarks[delta < 0 ? 25 : 26].y += Math.abs(delta);
     callbacks?.onFrame?.(frame);
     await request('calibration:sync:requested');
   }
@@ -337,14 +337,15 @@ describe('controller remote lifecycle', () => {
     await freezeKickNeutral();
     expect(snapshot().actionCalibration.status).toBe('IDLE');
     socket.emit.mockClear();
-    const frame = motionFrame(now + 1); frame.landmarks[26].x -= 0.15;
+    const frame = motionFrame(now + 1); frame.landmarks[25].y += 0.15;
     now += 1; callbacks?.onFrame?.(frame);
     expect(socket.emit).not.toHaveBeenCalled();
     await request('calibration:sync:requested');
     expect(snapshot().kneeKick).toMatchObject({ state: 'CANDIDATE', currentEvent: 'NONE', counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
     await kickFrame(-0.15); await kickFrame(-0.15);
     expect(snapshot().kneeKick).toMatchObject({ state: 'WAIT_RETURN', currentEvent: 'KNEE_LEFT', counts: { KNEE_LEFT: 1, KNEE_RIGHT: 0 } });
-    expect(JSON.stringify(snapshot().kneeKick)).not.toMatch(/landmarks|baseline|velocity|Displacement/);
+    expect(JSON.stringify(snapshot().kneeKick)).not.toMatch(/landmarks|baseline|velocity|Displacement|candidateStartedAt|evidenceEpoch/);
+    expect(container.querySelector('[aria-labelledby="knee-kick-title"]')!.textContent).toContain('mode Y_V3');
     const before = snapshot().kneeKick;
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-pressed]')!.click());
     await request('calibration:sync:requested');
@@ -358,8 +359,8 @@ describe('controller remote lifecycle', () => {
     await request('calibration:sync:requested');
     expect(snapshot().kneeKick).toMatchObject({ validNow: false, currentEvent: 'NONE', state: 'WAIT_RETURN' });
     const panel = container.querySelector('[aria-labelledby="knee-kick-title"]')!;
-    expect(panel.textContent).toContain('LEFT displacement-');
-    expect(panel.textContent).toContain('RIGHT displacement-');
+    expect(panel.textContent).toContain('Normalized Y LEFT-');
+    expect(panel.textContent).toContain('Normalized Y RIGHT-');
   });
 
   it('runs the guided detector test remotely, retains per-stage measurements, and resets safely', async () => {
@@ -374,8 +375,8 @@ describe('controller remote lifecycle', () => {
     for (let elapsed = 50; elapsed <= 22000; elapsed += 50) {
       await advance(50);
       const frame = motionFrame(now);
-      if (elapsed >= 12000 && elapsed < 15000) frame.landmarks[26].x -= 0.15;
-      if (elapsed >= 17000 && elapsed < 20000) frame.landmarks[25].x += 0.15;
+      if (elapsed >= 12000 && elapsed < 15000) frame.landmarks[25].y += 0.15;
+      if (elapsed >= 17000 && elapsed < 20000) frame.landmarks[26].y += 0.15;
       callbacks?.onFrame?.(frame);
     }
     expect(now - start).toBe(22000);
@@ -433,7 +434,7 @@ describe('controller remote lifecycle', () => {
     expect(snapshot()).toMatchObject({ lastCommandError: null, detectorTest: { status: 'ACTIVE' }, kneeKick: { state: 'ARMED' } });
     for (let index = 0; index < 45; index++) await kickFrame(-0.15);
     expect(snapshot().detectorTest).toMatchObject({ expected: 'TWIST_LEFT', waitingForArmed: false });
-    expect(snapshot().kneeKick.state).toBe('WAIT_CLEAR');
+    expect(snapshot().kneeKick.state).toBe('WAIT_RETURN');
     await request('kick:test:reset:requested');
     expect(snapshot().kneeKick).toMatchObject({ state: 'ARMED', lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } });
     await advance(400);

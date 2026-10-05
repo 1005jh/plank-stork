@@ -10,7 +10,7 @@ import type { KickDiagnosticDataset } from './kneeKickDiagnostics';
 
 const read = (analysis: KneeKickAnalysis) => JSON.parse(analysis.exportDiagnosticsJson()) as KickDiagnosticDataset;
 function calibrated(offCenter = false) {
-  const neutral = new PoseFeatureAnalysis(), analysis = new KneeKickAnalysis(); neutral.startCalibration(0);
+  const neutral = new PoseFeatureAnalysis(), analysis = new KneeKickAnalysis(null, 'LEGACY_X'); neutral.startCalibration(0);
   for (let index = 1; index <= 20; index++) {
     const frame = motionFrame(index * 50);
     if (offCenter) { frame.landmarks.forEach((point) => { point.x += 0.1 + index / 100 - 0.5; }); frame.landmarks[25].visibility = index % 2 ? 0.6 : 0.8; }

@@ -29,8 +29,8 @@ describe('production Y features and Neutral baseline', () => {
   });
   it('freezes V3 in the same production Neutral window, then ignores movement and trial resets', () => {
     const { kick, send } = calibration(), snapshot = kick.getReplaySnapshot(), b = snapshot.baselineV3!;
-    expect(b).toMatchObject({ version: 3, leftXMedian: snapshot.detector.baseline!.leftMedian, rightXMedian: snapshot.detector.baseline!.rightMedian,
-      bodyScale: snapshot.detector.baseline!.bodyScale });
+    expect(b).toMatchObject({ version: 3, leftXMedian: snapshot.legacyShadow.detector.baseline!.leftMedian, rightXMedian: snapshot.legacyShadow.detector.baseline!.rightMedian,
+      bodyScale: snapshot.legacyShadow.detector.baseline!.bodyScale });
     expect(b.leftYMedian).toBeCloseTo(0.3); expect(b.rightYMedian).toBeCloseTo(0.3);
     send(1050, 0.5); send(1100, 0.7); expect(kick.getReplaySnapshot().baselineV3).toEqual(b);
     kick.startTest(1200); kick.resetTest(1250); expect(kick.getReplaySnapshot().baselineV3).toEqual(b);

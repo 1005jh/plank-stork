@@ -1,6 +1,5 @@
 import { diagnosticConfig } from '../pose/kick/kneeKickDiagnostics';
-import { extractKneeMotionFeatures } from '../pose/motion/kneeMotionFeatures';
-import { usableKnees } from '../pose/kick/kneeKickDetector';
+import { Y_KICK_V3_CONFIG } from '../pose/kick/kneeKickDetectorV3';
 import { POSE_MODEL_URL } from '../pose/poseConstants';
 import { POSE_VIDEO_OPTIONS } from '../pose/createPoseLandmarker';
 import { copyPoseFrame, type CaptureCamera, type KickObservation, type KickSnapshot, type ReplayMarker, type ReplaySession, type ReplayTrial } from './replayTypes';
@@ -27,6 +26,7 @@ export class ReplayCapture {
   private seenMarkers = new Set<string>();
   private frozen = false;
   private lastEventKey = '';
+  private lastLegacyEventKey = '';
   private error: string | null = null;
 
   start(camera: CaptureCamera | null, mirrored: boolean, now: number, Recorder = globalThis.MediaRecorder): boolean {
@@ -38,7 +38,7 @@ export class ReplayCapture {
       const createdAt = new Date().toISOString();
       const captureId = `plank-stork-replay-${createdAt.replace(/[:.]/g, '-')}`;
       this.session = {
-        version: 1, captureId, createdAt,
+        version: 1, captureId, createdAt, detectorMode: 'Y_V3', detectorConfigV3: { ...Y_KICK_V3_CONFIG },
         video: { filename: `${captureId}.webm`, mimeType: recorder.mimeType, videoBitsPerSecond: recorder.videoBitsPerSecond,
           width: camera.width, height: camera.height, nominalFrameRate: camera.stream.getVideoTracks()[0].getSettings().frameRate ?? null,
           sourceVideoTimeAtStart: camera.videoTime },
@@ -48,7 +48,7 @@ export class ReplayCapture {
         liveResult: { neutralBaseline: null, kickBaseline: null, detectorConfig: diagnosticConfig(), guidedSummary: null, events: [], trials: [] },
       };
       this.chunks = []; this.blob = null; this.error = null; this.order = 0; this.trial = null;
-      this.seenMarkers.clear(); this.frozen = false; this.lastEventKey = ''; this.stopAt = null; this.stopped = false;
+      this.seenMarkers.clear(); this.frozen = false; this.lastEventKey = ''; this.lastLegacyEventKey = ''; this.stopAt = null; this.stopped = false;
       this.stopping = null; this.recorder = recorder;
       recorder.addEventListener('dataavailable', this.onData);
       recorder.addEventListener('stop', this.onStop);
@@ -100,14 +100,17 @@ export class ReplayCapture {
       const session = this.session, origin = session.timing.captureStartPerformanceMs, tMs = event.timestamp - origin;
       if (tMs < 0) return;
       const snapshot = read(); // A read-only snapshot, never getView().
+      session.detectorMode = snapshot.detectorMode;
+      const legacy = snapshot.legacyShadow;
       const order = ++this.order;
-      if (event.kind === 'START' && snapshot.detector.baseline) {
+      if (event.kind === 'START' && snapshot.detector.baseline && legacy.detector.baseline) {
         this.finishTrial(event.timestamp);
         const id = session.liveResult.trials.length + 1;
-        this.trial = { id, startMs: tMs, startOrder: order, endMs: null, endOrder: null, baseline: { ...snapshot.detector.baseline }, neutralBaseline: session.liveResult.neutralBaseline ? { ...session.liveResult.neutralBaseline } : null,
+        this.trial = { id, startMs: tMs, startOrder: order, endMs: null, endOrder: null, baseline: { ...legacy.detector.baseline }, neutralBaseline: session.liveResult.neutralBaseline ? { ...session.liveResult.neutralBaseline } : null,
           baselineV3: snapshot.baselineV3 ? { ...snapshot.baselineV3 } : null,
+          legacyXShadow: { result: { poseFrameCount: 0, poseUsableFrameCount: 0, events: [], finalState: legacy.detector.state, guidedSummary: legacy.guided.summary } },
           result: { poseFrameCount: 0, poseUsableFrameCount: 0, events: [], finalState: snapshot.detector.state, guidedSummary: snapshot.guided.summary } };
-        session.liveResult.trials.push(this.trial); this.lastEventKey = '';
+        session.liveResult.trials.push(this.trial); this.lastEventKey = ''; this.lastLegacyEventKey = '';
         this.marker('GUIDED_TEST_START', event.timestamp, `start-${id}`, { trialId: id });
       }
       if (event.kind === 'FRAME') {
@@ -120,11 +123,13 @@ export class ReplayCapture {
         }
         if (this.trial && this.trial.endMs === null) {
           this.trial.result.poseFrameCount++;
-          const usable = usableKnees(extractKneeMotionFeatures(event.frame.landmarks));
-          if (usable.left || usable.right) this.trial.result.poseUsableFrameCount++;
+          if (snapshot.frameUsability.primary) this.trial.result.poseUsableFrameCount++;
+          const shadow = this.trial.legacyXShadow!.result;
+          shadow.poseFrameCount++;
+          if (snapshot.frameUsability.legacy) shadow.poseUsableFrameCount++;
         }
       }
-      session.liveResult.kickBaseline = snapshot.detector.baseline ? { ...snapshot.detector.baseline } : session.liveResult.kickBaseline;
+      session.liveResult.kickBaseline = legacy.detector.baseline ? { ...legacy.detector.baseline } : session.liveResult.kickBaseline;
       session.liveResult.kickBaselineV3 = snapshot.baselineV3 ? { ...snapshot.baselineV3 } : null;
       const trial = this.trial;
       if (event.kind === 'CLOCK' && trial && trial.endMs === null) session.clockSamples.push({ tMs, order, trialId: trial.id });
@@ -133,11 +138,24 @@ export class ReplayCapture {
         this.lastEventKey = `${trial?.id}:${last.id}:${last.timestamp}`;
         const recorded = { id: last.id, direction: last.direction, tMs: last.timestamp - origin };
         if (recorded.tMs >= 0) {
-          session.liveResult.events.push({ ...recorded, trialId: trial?.id ?? null });
+          session.liveResult.events.push({ ...recorded, trialId: trial && trial.endMs === null ? trial.id : null });
           if (trial && trial.endMs === null && recorded.tMs >= trial.startMs && recorded.tMs < trial.startMs + 22000) trial.result.events.push(recorded);
         }
       }
+      const legacyLast = legacy.detector.eventsLast;
+      if (legacyLast && event.kind !== 'START' && trial && trial.endMs === null && trial.legacyXShadow) {
+        const key = `${trial.id}:${legacyLast.id}:${legacyLast.timestamp}`;
+        const time = legacyLast.timestamp - origin;
+        if (key !== this.lastLegacyEventKey && time >= trial.startMs && time < trial.startMs + 22000) {
+          this.lastLegacyEventKey = key;
+          trial.legacyXShadow.result.events.push({ id: legacyLast.id, direction: legacyLast.direction, tMs: time });
+        }
+      }
       if (trial && trial.endMs === null && event.kind !== 'RESET') {
+        if (trial.legacyXShadow) {
+          trial.legacyXShadow.result.finalState = legacy.detector.state;
+          trial.legacyXShadow.result.guidedSummary = legacy.guided.summary;
+        }
         trial.result.finalState = snapshot.detector.state; trial.result.guidedSummary = snapshot.guided.summary;
         session.liveResult.guidedSummary = snapshot.guided.summary;
         for (const stage of snapshot.guided.timings) if (stage.startedAt !== null) {

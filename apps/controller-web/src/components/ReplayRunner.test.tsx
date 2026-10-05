@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReplayRunner } from './ReplayRunner';
-import { fullTrial } from '../replay/testFixtures';
+import { fullTrial, fullV3Trial } from '../replay/testFixtures';
 import { inferReplayVideo } from '../replay/videoReplay';
 import type { ReplaySession } from '../replay/replayTypes';
 
@@ -29,13 +29,31 @@ afterEach(async () => {
   await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.clearAllMocks(); vi.unstubAllGlobals();
 });
 describe('Replay Runner isolation and file lifecycle', () => {
+  it('labels new LIVE V3 separately from X shadow and displays V3 and calibration parity', async () => {
+    const recorded = (await fullV3Trial()).session!;
+    await choose(0, jsonFile(recorded));
+    await act(async () => button('Y V3 LANDMARK REPLAY').click());
+    expect(container.textContent).toContain('LIVE V3 ↔ LANDMARK V3: Events/time MATCH · Summary MATCH · Final state MATCH');
+    expect(container.textContent).toContain('Actual calibration frames → V3 baseline: MATCH');
+    expect(container.textContent).toContain('LIVE X SHADOW');
+    await act(async () => button('LANDMARK REPLAY').click());
+    expect(container.textContent).toContain('LANDMARK X → LIVE_X_SHADOW: Events/time MATCH');
+    delete recorded.liveResult.trials[0].legacyXShadow;
+    await choose(0, jsonFile(recorded));
+    await act(async () => button('LANDMARK REPLAY').click());
+    expect(container.textContent).toContain('No recorded X reference to compare');
+    expect(container.textContent).not.toContain('Events/time DIFFER');
+    await choose(0, jsonFile());
+    expect(container.textContent).not.toContain('LIVE V3 ↔ LANDMARK V3:');
+    expect(container.textContent).toContain('LIVE X');
+  });
   it('runs deterministic and calibration replays without video and clears old results on new JSON', async () => {
     await choose(0, jsonFile());
     expect(button('LANDMARK REPLAY').disabled).toBe(false); expect(button('VIDEO REPLAY').disabled).toBe(true);
     await act(async () => button('LANDMARK REPLAY').click());
     await act(async () => button('CALIBRATION REPLAY').click());
     expect(container.textContent).toContain('Events/time MATCH');
-    expect(container.textContent).toContain('Calibration: Neutral MATCH · Kick baseline MATCH');
+    expect(container.textContent).toContain('Calibration: Neutral MATCH · X baseline MATCH');
     await choose(1, new File(['old'], session.video.filename));
     expect(button('VIDEO REPLAY').disabled).toBe(false);
     await choose(0, jsonFile({ ...session, captureId: 'second-capture' }));

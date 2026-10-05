@@ -3,9 +3,9 @@ import type { DetectorTestSummary, KneeKickState } from '@plank-stork/protocol';
 import type { PoseFrame } from '../recorder/poseRecorderTypes';
 import type { PoseDelegate } from '../pose/createPoseLandmarker';
 import type { NeutralCalibration, PoseFeatureView } from '../pose/features/poseFeatureTypes';
-import type { KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
+import type { KickDetectorMode, KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
 import type { KneeKickBaseline } from '../pose/kick/kneeKickDetector';
-import type { KneeKickBaselineV3 } from '../pose/kick/kneeKickDetectorV3';
+import type { Y_KICK_V3_CONFIG, KneeKickBaselineV3 } from '../pose/kick/kneeKickDetectorV3';
 import type { diagnosticConfig } from '../pose/kick/kneeKickDiagnostics';
 
 export type KickSnapshot = ReturnType<KneeKickAnalysis['getReplaySnapshot']>;
@@ -25,10 +25,13 @@ export interface ReplayResult {
 export interface ReplayTrial {
   id: number; startMs: number; endMs: number | null; startOrder: number; endOrder: number | null;
   baseline: KneeKickBaseline; neutralBaseline: NeutralCalibration | null; result: ReplayResult;
-  /** Optional STEP 4H extension; legacy X baseline/result remain unchanged. */
+  /** V3 baseline; result is PRIMARY according to session.detectorMode. baseline remains X for compatibility. */
   baselineV3?: KneeKickBaselineV3 | null;
+  legacyXShadow?: { result: ReplayResult };
 }
 export interface ReplaySession {
+  detectorMode?: KickDetectorMode;
+  detectorConfigV3?: typeof Y_KICK_V3_CONFIG;
   version: 1; captureId: string; createdAt: string;
   video: { filename: string; mimeType: string; width: number; height: number; nominalFrameRate: number | null; videoBitsPerSecond: number; sourceVideoTimeAtStart: number };
   pose: { model: string; modelUrl: string; delegate: PoseDelegate; settings: Record<string, number | string | boolean> };
@@ -48,7 +51,7 @@ export interface CaptureCamera { stream: MediaStream; delegate: PoseDelegate; wi
 export interface ReplayOutput {
   replayMode: 'LANDMARK' | 'VIDEO'; sourceCaptureId: string; trialId: number; result: ReplayResult;
   detectorConfig: ReturnType<typeof diagnosticConfig>;
-  comparison: { eventsEqual: boolean; finalStateEqual: boolean; guidedSummaryEqual: boolean; timestampToleranceMs: number };
+  comparison: ReplayComparison;
   videoDiagnostics?: VideoReplayDiagnostics;
   videoPose?: { delegate: PoseDelegate; modelUrl: string };
 }
@@ -61,4 +64,12 @@ export function copyPoseFrame(frame: PoseFrame, startMs: number, order: number):
 export function asPoseFrame(frame: ReplayPoseFrame): PoseFrame {
   const copy = (points: ReplayPoint[]) => points.map(({ x, y, z, visibility }) => ({ x, y, z, ...(visibility === null ? {} : { visibility }) }));
   return { timestamp: frame.tMs, videoTime: frame.tMs / 1000, landmarks: copy(frame.landmarks), worldLandmarks: copy(frame.worldLandmarks) };
+}
+
+/** Version 1 captures before live V3 always mean X. Never infer mode from baselineV3 alone. */
+export function replayDetectorMode(session: ReplaySession): KickDetectorMode { return session.detectorMode ?? 'LEGACY_X'; }
+export interface ReplayComparison {
+  target?: 'LIVE_V3' | 'LIVE_X' | 'LIVE_X_SHADOW';
+  available?: boolean;
+  eventsEqual: boolean; finalStateEqual: boolean; guidedSummaryEqual: boolean; timestampToleranceMs: number;
 }

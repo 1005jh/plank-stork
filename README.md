@@ -1078,7 +1078,7 @@ Diagnostics에는 normalized Y/X, side별 run ms/적분, triggered side, trackin
 
 ### Rollout / Replay 사용
 
-**실제 V3 switch는 `ReplayRunner → Y V3 LANDMARK REPLAY → replayKneeKickV3 → KneeKickDetectorV3` 경로뿐입니다.** Live controller `KneeKickAnalysis`의 detector와 mobile wire snapshot, 기존 LANDMARK/VIDEO 버튼은 X reference입니다. 이번 STEP의 rollout 범위가 LANDMARK 검증까지이므로 live switch/end-to-end 검증은 다음 STEP에 남깁니다. Production calibration에서는 Y baseline을 함께 준비·저장하지만 V3 event를 live/Socket/game으로 전송하지 않습니다.
+**아래는 STEP 4H 당시 범위입니다. 현재 live 전환은 STEP 4I를 참고하세요.** 당시 실제 V3 switch는 `ReplayRunner → Y V3 LANDMARK REPLAY → replayKneeKickV3 → KneeKickDetectorV3` 경로뿐이었습니다. Live controller `KneeKickAnalysis`의 detector와 mobile wire snapshot, 기존 LANDMARK/VIDEO 버튼은 X reference입니다. 이번 STEP의 rollout 범위가 LANDMARK 검증까지이므로 live switch/end-to-end 검증은 다음 STEP에 남깁니다. Production calibration에서는 Y baseline을 함께 준비·저장하지만 V3 event를 live/Socket/game으로 전송하지 않습니다.
 
 1. `pnpm dev:controller-web` → `http://localhost:5173`에서 Replay Runner를 엽니다. 카메라/WebM은 필요하지 않습니다.
 2. 기존 CLEAN 또는 STRESS Capture JSON을 선택하고 Guided trial을 고릅니다.
@@ -1110,6 +1110,98 @@ Baseline 선택 순서는 다음과 같습니다.
 산출물은 Desktop `plank-stork-shadow-analysis/step-4h-v3-landmark-results.json`, `step-4h-summary.json`, `step-4h-findings.md`입니다. 원본 Capture를 repo에 넣지 않습니다.
 
 Live validation 전 남은 위험은 제한된 한 사용자/카메라 fixture, 원래 calibration 기록이 없는 CLEAN의 baseline 재구성, clear gate가 실제 mid-kick reacquisition을 의도적으로 MISS 처리하는 점, 아직 수행하지 않은 controller/mobile end-to-end입니다. Runtime은 한쪽 knee만으로 검출하지만 최초 bodyScale/Neutral baseline 준비에는 기존처럼 양 side의 충분한 usable samples가 필요합니다. 이 단계에서는 새 운동 테스트, live switch, MediaPipe 설정 변경, game 연결을 하지 않습니다.
+
+## STEP 4I — Y V3 Live Rollout
+
+현재 live 경로는 `PoseCamera → useKneeKick → KneeKickAnalysis`이며 기본 `detectorMode`는 **Y_V3**입니다. 한 inference의 `KneeMotionFeatures`를 한 번 추출해 같은 객체/시각으로 `detectorV3`와 `legacyDetector`를 독립 실행합니다. V3만 primary Guided events, laptop/mobile counts, Capture `trial.result`를 생성합니다. X는 `legacyShadow` 및 별도 reference Guided 집계에만 들어가며 V3와 다르다는 이유로 실패 처리하지 않습니다. 기존 X reference/replay는 명시적으로 `LEGACY_X` 모드를 사용합니다.
+
+두 baseline은 같은 bounded Neutral window에서 freeze하며 이후 움직임으로 갱신하지 않습니다. Primary READY는 유효한 V3 baseline이 있을 때만 표시합니다. Camera stop/unmount/재보정은 두 core를 초기화하고, Guided reset/new trial은 각자의 frozen baseline만 보존합니다. V3 상수와 MediaPipe 설정은 STEP 4H 그대로입니다. Guided는 상태/pose loss와 무관하게 **22초 고정**입니다.
+
+Laptop 패널은 Y 값, side별 tracking/enter/clear run을 보여주며 X는 details에 둡니다. Mobile의 기존 `calibration:state` compact snapshot은 V3 primary ready/state/event/counts 및 Guided stage/result를 받습니다. Extended V3 event evidence는 controller diagnostics에만 보관합니다. 게임 입력 연결은 없습니다.
+
+### Capture와 비교 기준
+
+Version **1**을 유지하고 optional `detectorMode`, `detectorConfigV3`, `trial.baselineV3`, `trial.legacyXShadow.result`를 저장합니다. 기존 `trial.baseline`/`liveResult.kickBaseline`/`detectorConfig`는 X reference 호환 필드입니다. `trial.result`와 `liveResult.events`는 session mode의 **primary 결과**입니다. Mode가 없는 기존 capture는 항상 **LEGACY_X**로 해석하며 V3 baseline 존재만으로 mode를 추측하지 않습니다.
+
+- 새 Y_V3: **LIVE V3 ↔ Y V3 LANDMARK**에서 event ID/방향/시각, Guided summary, 최종 state를 비교합니다. 시각 허용 오차는 origin subtraction의 부동소수점 오차만 허용하는 **0.000001ms**입니다.
+- 기존 LANDMARK/VIDEO 버튼은 **X reference**입니다. 새 capture에서는 LIVE X SHADOW와 비교하고, shadow가 없는 경우 비교 자료 없음으로 표시합니다. V3 primary와 X를 parity 대상으로 비교하지 않습니다.
+- **CALIBRATION REPLAY**는 실제 setup frames로 Neutral/X/V3 baseline을 다시 만들고 저장값과 비교합니다. 새 Y_V3에는 `STORED_V3` 또는 `CALIBRATION_REPLAY`만 허용하며 첫 Guided Neutral을 보정 대체 데이터로 쓰지 않습니다. 실제 calibration frames가 없으면 경고를 표시합니다.
+- Detector diagnostics JSON에는 같은 프레임의 primary Y/side tracking/enter/clear/state/event와 X/state/event/counts 및 agreement를 함께 넣습니다. Full landmarks는 Capture JSON에만 저장합니다. Diagnostics의 기존 X candidate 열은 V3에서 null/empty이며 상세 Y evidence는 `frames[].v3`에 있습니다.
+
+### 실측 전 확인 및 딱 한 번의 검증
+
+먼저 아래 typecheck/build/test가 전부 성공해야 합니다. Controller 탭은 하나만 열어 서로 다른 상태가 phone에 섞이지 않게 합니다. `pnpm dev`로 server/controller/mobile을 실행하고 laptop은 `http://localhost:5173`, phone은 같은 LAN의 `http://<LAPTOP_LAN_IP>:5174`를 엽니다. Phone에서 먼저 `http://<LAPTOP_LAN_IP>:3000/health`를 확인합니다. 필요한 경우 사설 네트워크에서 Node.js/해당 포트 접근만 허용합니다.
+
+1. **Smoke:** Start Camera → Neutral Calibration까지만 진행합니다. Laptop에 mode **Y_V3**, baseline **READY**, LEFT/RIGHT tracking **READY**를 확인합니다. Baseline이 안 잡히면 Guided를 시작하지 않습니다.
+2. **Capture가 Neutral보다 먼저:** smoke 성공 후 Start Replay Capture → Neutral 재보정 → V3 READY/양쪽 tracking READY → phone 연결/상태 확인 순서로 준비합니다.
+3. Phone에서 Guided Detector Test를 **한 번만** 시작합니다. Neutral → Twist Left → Neutral → Twist Right → Neutral → Knee Left → Neutral → Knee Right → Neutral, 22초 안내가 스스로 완료될 때까지 진행합니다.
+4. Stop Replay Capture → **JSON + WebM 둘 다** 저장합니다. Detector Diagnostics JSON도 저장하면 tracking/visibility 원인 분석에 도움이 됩니다. 목표는 양쪽 kick 각 1회, Neutral/Twist false 0, wrong/duplicate 0, final ARMED입니다. Phone의 stage/LEFT KICK/RIGHT KICK 표시와 타이머 중단 여부도 기록합니다.
+5. 같은 JSON으로 **Y V3 LANDMARK REPLAY**와 **CALIBRATION REPLAY**를 실행하고 Download Replay Results JSON을 저장합니다. LIVE V3 events/time·summary·final state 및 실제 calibration baseline parity를 확인합니다. VIDEO는 이번 acceptance의 필수가 아닙니다.
+6. 실패하면 반복 운동이나 threshold 변경부터 하지 않습니다. 첫 capture의 baseline/visibility/tracking gate/diagnostics를 분석합니다. 마지막 상태가 WAIT_RETURN이면 종료 시각과 triggered-side return 관측을 확인합니다. Live와 동일 landmark replay가 다르면 wiring 오류로 취급합니다.
+
+기존 실제 CLEAN/STRESS 파일도 STEP 4H 산출물과 대조해 V3 config/baseline/events/diagnostics/summary/final tracking이 그대로인 것을 확인했습니다. X LIVE↔LANDMARK parity도 두 파일 모두 MATCH입니다. 결과는 Desktop `plank-stork-shadow-analysis/step-4i-old-capture-regression.json`에 보관하며 원본은 수정하지 않았습니다.
+
+검증: `pnpm typecheck`, `pnpm build`, `pnpm --filter @plank-stork/controller-web test` 모두 통과했습니다. 기존 546개 테스트를 유지하고 live wiring/replay/UI 검증을 추가해 **48 files / 563 tests**입니다. Controller main chunk **653.95kB**의 기존 500kB 초과 경고는 남습니다.
+
+자동 합성 fixture는 실제 운동/phone LAN 검증을 대신하지 않습니다. 새 사용자의 실제 capture ID와 acceptance 결과는 1회 실측 및 post-live replay 후 따로 기록합니다.
+
+## STEP 4J — Multi-Signal Kick Evidence Validation
+
+저장된 capture의 **analysis-only** 비교입니다. Live `KneeKickDetectorV3`, Y threshold, primary switching, MediaPipe 설정은 STEP 4I 그대로입니다. 새 운동/촬영이나 서버 업로드 없이 JSON만 분석합니다.
+
+### 실행 방법과 판정 기준
+
+1. Controller의 **STEP 4J — Multi-Signal Kick Evidence Validation**에서 Replay JSON 세 개를 선택합니다. 카메라를 시작할 필요가 없습니다.
+2. 파일마다 role을 직접 지정합니다. `clean인가요.json` → `REFERENCE_OLD_CLEAN`, `3차검증2.json` → `STRESS`, capture ID `plank-stork-replay-2026-10-03T16-39-36-229Z` → `REFERENCE_LIVE`입니다. 파일명으로 role을 추측하지 않으며 동일 role에 추가 reference도 허용합니다.
+3. **Run Multi-Signal Analysis**는 먼저 새 LIVE의 event/time·summary·final state·Neutral/X/V3 baseline parity를 검사합니다. 불일치면 sweep을 중단합니다. Y_ONLY shadow도 실제 V3 replay와 이벤트 시각/방향·최종 state가 같은지 검사합니다.
+4. Stage별 flexion coverage/ankle coverage/Neutral angle/peak/threshold 위 연속 시간과 strategy별 L/R·false·cross-gap·wrong·duplicate·trigger source·final을 비교합니다. **Inspect**에는 이벤트 시각, Guided stage 판정, 채널별 loss/reacquisition/READY 시각이 있습니다.
+5. **Download Multi-Signal JSON**으로 inputs, liveReplayParity, perFixture, strategies, viableConfigs를 저장합니다. 자동 BEST는 없습니다. 역할 변경/파일 교체/Reset은 이전 결과를 폐기하고, Cancel/unmount는 진행 중 계산을 취소합니다.
+
+Flexion은 같은 side hip–knee–ankle의 **normalized image XY angle**입니다. 세 landmark 각각 visibility ≥0.5, 유한한 XY, 0이 아닌 limb 길이가 필요합니다. Evidence는 `max(0, neutralAngle - currentAngle)`이며 과신전을 abs로 뒤집지 않습니다. World/Z/반대 side/Mirror는 이 계산을 바꾸지 않습니다. Ankle이 없으면 flexion만 unavailable이며, Y는 기존 hip≥0.7/knee≥0.5 guard로 독립 동작합니다.
+
+Flexion Neutral은 Guided 이전 가장 최근 Calibration START → FROZEN의 마지막 1000ms usable-angle median으로 고정합니다. START가 없던 old CLEAN만 첫 Neutral을 compatibility reference로 사용하며 해당 stage 전체를 평가에서 제외합니다. 최신 calibration이 있는데 FROZEN이 없으면 동작 구간으로 대체하지 않습니다. Baseline은 이후 동작으로 바뀌지 않습니다.
+
+총 **491개** 조합을 비교합니다.
+
+- **Y_ONLY 1:** production reference의 ENTER 0.40 / dwell50ms, clear0.25 / 100ms.
+- **X_ONLY_CONTROL 20 + Y_OR_X_CONTROL 20:** per-limb abs(normalizedX), ENTER 0.28/0.30/0.34/0.40 × dwell33/50/67/80/100ms. Legacy event union이 아니며 X entry는 Y와 같은 hip/knee availability 및 Y reacquisition gate를 사용합니다. X-trigger return은 X<0.25 / 100ms입니다. 검증 control이며 production 제안이 아닙니다.
+- **Y_OR_FLEXION 450:** flex ENTER8/10/12/15/20° × dwell33/50/67/80/100ms × clear3/5/8° × clear dwell100/150/180ms × 두 return policy. Y는 항상 고정입니다.
+
+시간은 recorded tMs만 사용합니다. 각 채널은 missing/unusable 또는 dt≥400ms에서 run을 초기화합니다. ≥33ms loss 이후 Y는 Y clear, flexion은 자체 clear/dwell을 만족해야 READY입니다. 그 전 flexion 상태는 `FLEX_REACQUIRED_NOT_READY`이며 Y eligibility를 막지 않습니다. FIRST observed dwell을 사용하고 양 side가 같은 시각에 eligible이면 `max(0,evidence/enter-1)`의 시간 적분을 비교합니다. 한 side의 여러 채널은 그중 최대 적분값으로 비교하고 정확한 동률은 양쪽 WAIT_CLEAR입니다. 같은 side의 동시 Y/flexion은 `BOTH` 이벤트 하나만 생성합니다.
+
+Return은 event 이후 triggered side에서 새 clear clock을 시작합니다. `TRIGGER_CHANNEL_CLEAR`는 발화한 채널 모두를 요구하고, 발화 채널이 missing이면 복귀하지 않습니다. `ALL_AVAILABLE_CHANNELS_CLEAR`는 Y와 현재 관측되는 flexion 모두를 요구하며 missing flexion은 건너뛸 수 있지만 재추적 gate는 유지합니다. Y clear는 항상 0.25/100ms입니다. 따라서 Y가 이미 Neutral이어도 flexion-trigger 이후 굽힌 무릎을 유지하면 중복 이벤트가 생기지 않습니다.
+
+Ground truth는 `GUIDED_STAGE_CHANGE`만 사용합니다. 관측성은 strategy 채널 중 하나라도 usable인 frame 비율 ≥80%, usable gap<400ms로 정의합니다. 모든 reference의 observable L/R가 각각 정확히 1회이고 모든 false/wrong/duplicate/cross-gap/reacquisition false가 0이어야 합니다. STRESS의 unobservable kick miss는 제외하지만 observable kick miss와 observable false/wrong/duplicate/cross-gap/reacquisition false는 실패입니다. 세 role이 모두 없으면 `INSUFFICIENT_EVIDENCE`이며 viable을 선언하지 않습니다.
+
+### 실제 저장된 세 capture의 결과 (2026-10-05)
+
+**새 LIVE parity는 모두 MATCH**입니다. LEFT **39064.500ms** 1회, RIGHT 0회, false/wrong/duplicate 0, final ARMED로 LIVE와 같습니다. 두 calibration 중 **21517.000ms START → 22532.100ms FROZEN**을 선택했고 저장 Neutral/X/V3 baseline과 모두 일치했습니다. Flexion window는 `(21532.100, 22532.100]ms`의 양쪽 31 usable frames입니다. Old CLEAN은 첫 Neutral 60 frames를 compatibility 전용으로 제외했습니다.
+
+Guided 종료 **47922.100ms** 이후 RIGHT **50721.800ms** global event는 Guided 검출에 포함하지 않았습니다. `ReplayCapture`는 이제 열린 trial(`trial && trial.endMs === null`)에서만 global event에 trialId를 붙입니다. 종료 후 global event는 **trialId:null**이고 closed trial.result는 바뀌지 않습니다. 기존 잘못된 trialId가 있는 JSON도 계속 읽을 수 있으며 원본 파일을 수정하지 않습니다.
+
+| Strategy | Old Clean L/R | New Live L/R | STRESS observable false | Viable |
+| --- | --- | --- | --- | --- |
+| Y_ONLY | 1/1 | 1/0 | 0 | 0/1 |
+| X_ONLY_CONTROL | RIGHT 모두 miss, 일부 wrong/duplicate | RIGHT 검출 13/20 configs | 모든 config 1–2 | 0/20 |
+| Y_OR_X_CONTROL | RIGHT Y로 검출, 일부 wrong/duplicate | RIGHT 검출 13/20 configs | 모든 config 1–2 | 0/20 |
+| Y_OR_FLEXION의 viable configs | 1/1 | 1/1 | 0 | **144/450** |
+
+Y_ONLY는 세 fixture 모두 false/wrong/duplicate/cross-gap/reacquisition false 0, final ARMED이며 STRESS L/R는 UNOBSERVABLE miss입니다. X control은 LIVE를 보완할 수 있어도 STRESS Twist false를 피하지 못했습니다.
+
+**144/491 viableConfigs**는 정확히 다음 직교 조합입니다: flex ENTER **15° 또는 20°**, dwell **50/67/80/100ms**, clear **3/5/8°**, clear dwell **100/150/180ms**, 두 return policy 전부. 각 policy 72개입니다. ENTER8/10/12° 또는 dwell33ms에서는 false/wrong/duplicate가 남아 탈락했습니다. 이 범위는 세 저장 fixture에서의 관측 결과이며 production threshold 선택이 아닙니다.
+
+- New LIVE RIGHT: Y peak **0.281783**, X peak **0.509473**, flexion peak **42.103°**, ≥10° 최장 **232.400ms**, ≥15° **200ms**, ≥20° **166.700ms**입니다. 요청의 약41.8° 참고치와 약0.3° 차이가 있어 계산 window/median을 JSON에 명시했습니다. 이번 계산의 RIGHT Neutral angle은 **177.998936°**입니다.
+- Old CLEAN RIGHT: Y peak **0.458747**, X peak **0.156017**, flexion peak **14.763°**이며 ≥10°가 단일 frame뿐입니다. Viable config에서 RIGHT source는 항상 **Y**, new LIVE RIGHT는 항상 **FLEXION**입니다. New LIVE LEFT는 **Y 또는 BOTH**로 **39064.500ms**, RIGHT는 **44055.700–44122.400ms**에 검출됩니다.
+- STRESS TWIST_LEFT RIGHT: X peak **0.417017**, flexion peak **14.940624°**입니다. 15°와의 여유가 약0.059°뿐이므로 15° 통과를 일반화 근거로 삼을 수 없습니다.
+- 225쌍 return-policy 비교에서 이벤트 방향/시각/source 및 viability는 동일했습니다. 탈락 조합 중 **40쌍**은 final state가 달랐습니다. Viable 144개는 세 fixture 모두 final ARMED, false/wrong/duplicate/cross-gap/reacquisition false 0입니다. 별도 합성 테스트에서 굽힌 무릎 유지·missing trigger·BOTH clear·정책별 복귀 차이를 검증합니다.
+- Expected kick side의 ankle coverage는 old CLEAN/new LIVE L/R 모두 **100%**입니다. STRESS는 LEFT kick **20%**(flexion usable **16.7%**), RIGHT kick **0%**입니다. New LIVE RIGHT stage에서 반대 LEFT ankle **55.6%**/flexion **52.2%**여도 RIGHT를 막지 않습니다.
+- Viable configs의 flexion 재추적 gated episodes는 old CLEAN **21**, new LIVE **4**, STRESS **14**입니다. 그중 trial 종료/재손실까지 READY를 관측하지 못한 episode는 각각 **9–14 / 1 / 9–12**개이며 0ms 복귀로 간주하지 않습니다. 이들은 flexion 채널의 전체 loss 통계이며 ankle-only loss라는 뜻은 아닙니다. Reacquisition false와 cross-gap event는 모두 0입니다.
+
+동일 세 파일/설정을 두 번 실행해 전체 결과의 결정성을 확인했습니다. 전체 JSON은 Desktop `plank-stork-shadow-analysis/step-4j-multi-signal-results.json`, 최초 LIVE parity는 `step-4j-live-parity.json`에 저장했습니다. Raw capture/WebM은 repo에 넣지 않습니다.
+
+검증: `pnpm typecheck`, `pnpm build`, `pnpm --filter @plank-stork/controller-web test` 모두 성공했습니다. 기존 563개를 유지하고 45개를 추가해 **53 files / 608 tests**입니다. Production detector/기존 X·V3 replay·4F–4I 회귀에 더해 angle guard, 두 calibration 중 최신 선택, 기록 시각 기반 dwell/독립 loss/gate/복귀, parity 선검사, 명시적 role, JSON·UI 취소/정리, 종료 후 event attribution을 검증합니다. Controller main chunk **678.56kB**의 기존 500kB 초과 경고는 남습니다.
+
+이번 STEP 완료에 새 운동은 필요하지 않았습니다. Production 채택 전에는 독립된 추가 실측으로 경계값 여유, ankle 가림, 복귀 유지, 반대쪽 spike를 확인해야 합니다. 이번에는 새 운동을 수행하거나 production 후보를 자동 선택하지 않았습니다.
 
 ## 검증 및 빌드
 

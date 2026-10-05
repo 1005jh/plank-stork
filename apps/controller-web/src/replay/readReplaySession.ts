@@ -14,7 +14,7 @@ export function readReplaySession(json: string): ReplaySession {
   const timed = (value: { tMs: number; order: number }) => value && nonnegative(value.tMs) && nonnegative(value.order);
   const states = ['NOT_READY', 'ARMED', 'CANDIDATE', 'WAIT_CLEAR', 'WAIT_RETURN', 'TRIGGERED_LEFT', 'TRIGGERED_RIGHT'];
   try {
-    if (data.version !== 1 || typeof data.captureId !== 'string' || !data.captureId || !nonnegative(data.timing.durationMs) ||
+    if ((data.detectorMode !== undefined && !['Y_V3', 'LEGACY_X'].includes(data.detectorMode)) || data.version !== 1 || typeof data.captureId !== 'string' || !data.captureId || !nonnegative(data.timing.durationMs) ||
         !number(data.timing.captureStartPerformanceMs) || typeof data.video.filename !== 'string' ||
         !number(data.video.width) || !number(data.video.height) || !['GPU', 'CPU'].includes(data.pose.delegate) ||
         typeof data.pose.modelUrl !== 'string' || typeof data.pose.settings !== 'object' || !data.pose.settings ||
@@ -34,11 +34,16 @@ export function readReplaySession(json: string): ReplaySession {
     if (data.liveResult.kickBaselineV3 != null && !validKneeKickBaselineV3(data.liveResult.kickBaselineV3)) throw new Error('V3 baseline');
     for (const trial of data.liveResult.trials) {
       if (trial.baselineV3 != null && !validKneeKickBaselineV3(trial.baselineV3)) throw new Error('V3 baseline');
-      const summary = trial.result.guidedSummary;
+      const shadow = trial.legacyXShadow?.result;
+      if (shadow && (!nonnegative(shadow.poseFrameCount) || !nonnegative(shadow.poseUsableFrameCount) || !states.includes(shadow.finalState) ||
+        !Array.isArray(shadow.events) || !shadow.events.every((e) => number(e.id) && nonnegative(e.tMs) && ['KNEE_LEFT', 'KNEE_RIGHT'].includes(e.direction)))) throw new Error('X shadow result');
+      for (const result of [trial.result, ...(shadow ? [shadow] : [])]) {
+      const summary = result.guidedSummary;
       if (!summary) continue;
       for (const name of ['NEUTRAL', 'TWIST_LEFT', 'TWIST_RIGHT'] as const) if (!nonnegative(summary[name].falseKickCount)) throw new Error('summary');
       for (const name of ['KNEE_LEFT', 'KNEE_RIGHT'] as const) if (typeof summary[name].detected !== 'boolean' ||
         ![null, true, false].includes(summary[name].directionCorrect)) throw new Error('summary');
+      }
     }
   } catch { throw new Error('지원하는 STEP 4F version 1 Replay JSON이 아닙니다. 원본 Capture JSON을 선택하세요.'); }
   return data;

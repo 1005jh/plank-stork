@@ -3,7 +3,7 @@ import { KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
 import { diagnosticConfig } from '../pose/kick/kneeKickDiagnostics';
 import { usableKnees } from '../pose/kick/kneeKickDetector';
 import { extractKneeMotionFeatures } from '../pose/motion/kneeMotionFeatures';
-import { asPoseFrame, type ReplayOutput, type ReplayPoseFrame, type ReplaySession } from './replayTypes';
+import { asPoseFrame, replayDetectorMode, type ReplayComparison, type ReplayResult, type ReplayOutput, type ReplayPoseFrame, type ReplaySession, type ReplayTrial } from './replayTypes';
 
 // Only compensates floating-point subtraction of the capture origin, not clock drift.
 export const REPLAY_TIMESTAMP_TOLERANCE_MS = 0.000001;
@@ -47,21 +47,15 @@ export function replayLandmarks(session: ReplaySession, trialId: number, source 
   const snapshot = engine.getReplaySnapshot();
   const result = { poseFrameCount: frames.length, poseUsableFrameCount, events, finalState: snapshot.detector.state, guidedSummary: snapshot.guided.summary };
   return { replayMode: mode, sourceCaptureId: session.captureId, trialId, result, detectorConfig: diagnosticConfig(),
-    comparison: {
-      eventsEqual: result.events.length === trial.result.events.length && result.events.every((event, i) => {
-        const live = trial.result.events[i];
-        return event.id === live.id && event.direction === live.direction && Math.abs(event.tMs - live.tMs) <= REPLAY_TIMESTAMP_TOLERANCE_MS;
-      }),
-      finalStateEqual: result.finalState === trial.result.finalState,
-      guidedSummaryEqual: JSON.stringify(result.guidedSummary) === JSON.stringify(trial.result.guidedSummary),
-      timestampToleranceMs: REPLAY_TIMESTAMP_TOLERANCE_MS,
-    } };
+    comparison: compareReplayResults(result, replayDetectorMode(session) === 'Y_V3' ? trial.legacyXShadow?.result : trial.result,
+      replayDetectorMode(session) === 'Y_V3' ? 'LIVE_X_SHADOW' : 'LIVE_X') };
+
 }
 
 export function replayCalibration(session: ReplaySession, trialId: number) {
   const trial = session.liveResult.trials.find((trial) => trial.id === trialId);
   if (!trial) throw new Error('Guided Test를 선택하세요.');
-  const start = [...session.markers].reverse().find((marker) => marker.type === 'NEUTRAL_CALIBRATION_START' && marker.tMs <= trial.startMs);
+  const start = latestCalibrationStart(session, trial);
   if (!start) throw new Error('Capture를 먼저 시작한 뒤 Neutral calibration을 수행한 JSON이 필요합니다.');
   const neutral = new PoseFeatureAnalysis(), kick = new KneeKickAnalysis();
   neutral.startCalibration(start.tMs);
@@ -72,12 +66,33 @@ export function replayCalibration(session: ReplaySession, trialId: number) {
     kick.processFrame(frame, neutral.getView(frame.timestamp));
   }
   const baseline = neutral.getView(trial.startMs).baseline;
-  const kickBaseline = kick.getReplaySnapshot().detector.baseline;
+  const kickBaseline = kick.getReplaySnapshot().legacyShadow.detector.baseline;
+  const kickBaselineV3 = kick.getReplaySnapshot().baselineV3;
   const equal = (a: object | null, b: object | null) => a === null || b === null ? a === b
     : Object.entries(a).every(([key, value]) => {
       const other = (b as Record<string, unknown>)[key];
       return value === other || (typeof value === 'number' && typeof other === 'number' && Math.abs(value - other) <= 1e-9);
     });
-  return { sourceCaptureId: session.captureId, trialId, baseline, kickBaseline,
+  return { sourceCaptureId: session.captureId, trialId, calibrationStartMs: start.tMs, calibrationStartOrder: start.order, baseline, kickBaseline, kickBaselineV3,
+    kickBaselineV3Equal: trial.baselineV3 == null ? null : equal(kickBaselineV3, trial.baselineV3),
     neutralBaselineEqual: equal(baseline, trial.neutralBaseline), kickBaselineEqual: equal(kickBaseline, trial.baseline) };
+}
+
+/** Compare only like-for-like detectors; missing X shadow is not a primary V3 failure. */
+export function compareReplayResults(result: ReplayResult, live: ReplayResult | undefined, target: ReplayComparison['target']): ReplayComparison {
+  return { target, available: live !== undefined,
+    eventsEqual: !!live && result.events.length === live.events.length && result.events.every((event, i) => {
+      const recorded = live.events[i];
+      return event.id === recorded.id && event.direction === recorded.direction && Math.abs(event.tMs - recorded.tMs) <= REPLAY_TIMESTAMP_TOLERANCE_MS;
+    }),
+    finalStateEqual: !!live && result.finalState === live.finalState,
+    guidedSummaryEqual: !!live && JSON.stringify(result.guidedSummary) === JSON.stringify(live.guidedSummary),
+    timestampToleranceMs: REPLAY_TIMESTAMP_TOLERANCE_MS };
+}
+
+/** Select by recorded time/order, never file array order or the first calibration. */
+export function latestCalibrationStart(session: ReplaySession, trial: ReplayTrial) {
+  return session.markers.filter((m) => m.type === 'NEUTRAL_CALIBRATION_START' &&
+    (m.tMs < trial.startMs || m.tMs === trial.startMs && m.order < trial.startOrder))
+    .sort((a, b) => a.tMs - b.tMs || a.order - b.order).at(-1);
 }

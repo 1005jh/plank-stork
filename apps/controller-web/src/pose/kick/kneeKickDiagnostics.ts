@@ -1,3 +1,6 @@
+import { Y_KICK_ENTER, type Y_KICK_V3_CONFIG, type KneeKickDetectorV3, type KneeKickBaselineV3, type KneeKickEventV3 } from './kneeKickDetectorV3';
+import type { KneeKickDetector } from './kneeKickDetector';
+import type { KickDetectorMode } from './kneeKickAnalysis';
 import type { DetectorTestExpected, DetectorTestSummary, KneeKickDirection, KneeKickEvent, KneeKickState } from '@plank-stork/protocol';
 import { finite } from '../motion/kneeMotionFeatures';
 import { robustStats } from '../motion/kneeMotionAnalyzer';
@@ -8,6 +11,10 @@ import type { DetectorTestStage, DetectorStageTiming } from './guidedDetectorTes
 
 /** Controller-local derived numbers only. Never holds a PoseFrame or landmark arrays. */
 export interface KickDetectorDiagnosticFrame extends KickCandidateDiagnostics {
+  detectorMode?: KickDetectorMode;
+  v3?: ReturnType<KneeKickDetectorV3['getValuesForDiagnostics']> & { event: KneeKickEventV3 | null };
+  legacyShadow?: ReturnType<KneeKickDetector['getValuesForDiagnostics']> & { event: KneeKickEvent | null;
+    counts: { KNEE_LEFT: number; KNEE_RIGHT: number }; eventAgreement: boolean; directionAgreement: boolean | null };
   timestamp: number;
   stageIndex: number;
   expected: DetectorTestExpected;
@@ -60,6 +67,9 @@ export interface NeutralKickDiagnostics {
 }
 
 export interface KickDiagnosticMetadata {
+  detectorMode?: KickDetectorMode;
+  detectorConfigV3?: typeof Y_KICK_V3_CONFIG;
+  baselineV3?: KneeKickBaselineV3 | null;
   createdAt: string;
   startedAt: number;
   baseline: { detector: KneeKickBaseline | null; diagnostics: NeutralKickDiagnostics | null };
@@ -160,6 +170,7 @@ const peak = (values: readonly (number | null)[]) => {
 
 /** Observations only: no diagnosis, threshold selection, or feedback into the detector. */
 export function summarizeKickDiagnostics(frames: readonly KickDetectorDiagnosticFrame[], stages: readonly DetectorTestStage[], timings: readonly DetectorStageTiming[] = [], now = 0): KickStageDiagnostics[] {
+  const enter = frames[0]?.detectorMode === 'Y_V3' ? Y_KICK_ENTER : KICK_ENTER_DISPLACEMENT;
   const starts = new Set<number>(), outcomes = new Set<number>();
   const startFrames: KickDetectorDiagnosticFrame[] = [], outcomeFrames: KickDetectorDiagnosticFrame[] = [];
   for (const frame of frames) {
@@ -177,7 +188,7 @@ export function summarizeKickDiagnostics(frames: readonly KickDetectorDiagnostic
     const signedDominantAtMax = dominant.reduce<number | null>((best, value) => best === null || Math.abs(value) > Math.abs(best) ? value : best, null);
     const maxAbsDominantDisplacement = signedDominantAtMax === null ? null : Math.abs(signedDominantAtMax);
     const armed = rows.filter((row) => row.stateBefore === 'ARMED');
-    const aboveEnter = (row: KickDetectorDiagnosticFrame) => finite(row.dominantNormalizedDisplacement) && Math.abs(row.dominantNormalizedDisplacement) >= KICK_ENTER_DISPLACEMENT;
+    const aboveEnter = (row: KickDetectorDiagnosticFrame) => finite(row.dominantNormalizedDisplacement) && Math.abs(row.dominantNormalizedDisplacement) >= enter;
     const maxAbsDominantWhileArmed = peak(armed.map((row) => row.dominantNormalizedDisplacement));
     const leftVisibility = values('leftKneeVisibility'), rightVisibility = values('rightKneeVisibility'), hip = values('hipCenterX');
     const resolutions = outcomeFrames.filter((row) => row.stageIndex === stageIndex);
@@ -203,8 +214,8 @@ export function summarizeKickDiagnostics(frames: readonly KickDetectorDiagnostic
       maxAbsDominantDisplacement, signedDominantAtMax,
       maxAbsLeftDisplacement: peak(rows.map((row) => row.normalizedLeft)), maxAbsRightDisplacement: peak(rows.map((row) => row.normalizedRight)),
       framesAboveEnter: rows.filter(aboveEnter).length, armedFramesAboveEnter: armed.filter(aboveEnter).length, maxAbsDominantWhileArmed,
-      enterMargin: maxAbsDominantDisplacement === null ? null : maxAbsDominantDisplacement - KICK_ENTER_DISPLACEMENT,
-      armedEnterMargin: maxAbsDominantWhileArmed === null ? null : maxAbsDominantWhileArmed - KICK_ENTER_DISPLACEMENT,
+      enterMargin: maxAbsDominantDisplacement === null ? null : maxAbsDominantDisplacement - enter,
+      armedEnterMargin: maxAbsDominantWhileArmed === null ? null : maxAbsDominantWhileArmed - enter,
       peakAbsLeftVelocity: peak(rows.map((row) => row.normalizedLeftVelocity)), peakAbsRightVelocity: peak(rows.map((row) => row.normalizedRightVelocity)),
       medianLeftKneeVisibility: robustStats(leftVisibility).median, medianRightKneeVisibility: robustStats(rightVisibility).median,
       minLeftKneeVisibility: leftVisibility.length ? Math.min(...leftVisibility) : null, minRightKneeVisibility: rightVisibility.length ? Math.min(...rightVisibility) : null,

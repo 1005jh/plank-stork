@@ -1,5 +1,5 @@
 import { PoseFeatureAnalysis } from '../pose/features/poseFeatureAnalysis';
-import { KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
+import { KneeKickAnalysis, type KickDetectorMode } from '../pose/kick/kneeKickAnalysis';
 import { motionFrame } from '../pose/motion/testFixtures';
 import type { PoseFrame } from '../recorder/poseRecorderTypes';
 import { ReplayCapture } from './replayCapture';
@@ -27,8 +27,8 @@ export function captureCamera(): CaptureCamera {
 }
 export const ORIGIN = 100000.25;
 export const TRIAL_AT = 1200;
-export function liveHarness(captureEnabled = true) {
-  const capture = new ReplayCapture(), neutral = new PoseFeatureAnalysis(), kick = new KneeKickAnalysis();
+export function liveHarness(captureEnabled = true, detectorMode: KickDetectorMode = 'LEGACY_X') {
+  const capture = new ReplayCapture(), neutral = new PoseFeatureAnalysis(), kick = new KneeKickAnalysis(null, detectorMode);
   const context = captureCamera();
   if (captureEnabled) capture.start(context, true, ORIGIN, mockRecorder);
   neutral.startCalibration(ORIGIN + 100); capture.neutralStarted(ORIGIN + 100);
@@ -72,4 +72,19 @@ export async function fullTrial() {
     if (time % 160 === 20) live.clock(time + 8);
   }
   return { ...live, session: await live.finish() };
+}
+
+/** Live PRIMARY V3 fixture, including actual setup frames and a disagreeing X shadow. */
+export async function fullV3Trial(captureEnabled = true) {
+  const live = liveHarness(captureEnabled, 'Y_V3');
+  for (let t = 20; t <= 22020; t += 40) {
+    const f = motionFrame(ORIGIN + TRIAL_AT + t), scale = live.baseline.bodyScale;
+    if (t >= 2020 && t <= 2300) f.landmarks[25].x -= (t === 2020 ? .32 : .64) * scale;
+    if (t >= 12060 && t <= 12420) f.landmarks[25].y += .6 * scale;
+    if (t >= 17060 && t <= 17420) f.landmarks[26].y += .5 * scale;
+    if (t >= 6060 && t <= 6140) { f.landmarks = []; f.worldLandmarks = []; }
+    live.frame(f);
+    if (t % 160 === 20) live.clock(t + 8);
+  }
+  return { ...live, session: captureEnabled ? await live.finish() : null };
 }

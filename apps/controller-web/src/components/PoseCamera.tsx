@@ -1,3 +1,4 @@
+import { MultiSignalAnalysis } from './MultiSignalAnalysis';
 import { useReplayCapture } from '../replay/useReplayCapture';
 import { ReplayCapturePanel } from './ReplayCapturePanel';
 import { ReplayRunner } from './ReplayRunner';
@@ -206,6 +207,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
       <KneeMotionValidationPanel motion={motion} canStart={kneeMotionReady(status === 'RUNNING', metrics.detected, features.view)} onStart={startMotion} />
       <ReplayRunner />
       <KickFeatureDiscovery />
+      <MultiSignalAnalysis />
     </section>
   );
 }

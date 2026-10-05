@@ -6,8 +6,8 @@ import { KneeKickDetectorV3, Y_KICK_V3_CONFIG, usableKneesV3, validKneeKickBasel
 import { extractKneeMotionFeatures } from '../pose/motion/kneeMotionFeatures';
 import { discoveryStages, stageForTime } from '../discovery/discoveryStages';
 import { summarizeTemporalSide, type TemporalPoint } from '../discovery/temporalEvidence';
-import { orderedFrames, replayLandmarks } from './landmarkReplay';
-import { asPoseFrame, type ReplayResult, type ReplaySession, type ReplayTrial } from './replayTypes';
+import { orderedFrames, replayLandmarks, replayCalibration, compareReplayResults, latestCalibrationStart } from './landmarkReplay';
+import { asPoseFrame, replayDetectorMode, type ReplayResult, type ReplaySession, type ReplayTrial } from './replayTypes';
 
 export function resolveV3ReplayBaseline(session: ReplaySession, trial: ReplayTrial) {
   if (trial.baselineV3 != null) {
@@ -15,8 +15,7 @@ export function resolveV3ReplayBaseline(session: ReplaySession, trial: ReplayTri
     return { source: 'STORED_V3' as const, baseline: { ...trial.baselineV3 }, calibrationOnly: null,
       scaleSource: 'STORED_V3', warnings: [] as string[] };
   }
-  const start = [...session.markers].filter((m) => m.type === 'NEUTRAL_CALIBRATION_START' && m.tMs <= trial.startMs)
-    .sort((a, b) => a.tMs - b.tMs || a.order - b.order).at(-1);
+  const start = latestCalibrationStart(session, trial);
   if (start) {
     const neutral = new PoseFeatureAnalysis(), calibration = new KneeKickAnalysis();
     neutral.startCalibration(start.tMs);
@@ -29,8 +28,9 @@ export function resolveV3ReplayBaseline(session: ReplaySession, trial: ReplayTri
     const baseline = calibration.getReplaySnapshot().baselineV3;
     if (!baseline) throw new Error('기록된 Neutral calibration에서 V3 baseline의 usable samples가 부족합니다.');
     return { source: 'CALIBRATION_REPLAY' as const, baseline, calibrationOnly: null,
-      scaleSource: 'PRODUCTION_NEUTRAL_WINDOW', warnings: ['Legacy capture: V3 baseline reconstructed from recorded calibration frames; no stored V3 live result.'] };
+      scaleSource: 'PRODUCTION_NEUTRAL_WINDOW', warnings: replayDetectorMode(session) === 'Y_V3' ? [] : ['Legacy capture: V3 baseline reconstructed from recorded calibration frames; no stored V3 live result.'] };
   }
+  if (replayDetectorMode(session) === 'Y_V3') throw new Error('Y_V3 capture에는 저장된 V3 baseline 또는 실제 Neutral calibration frame이 필요합니다. 첫 Neutral stage를 대체 보정으로 사용하지 않습니다.');
   // Legacy captures sometimes started after calibration, so Y was never recorded in the baseline.
   // Explicit compatibility reconstruction only. These first Neutral frames are calibration data,
   // excluded from candidate evaluation; they are not independent false-event evidence.
@@ -44,7 +44,7 @@ export function resolveV3ReplayBaseline(session: ReplaySession, trial: ReplayTri
     scaleSource: 'RECORDED_LEGACY_X_BASELINE', warnings: ['Original Neutral calibration frames / stored V3 baseline absent. First Neutral is used only for Y calibration, not independent validation. This does not prove live calibration parity.'] };
 }
 
-/** LANDMARK-only candidate runner; original X/LANDMARK/VIDEO/calibration APIs remain untouched. */
+/** V3 primary parity runner. Old captures retain an explicitly labelled X reference. */
 export function replayKneeKickV3(session: ReplaySession, trialId: number) {
   const trial = session.liveResult.trials.find((t) => t.id === trialId);
   if (!trial || trial.endMs === null) throw new Error('완료 또는 중지된 Guided trial이 필요합니다.');
@@ -104,13 +104,22 @@ export function replayKneeKickV3(session: ReplaySession, trialId: number) {
     duplicates: stages.reduce((n, s) => n + s.duplicates, 0), crossGapConfirmations: events.filter((e) => e.crossGapConfirmation).length,
     reacquisitionFalseEvents: events.filter((e) => (e.falseEvent || e.wrongDirection) && e.eventSource === 'POST_REACQUISITION').length };
   const legacyX = replayLandmarks(session, trialId);
+  const isV3Live = replayDetectorMode(session) === 'Y_V3';
+  const comparison = isV3Live ? compareReplayResults(result, trial.result, 'LIVE_V3') : null;
+  // New fixtures should include actual setup frames. Lack of these is visible, never substituted.
+  let calibrationParity: ReturnType<typeof replayCalibration> | null = null;
+  let calibrationWarning: string | null = null;
+  if (isV3Live) {
+    try { calibrationParity = replayCalibration(session, trialId); }
+    catch (cause) { calibrationWarning = cause instanceof Error ? cause.message : String(cause); }
+  }
   return { version: 1, detector: 'Y_KICK_V3' as const, replayMode: 'LANDMARK' as const, sourceCaptureId: session.captureId, trialId,
-    config: Y_KICK_V3_CONFIG, baseline, calibrationOnlyFrameCount, result, events, diagnostics, stages, counts,
+    config: Y_KICK_V3_CONFIG, comparison, calibrationParity, baseline, calibrationOnlyFrameCount, result, events, diagnostics, stages, counts,
     finalDiagnostics: detector.getValuesForDiagnostics(), guided: snapshot,
     cleanAcceptance: counts.leftDetected === 1 && counts.rightDetected === 1 && counts.falseEvents === 0 && counts.wrongDirection === 0 && counts.duplicates === 0 &&
       result.finalState === 'ARMED' && stages.filter((s) => s.expected.startsWith('KNEE_')).every((s) => s.observable),
     stressAcceptance: counts.crossGapConfirmations === 0 && counts.reacquisitionFalseEvents === 0,
-    // Comparison is against X, not a claim that V3 should reproduce the old miss.
-    legacyX, warnings: [...baseline.warnings, ...stageDefinition.warnings] };
+    // X is a separate reference. Disagreement never changes V3 acceptance/parity.
+    legacyX, warnings: [...baseline.warnings, ...stageDefinition.warnings, ...(calibrationWarning ? [calibrationWarning] : [])] };
 }
 export type KneeKickV3Replay = ReturnType<typeof replayKneeKickV3>;

@@ -6,7 +6,7 @@ import { KneeKickAnalysis } from './kneeKickAnalysis';
 
 describe('detector Neutral baseline lifecycle', () => {
   function calibrate(missingLeft = false, degenerate = false) {
-    const neutral = new PoseFeatureAnalysis(), kick = new KneeKickAnalysis(); neutral.startCalibration(0);
+    const neutral = new PoseFeatureAnalysis(), kick = new KneeKickAnalysis(null, 'LEGACY_X'); neutral.startCalibration(0);
     const frame = (time: number) => {
       const result = motionFrame(time);
       if (missingLeft) result.landmarks[25].visibility = 0.1;
@@ -23,8 +23,8 @@ describe('detector Neutral baseline lifecycle', () => {
     const { kick, neutral } = calibrate();
     const view = kick.getView(1000);
     expect(view).toMatchObject({ baselineCounts: { left: 20, right: 20 }, baselineSealed: true, detector: { ready: true, state: 'ARMED' } });
-    expect(view.detector.baseline!.leftMedian).toBeCloseTo(-0.15);
-    expect(view.detector.baseline!.rightMedian).toBeCloseTo(0.15);
+    expect(view.legacyShadow.baseline!.leftMedian).toBeCloseTo(-0.15);
+    expect(view.legacyShadow.baseline!.rightMedian).toBeCloseTo(0.15);
     expect(view.detector.baseline!.bodyScale).toBeCloseTo(Math.hypot(0.05, 0.3));
     const moving = motionFrame(1050); moving.landmarks[26].x -= 0.15;
     kick.processFrame(moving, neutral.getView(1050));

@@ -9,7 +9,7 @@ import { KneeKickDetector, usableKnees } from './kneeKickDetector';
 import type { KickDiagnosticDataset } from './kneeKickDiagnostics';
 
 function calibrated() {
-  const neutral = new PoseFeatureAnalysis(), kick = new KneeKickAnalysis();
+  const neutral = new PoseFeatureAnalysis(), kick = new KneeKickAnalysis(null, 'LEGACY_X');
   neutral.startCalibration(0);
   for (let now = 50; now <= 1000; now += 50) {
     const frame = motionFrame(now);

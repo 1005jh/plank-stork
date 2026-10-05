@@ -207,6 +207,11 @@ export class KneeKickDetectorV3 {
       currentEvent: validNow && this.lastEvent && now - this.lastEvent.timestamp < KICK_EVENT_DISPLAY_MS ? this.lastEvent.direction : 'NONE',
       lastEvent: this.lastEvent ? { ...this.lastEvent } : null, counts: { ...this.counts }, baseline: this.baseline ? { ...this.baseline } : null, diagnostics };
   }
+  /** Passive capture snapshot. No clock read or state transitions. */
+  getReplaySnapshot() {
+    return { baseline: this.baseline ? { ...this.baseline } : null, state: this.state,
+      eventsLast: this.lastEvent ? { ...this.lastEvent } : null, counts: { ...this.counts } };
+  }
   getStateForDiagnostics() { return this.state; }
   restartTrial() { const baseline = this.baseline; this.setBaseline(baseline); }
   reset() {
