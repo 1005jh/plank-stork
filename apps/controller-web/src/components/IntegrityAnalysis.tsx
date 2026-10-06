@@ -6,6 +6,7 @@ import { integrityConfigs } from '../discovery/integrityGuard';
 import { HOLDOUT_ROLE, validateIntegrityHoldout, type HoldoutValidation } from '../discovery/holdoutValidation';
 import { readReplaySession } from '../replay/readReplaySession';
 import { useLocalDownload } from '../replay/useLocalDownload';
+import { TwistConfusionAnalysis } from './TwistConfusionAnalysis';
 
 const num = (v: number | null) => v === null ? '-' : v.toFixed(3);
 // Saved-file analysis has no live pose props. Camera metric ticks must not re-render
@@ -72,7 +73,7 @@ export const IntegrityAnalysis = memo(function IntegrityAnalysis() {
     const result = holdout ? { ...(report ?? evidence), step: '4K.2A', holdoutValidation: holdout } : report ?? evidence;
     download(new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' }), `plank-stork-step-${holdout ? '4k2a' : '4k1'}-${report || holdout ? 'results' : 'evidence'}.json`);
   };
-  return <section aria-labelledby="integrity-title">
+  return <><section aria-labelledby="integrity-title">
     <h3 id="integrity-title">STEP 4K.1 — Landmark Integrity Validation</h3>
     <p>Analysis only · 저장된 네 capture의 soft discontinuity를 비교합니다. 먼저 분포/trace를 확인한 뒤 고정 grid를 실행합니다. Y .40/50ms와 flexion 15°/67ms, clear5°/150ms는 고정입니다. 자동 BEST/production 적용 없음.</p>
     <label>Integrity Replay JSON <input ref={inputRef} type="file" accept=".json,application/json" multiple onChange={(e) => void load(Array.from(e.target.files ?? []))} /></label>
@@ -136,5 +137,5 @@ export const IntegrityAnalysis = memo(function IntegrityAnalysis() {
       }))}</tbody></table></div>
       {detail && <details open><summary>Guard episodes / recovery latency / events</summary><pre>{JSON.stringify(detail, null, 2)}</pre></details>}
     </>}
-  </section>;
+  </section><TwistConfusionAnalysis /></>;
 });

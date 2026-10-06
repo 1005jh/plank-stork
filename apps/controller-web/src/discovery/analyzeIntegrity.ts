@@ -2,7 +2,7 @@ import { stageForTime } from './discoveryStages';
 import { analyzeMultiFixture, type PreparedMultiFixture } from './analyzeMultiSignal';
 import { MULTI_DEFAULT } from './multiSignalShadow';
 import { integrityDistributions, INTEGRITY_FEATURE_SETTINGS, type IntegrityFixture, type IntegrityFrame } from './integrityFeatures';
-import { IntegrityShadow, FIXED_FLEXION_CONFIG, INTEGRITY_SWEEP, NO_INTEGRITY_GUARD, PRE_REGISTERED_INTEGRITY_CONFIG, integrityConfigId, integrityConfigs, type IntegrityConfig } from './integrityGuard';
+import { IntegrityShadow, FIXED_FLEXION_CONFIG, INTEGRITY_SWEEP, NO_INTEGRITY_GUARD, PRE_REGISTERED_INTEGRITY_CONFIG, integrityConfigId, integrityConfigs, type IntegrityConfig, type IntegrityEntryGuard } from './integrityGuard';
 
 export type IntegrityMode = 'Y_ONLY' | 'FIXED_Y_OR_FLEXION';
 export const INTEGRITY_SETTINGS = {
@@ -19,10 +19,12 @@ export const INTEGRITY_SETTINGS = {
     'A visibility-valid geometric discontinuity is evidence of suspected corruption, not proof of the physical pose. World values are diagnostics only.'],
 } as const;
 
-export function runIntegrityFixture(f: IntegrityFixture, config: IntegrityConfig, mode: IntegrityMode, collectTrace = false) {
-  if (f.input.role === 'REFERENCE_LIVE_3_HOLDOUT' && integrityConfigId(config) !== integrityConfigId(PRE_REGISTERED_INTEGRITY_CONFIG))
+export type IntegrityRunFixture = Omit<IntegrityFixture, 'input'> & { input: Omit<IntegrityFixture['input'], 'role'> & {
+  role: IntegrityFixture['input']['role'] | 'REFERENCE_LIVE_3_HOLDOUT_FAILURE' } };
+export function runIntegrityFixture(f: IntegrityRunFixture, config: IntegrityConfig, mode: IntegrityMode, collectTrace = false, entryGuard?: IntegrityEntryGuard) {
+  if (f.input.role === 'REFERENCE_LIVE_3_HOLDOUT' && (entryGuard || integrityConfigId(config) !== integrityConfigId(PRE_REGISTERED_INTEGRITY_CONFIG)))
     throw new Error('HOLDOUT_SWEEP_FORBIDDEN: only pre-registered velocity12 is allowed.');
-  const evidence = mode === 'Y_ONLY' ? MULTI_DEFAULT : FIXED_FLEXION_CONFIG, detector = new IntegrityShadow(config, evidence);
+  const evidence = mode === 'Y_ONLY' ? MULTI_DEFAULT : FIXED_FLEXION_CONFIG, detector = new IntegrityShadow(config, evidence, entryGuard);
   const emitted: NonNullable<ReturnType<IntegrityShadow['processFrame']>>[] = [];
   const channelTrace: { timestamp: number; LEFT: number; RIGHT: number }[] = [];
   const summary = analyzeMultiFixture({ ...f, input: { ...f.input, role: f.input.role.startsWith('REFERENCE_LIVE') ? 'REFERENCE_LIVE' : f.input.role } } as PreparedMultiFixture,
@@ -57,8 +59,8 @@ export function runIntegrityFixture(f: IntegrityFixture, config: IntegrityConfig
     softEpisodes: episodes, finalSoftTracking: detector.getSoftView(), channelTrace };
 }
 type FixtureResult = ReturnType<typeof runIntegrityFixture>;
-function rejectHoldout(fixtures: readonly { input: IntegrityFixture['input'] }[]) {
-  if (fixtures.some((f) => f.input.role === 'REFERENCE_LIVE_3_HOLDOUT'))
+function rejectHoldout(fixtures: readonly { input: { role: string } }[]) {
+  if (fixtures.some((f) => f.input.role === 'REFERENCE_LIVE_3_HOLDOUT' || f.input.role === 'REFERENCE_LIVE_3_HOLDOUT_FAILURE'))
     throw new Error('HOLDOUT_SWEEP_FORBIDDEN: use the pre-registered velocity12 validation only.');
 }
 export function createIntegrityEvidence(fixtures: readonly IntegrityFixture[]) {

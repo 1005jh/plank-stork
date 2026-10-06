@@ -25,7 +25,7 @@ const emptyCounts = (): CalibrationSampleCounts => Object.fromEntries(
 ) as CalibrationSampleCounts;
 
 /** Filter individual feature values, never a whole raw pose or dataset frame. */
-function validFeatures(features: PoseFeatures): PoseFeatures {
+export function validFeatures(features: PoseFeatures): PoseFeatures {
   const result = { ...features };
   const visible = (visibility: number | null, minimum: number) => visibility !== null && visibility >= minimum;
   const leftHip = visible(features.leftHipVisibility, HIP_CALIBRATION_VISIBILITY);

@@ -1230,6 +1230,19 @@ Integrity 패널의 명시적 role에 `REFERENCE_LIVE_3_HOLDOUT`이 추가되었
 
 HOLDOUT은 기존37개 설정 sweep과 `viableIntegrityConfigs`에서 제외됩니다. 12가 실패해도10/15로 fallback하지 않습니다. 기존 네 역할의 exploratory 비교는 그대로 실행할 수 있습니다. Holdout calibration은 Guided 직전 마지막 successful/frozen 쌍을 사용하며 저장 baseline과 재구성 불일치 시 평가를 중단합니다. 새 독립 holdout의 실제 성공 여부는 아직 검증하지 않았습니다.
 
+## STEP 4L — Twist / Knee-Kick Confusion Analysis
+
+기존 Integrity 패널 아래의 별도 STEP4L section은 저장된5개 fixture를 사용한 **POST_FAILURE_EXPLORATORY** 분석입니다. LIVE3가 새 rule의 독립 holdout인 것처럼 보고하지 않습니다. [정확한 trace·분포·전략 결과](docs/step-4l-findings.md)에 전체 해석을 기록했습니다.
+
+1. 기존 Replay JSON을 선택하고 OLD CLEAN/STRESS/LIVE1/LIVE2/`REFERENCE_LIVE_3_HOLDOUT_FAILURE` 역할을 직접 지정합니다. 기존 HOLDOUT 역할도 입력할 수 있지만 STEP4L report에서는 FAILURE로 표시합니다.
+2. **Analyze Twist/Kick Confusion**으로 LIVE parity와 frozen Neutral baseline을 확인한 뒤 hip/knee delta, normalized hip RMS, pelvis width/axis, bilateral Y/flexion 분포 및 candidate±750ms trace를 먼저 봅니다. Missing expected kick은 event가 아닌 stage peak로 표시합니다.
+3. **Compare Twist Entry Guards**는 hip depth6개, hip motion6개, bilateral Y4개, 작은 combined grid12개만 비교합니다. Entry의 현재 값만 사용하고 진행 중인 run은 취소하지 않습니다. Velocity12와 fixed flexion threshold는 바꾸지 않습니다.
+4. **Download Twist JSON / Download Twist Traces CSV**로 로컬 결과를 저장합니다. 기존4K.1/4K.2 결과와 분리되며 서버/Socket 업로드는 없습니다.
+
+실측 결과는 **28개 모두 REJECTED, EXPLORATORY_VIABLE 없음**입니다. Hip-motion .5는 LIVE3 false를 제거하지만 정상 kick5개를 잃고 LIVE2 false1개를 추가했습니다. Bilateral/combined는 정상 recall을 유지해도 LIVE3 false를 제거하지 못합니다. Production/classifier를 변경하거나 새 운동을 수행하지 않았으며, 현재 가설은 독립 운동 검증 전에 feature/temporal 설계를 다시 검토해야 합니다.
+
+검증: typecheck/build 성공, 기존656개+추가25개인 **62 files / 681 tests** 통과. 기존 네 fixture의37-config 전체4K.1 report 일치와 다섯 fixture28-config 결과의 결정성도 확인했습니다. Controller main chunk738.08kB의 기존500kB 초과 경고는 남습니다.
+
 ## 검증 및 빌드
 
 ```sh

@@ -30,6 +30,7 @@ export interface SoftLossEpisode {
   readyAt: number | null; timeToReadyMs: number | null;
 }
 const initial = () => ({ state: 'READY' as 'READY' | 'SUSPECT_NOT_READY', epoch: 0, clearAt: null as number | null, episode: null as number | null });
+export type IntegrityEntryGuard = (frame: IntegrityFrame, context: ShadowGuardContext, integrityBlocked: readonly Limb[]) => readonly Limb[];
 
 /** Analysis-only runner. Veto both channels of the suspect limb;
  * continue original frame/time/visibility processing and the independent other limb. */
@@ -39,7 +40,7 @@ export class IntegrityShadow {
   private previous: IntegrityFrame | null = null;
   private episodes: SoftLossEpisode[] = [];
   readonly config: Readonly<IntegrityConfig>;
-  constructor(config: IntegrityConfig, evidence: MultiConfig = MULTI_DEFAULT) {
+  constructor(config: IntegrityConfig, evidence: MultiConfig = MULTI_DEFAULT, private entryGuard?: IntegrityEntryGuard) {
     if (!['NONE', 'Y_VELOCITY', 'KNEE_2D_VELOCITY', 'SEGMENT_COLLAPSE', 'Y_VELOCITY_OR_COLLAPSE'].includes(config.guardType) ||
       config.velocity !== null && (!Number.isFinite(config.velocity) || config.velocity <= 0) ||
       config.minRatio !== null && (!Number.isFinite(config.minRatio) || config.minRatio <= 0) ||
@@ -88,7 +89,11 @@ export class IntegrityShadow {
   }
   processFrame(frame: IntegrityFrame) {
     if (!Number.isFinite(frame.timestamp) || this.previous && frame.timestamp <= this.previous.timestamp) return null;
-    const event = this.core.processFrame(frame, (context) => this.veto(frame, context));
+    const event = this.core.processFrame(frame, (context) => {
+      const integrityBlocked = this.veto(frame, context);
+      // Separate opt-in analysis hook; cannot alter integrity thresholds/recovery.
+      return [...integrityBlocked, ...(this.entryGuard?.(frame, context, integrityBlocked) ?? [])];
+    });
     this.previous = frame;
     return event ? { ...event, softEpoch: this.sides[event.side].epoch,
       softGapCrossConfirmation: this.episodes.some((e) => e.side === event.side && e.startedAt >= event.candidateStartedAt && e.startedAt <= event.timestamp) } : null;

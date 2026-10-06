@@ -52,7 +52,7 @@ export function replayLandmarks(session: ReplaySession, trialId: number, source 
 
 }
 
-export type CalibrationSelection = 'LATEST_START' | 'LATEST_FROZEN';
+export type CalibrationSelection = 'LATEST_START' | 'LATEST_FROZEN' | 'LATEST_FROZEN_OR_COMPATIBILITY';
 export function replayCalibration(session: ReplaySession, trialId: number, selection: CalibrationSelection = 'LATEST_START') {
   const trial = session.liveResult.trials.find((trial) => trial.id === trialId);
   if (!trial) throw new Error('Guided Test를 선택하세요.');
@@ -97,7 +97,10 @@ export function latestCalibrationStart(session: ReplaySession, trial: ReplayTria
     (m.tMs < trial.startMs || m.tMs === trial.startMs && m.order < trial.startOrder))
     .sort((a, b) => a.tMs - b.tMs || a.order - b.order);
   if (selection === 'LATEST_START') return markers.filter((m) => m.type === 'NEUTRAL_CALIBRATION_START').at(-1);
-  // Holdout-only opt-in. A FROZEN belongs to the immediately preceding START;
+  // Legacy compatibility is permitted only when there was no setup START before
+  // this particular trial. A failed pre-trial attempt must not use motion as Neutral.
+  if (selection === 'LATEST_FROZEN_OR_COMPATIBILITY' && !markers.some((m) => m.type === 'NEUTRAL_CALIBRATION_START')) return undefined;
+  // Analysis-only opt-in. A FROZEN belongs to the immediately preceding START;
   // a later unfinished attempt cannot replace the last successful calibration.
   let pending: typeof markers[number] | undefined, successful: typeof pending;
   for (const marker of markers) {
