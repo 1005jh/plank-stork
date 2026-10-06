@@ -1243,6 +1243,22 @@ HOLDOUT은 기존37개 설정 sweep과 `viableIntegrityConfigs`에서 제외됩�
 
 검증: typecheck/build 성공, 기존656개+추가25개인 **62 files / 681 tests** 통과. 기존 네 fixture의37-config 전체4K.1 report 일치와 다섯 fixture28-config 결과의 결정성도 확인했습니다. Controller main chunk738.08kB의 기존500kB 초과 경고는 남습니다.
 
+## STEP 4M — Body-local / Temporal Kick Feature Redesign
+
+기존 다섯 capture로 수행하는 **POST_FAILURE_EXPLORATORY** 분석입니다. [계산 정의·실측 수치·한계](docs/step-4m-findings.md)에 상세 결과를 기록했습니다. Production detector/live/ReplayCapture/MediaPipe와 기존 Y·integrity12·flexion 설정은 그대로입니다.
+
+1. Controller의 **STEP 4M**에서 기존 Replay JSON 다섯 개를 선택하고 `REFERENCE_OLD_CLEAN`, `STRESS`, `REFERENCE_LIVE_1`, `REFERENCE_LIVE_2`, `REFERENCE_LIVE_3`를 직접 지정합니다. Camera Start나 새 운동은 필요 없습니다.
+2. **Inspect Body-local Features**로 LIVE parity를 확인한 뒤 same-side hip, pelvis-local, torso-local, bilateral common/differential/residual, circular angle 및35개 anchor의 causal 통계를 먼저 확인합니다. OLD CLEAN만 first Neutral 호환을 허용하고 해당 stage는 제외합니다. Frozen bodyScale을 사용하며 missing은 null입니다.
+3. **Compare Candidate Families**는 8개 고유 family ×8 thresholds ×4 dwells의256개 조합을 비교합니다. 기존 Y에 veto를 붙이지 않는 별도 `FeatureKickShadow`입니다. Pelvis/torso residual은 각 differential과 동일한 수식이라 alias로 표시합니다. Residual 절댓값의 양측 동률을 임의 방향으로 바꾸지 않습니다.
+4. 직접 grid가 모두 REJECTED인 경우에만 **Compare Causal Temporal Candidates**로 고정된180개 extension을 실행합니다. Coherence와 efficiency는 따로 비교하며 100/150/200ms 실제 대기 비용과 관측 frame 지연을 기록합니다. 과거/확인 시각 이후 frame을 decision metric에 사용하지 않습니다.
+5. **Download Body-local JSON**으로 evidence 또는 전체 결과를 로컬 저장합니다. 기존4K/4L 상태와 분리하며 역할 변경/파일 교체/Cancel/Reset/unmount는 진행 중 분석을 폐기합니다. 서버/Socket 업로드, 자동 BEST 선택은 없습니다.
+
+실측 결과: **직접256개 + temporal180개 모두 REJECTED**, EXPLORATORY_VIABLE 및 통과 neighborhood 없음. LIVE3 twist false의 sameHipY/pelvis-normal/torso-long은 `.547/.431/1.373`이며, true LEFT의 pelvis-normal은 `.055`여서 좌표 변환만으로 개선되지 않습니다. LIVE2 corruption도 새 좌표와 높은 coherence/efficiency에서 재현됩니다. Residual magnitude는 양측이 같아 방향을 구분하지 못합니다. 현재 독립 live validation으로 넘길 후보는 없습니다.
+
+전체 결과는 Desktop `plank-stork-shadow-analysis/step-4m-results.json`, 요약은 `step-4m-summary.json`에 있습니다. 기존 STEP4K.1/4K.2/4L report를 저장본과 비교했고, 새436-config report를 두 번 계산해 결정성을 확인했습니다. 기존 세 LIVE의 parity는 모두 MATCH, 전체 새 조합의 hard cross-gap event는0입니다. 다섯 capture는 모두 discovery 자료이며 새 independent holdout이 아닙니다.
+
+검증: `pnpm typecheck`, `pnpm build`, `pnpm --filter @plank-stork/controller-web test` 모두 성공. 기존681개를 유지하고42개를 추가하여 **67 files / 723 tests**가 통과했습니다. Controller main chunk767.27kB의 기존500kB 초과 경고는 남습니다.
+
 ## 검증 및 빌드
 
 ```sh
