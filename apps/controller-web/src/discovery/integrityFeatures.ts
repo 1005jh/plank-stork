@@ -2,11 +2,11 @@ import { LIMBS, median, type Limb } from './discoveryFeatures';
 import { kneeAngle, neutralCalibrationWindow } from './multiSignalFeatures';
 import { prepareMultiInputs, assertYReferenceParity, type PreparedMultiFixture } from './analyzeMultiSignal';
 import { replayKneeKickV3 } from '../replay/kneeKickV3Replay';
-import { orderedFrames } from '../replay/landmarkReplay';
+import { orderedFrames, type CalibrationSelection } from '../replay/landmarkReplay';
 import { KICK_STALE_MS } from '../pose/kick/kneeKickDetectorV3';
 import type { ReplayPoint, ReplaySession, ReplayTrial } from '../replay/replayTypes';
 
-export const INTEGRITY_ROLES = ['UNASSIGNED', 'REFERENCE_OLD_CLEAN', 'STRESS', 'REFERENCE_LIVE_1', 'REFERENCE_LIVE_2_INDEPENDENT'] as const;
+export const INTEGRITY_ROLES = ['UNASSIGNED', 'REFERENCE_OLD_CLEAN', 'STRESS', 'REFERENCE_LIVE_1', 'REFERENCE_LIVE_2_INDEPENDENT', 'REFERENCE_LIVE_3_HOLDOUT'] as const;
 export type IntegrityRole = typeof INTEGRITY_ROLES[number];
 export interface IntegrityInput { filename: string; role: IntegrityRole; session: ReplaySession }
 export const INTEGRITY_FEATURE_SETTINGS = {
@@ -38,8 +38,8 @@ export function integrityGeometry(points: readonly ReplayPoint[], world: readonl
     worldHipKneeLength: length(wh, wk, true), worldKneeAnkleLength: length(wk, wa, true), worldKneeAngle: worldAngle(wh, wk, wa),
     visibility: { hip: visibility(23 + offset), otherHip: visibility(24 - offset), knee: visibility(25 + offset), ankle: visibility(27 + offset) } };
 }
-export function segmentBaseline(session: ReplaySession, trial: ReplayTrial) {
-  const { frames, ...window } = neutralCalibrationWindow(session, trial);
+export function segmentBaseline(session: ReplaySession, trial: ReplayTrial, selection: CalibrationSelection = 'LATEST_START') {
+  const { frames, ...window } = neutralCalibrationWindow(session, trial, selection);
   const side = (limb: Limb) => {
     const raw = frames.map((f) => integrityGeometry(f.landmarks, f.worldLandmarks, limb));
     const summary = (key: 'hipKneeLength' | 'kneeAnkleLength') => {
@@ -65,7 +65,8 @@ export interface IntegrityMeasurement extends Geometry {
 export type IntegrityFrame = BaseFrame & { measurements: Record<Limb, IntegrityMeasurement> };
 function prepareOne(input: IntegrityInput, multi: PreparedMultiFixture) {
   const trial = input.session.liveResult.trials.find((t) => t.id === multi.input.trialId)!;
-  const baseline = segmentBaseline(input.session, trial), production = replayKneeKickV3(input.session, trial.id);
+  const selection = input.role === 'REFERENCE_LIVE_3_HOLDOUT' ? 'LATEST_FROZEN' : 'LATEST_START';
+  const baseline = segmentBaseline(input.session, trial, selection), production = replayKneeKickV3(input.session, trial.id, selection);
   const rawByTime = new Map(orderedFrames(input.session.poseFrames).map((f) => [f.tMs, f]));
   const diagByTime = new Map(production.diagnostics.map((d) => [d.timestamp, d]));
   let previous: IntegrityFrame | null = null;
@@ -96,7 +97,7 @@ function prepareOne(input: IntegrityInput, multi: PreparedMultiFixture) {
 }
 export type IntegrityFixture = ReturnType<typeof prepareOne>;
 export function prepareIntegrityInputs(inputs: readonly IntegrityInput[]): IntegrityFixture[] {
-  const multi = prepareMultiInputs(inputs.map((i) => ({ ...i, role: i.role.startsWith('REFERENCE_LIVE') ? 'REFERENCE_LIVE' : i.role as 'UNASSIGNED' | 'REFERENCE_OLD_CLEAN' | 'STRESS' })));
+  const multi = prepareMultiInputs(inputs.map((i) => ({ ...i, calibrationSelection: i.role === 'REFERENCE_LIVE_3_HOLDOUT' ? 'LATEST_FROZEN' : 'LATEST_START', role: i.role.startsWith('REFERENCE_LIVE') ? 'REFERENCE_LIVE' : i.role as 'UNASSIGNED' | 'REFERENCE_OLD_CLEAN' | 'STRESS' })));
   assertYReferenceParity(multi);
   return multi.map((m) => prepareOne(inputs.find((i) => i.session.captureId === m.input.captureId)!, m));
 }

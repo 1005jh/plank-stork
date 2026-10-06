@@ -52,10 +52,11 @@ export function replayLandmarks(session: ReplaySession, trialId: number, source 
 
 }
 
-export function replayCalibration(session: ReplaySession, trialId: number) {
+export type CalibrationSelection = 'LATEST_START' | 'LATEST_FROZEN';
+export function replayCalibration(session: ReplaySession, trialId: number, selection: CalibrationSelection = 'LATEST_START') {
   const trial = session.liveResult.trials.find((trial) => trial.id === trialId);
   if (!trial) throw new Error('Guided Test를 선택하세요.');
-  const start = latestCalibrationStart(session, trial);
+  const start = latestCalibrationStart(session, trial, selection);
   if (!start) throw new Error('Capture를 먼저 시작한 뒤 Neutral calibration을 수행한 JSON이 필요합니다.');
   const neutral = new PoseFeatureAnalysis(), kick = new KneeKickAnalysis();
   neutral.startCalibration(start.tMs);
@@ -91,8 +92,18 @@ export function compareReplayResults(result: ReplayResult, live: ReplayResult | 
 }
 
 /** Select by recorded time/order, never file array order or the first calibration. */
-export function latestCalibrationStart(session: ReplaySession, trial: ReplayTrial) {
-  return session.markers.filter((m) => m.type === 'NEUTRAL_CALIBRATION_START' &&
+export function latestCalibrationStart(session: ReplaySession, trial: ReplayTrial, selection: CalibrationSelection = 'LATEST_START') {
+  const markers = session.markers.filter((m) =>
     (m.tMs < trial.startMs || m.tMs === trial.startMs && m.order < trial.startOrder))
-    .sort((a, b) => a.tMs - b.tMs || a.order - b.order).at(-1);
+    .sort((a, b) => a.tMs - b.tMs || a.order - b.order);
+  if (selection === 'LATEST_START') return markers.filter((m) => m.type === 'NEUTRAL_CALIBRATION_START').at(-1);
+  // Holdout-only opt-in. A FROZEN belongs to the immediately preceding START;
+  // a later unfinished attempt cannot replace the last successful calibration.
+  let pending: typeof markers[number] | undefined, successful: typeof pending;
+  for (const marker of markers) {
+    if (marker.type === 'NEUTRAL_CALIBRATION_START') pending = marker;
+    if (marker.type === 'NEUTRAL_FROZEN' && pending) { successful = pending; pending = undefined; }
+  }
+  if (!successful) throw new Error('HOLDOUT requires a successful/frozen Neutral calibration before Guided.');
+  return successful;
 }

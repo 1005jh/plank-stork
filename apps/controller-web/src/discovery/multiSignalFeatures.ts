@@ -1,6 +1,6 @@
 import { median, type Limb } from './discoveryFeatures';
 import { discoveryStages } from './discoveryStages';
-import { latestCalibrationStart, orderedFrames } from '../replay/landmarkReplay';
+import { latestCalibrationStart, orderedFrames, type CalibrationSelection } from '../replay/landmarkReplay';
 import { CALIBRATION_WINDOW_MS } from '../pose/features/poseFeatureAnalysis';
 import type { ReplayPoint, ReplayPoseFrame, ReplaySession, ReplayTrial } from '../replay/replayTypes';
 
@@ -25,8 +25,8 @@ export function kneeAngle(points: readonly ReplayPoint[], side: Limb): number | 
 export function flexionIncrease(neutral: number | null, current: number | null): number | null {
   return neutral === null || current === null ? null : Math.max(0, neutral - current);
 }
-export function neutralCalibrationWindow(session: ReplaySession, trial: ReplayTrial) {
-  const start = latestCalibrationStart(session, trial), frames = orderedFrames(session.poseFrames);
+export function neutralCalibrationWindow(session: ReplaySession, trial: ReplayTrial, selection: CalibrationSelection = 'LATEST_START') {
+  const start = latestCalibrationStart(session, trial, selection), frames = orderedFrames(session.poseFrames);
   let selected: ReplayPoseFrame[], startMs: number, endMs: number;
   let source: 'LATEST_CALIBRATION_WINDOW' | 'FIRST_NEUTRAL_COMPATIBILITY';
   if (start) {
@@ -48,8 +48,8 @@ export function neutralCalibrationWindow(session: ReplaySession, trial: ReplayTr
   return { source, calibrationStartMs: start?.tMs ?? null, startMs, endMs, frameCount: selected.length, frames: selected,
     excludedStageIndex: source === 'FIRST_NEUTRAL_COMPATIBILITY' ? 0 : null };
 }
-export function flexionBaseline(session: ReplaySession, trial: ReplayTrial) {
-  const { frames, ...window } = neutralCalibrationWindow(session, trial);
+export function flexionBaseline(session: ReplaySession, trial: ReplayTrial, selection: CalibrationSelection = 'LATEST_START') {
+  const { frames, ...window } = neutralCalibrationWindow(session, trial, selection);
   const values = (side: Limb) => frames.map((f) => kneeAngle(f.landmarks, side)).filter((n): n is number => n !== null);
   const left = values('LEFT'), right = values('RIGHT');
   return { ...window, LEFT: { neutralAngle: median(left), usableFrames: left.length }, RIGHT: { neutralAngle: median(right), usableFrames: right.length } };

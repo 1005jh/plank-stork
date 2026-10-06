@@ -29,6 +29,64 @@ beforeEach(async () => { vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); contai
 afterEach(async () => { if (root) await act(async () => root!.unmount()); container.remove(); vi.useRealTimers(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe('local integrity feature/guard UI', () => {
+  it('allows an explicit HOLDOUT role, disables its sweep and exports only the pre-registered acceptance', async () => {
+    const json = JSON.stringify((await fullV3Trial()).session);
+    await select([file('REFERENCE_LIVE_3_HOLDOUT.json', async () => json)]);
+    const selector = container.querySelector('select')!;
+    expect(selector.value).toBe('UNASSIGNED');
+    expect([...selector.options].map((o) => o.value)).toContain('REFERENCE_LIVE_3_HOLDOUT');
+    await assign(0, 'REFERENCE_LIVE_3_HOLDOUT');
+    expect(button('Validate HOLDOUT · velocity12').disabled).toBe(true);
+    await act(async () => button('Inspect Integrity Features').click()); await settle();
+    expect(button('Run Integrity Guard Comparison').disabled).toBe(true);
+    expect(button('Download Integrity Traces CSV').disabled).toBe(true);
+    expect(button('Validate HOLDOUT · velocity12').disabled).toBe(false);
+    await act(async () => button('Validate HOLDOUT · velocity12').click()); await settle();
+    expect(container.textContent).toContain('Y guard safety: FAIL');
+    expect(container.textContent).toContain('Expected-limb kick guard activations:');
+    await act(async () => button('Download Integrity JSON').click()); const result = JSON.parse(await readBlob());
+    expect(result).not.toHaveProperty('strategies'); expect(result.references).toEqual([]);
+    expect(result.holdoutValidation).toMatchObject({ role: 'REFERENCE_LIVE_3_HOLDOUT', preRegisteredConfig: { velocity: 12 },
+      acceptance: { yGuardSafetyPass: false, fullCandidatePass: false } });
+    expect(result.holdoutValidation.perFixture[0].liveReplayParity.matched).toBe(true);
+    await assign(0, 'UNASSIGNED'); expect(button('Download Integrity JSON').disabled).toBe(true);
+    expect(button('Validate HOLDOUT · velocity12').disabled).toBe(true);
+  });
+  it('keeps mixed-input HOLDOUT out of all37 exploratory results and preserves its separate report', async () => {
+    const { session } = await fullV3Trial();
+    await select([file('old.json', async () => JSON.stringify(session)), file('holdout.json', async () => JSON.stringify({ ...session, captureId: 'holdout' }))]);
+    await assign(0, 'REFERENCE_LIVE_1'); await assign(1, 'REFERENCE_LIVE_3_HOLDOUT');
+    await act(async () => button('Inspect Integrity Features').click()); await settle();
+    await act(async () => button('Validate HOLDOUT · velocity12').click()); await settle();
+    await act(async () => button('Run Integrity Guard Comparison').click()); await settle();
+    await act(async () => button('Download Integrity JSON').click()); const result = JSON.parse(await readBlob());
+    expect(result.inputs.map((i: { role: string }) => i.role)).toEqual(['REFERENCE_LIVE_1']);
+    expect(result.strategies).toHaveLength(37);
+    for (const s of result.strategies) for (const mode of [s.yOnly, s.fixedFlexionDiagnostic]) {
+      expect(mode.perFixture).toHaveLength(1); expect(mode.perFixture[0].input.role).toBe('REFERENCE_LIVE_1');
+    }
+    expect(result.holdoutValidation.perFixture).toHaveLength(1);
+  }, 15000);
+  it('blocks HOLDOUT on parity mismatch without exporting an acceptance', async () => {
+    const { session } = await fullV3Trial(); session!.liveResult.trials[0].result.events[0].tMs++;
+    await select([file('bad-holdout.json', async () => JSON.stringify(session))]); await assign(0, 'REFERENCE_LIVE_3_HOLDOUT');
+    await act(async () => button('Inspect Integrity Features').click()); await settle();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('LIVE_V3_PARITY_MISMATCH');
+    expect(button('Validate HOLDOUT · velocity12').disabled).toBe(true);
+    expect(button('Download Integrity JSON').disabled).toBe(true);
+    expect(container.textContent).not.toContain('Y guard safety:');
+  });
+  it('cancels a pending HOLDOUT evaluation on cancel/reset/unmount', async () => {
+    const json = JSON.stringify((await fullV3Trial()).session);
+    for (const action of ['Cancel Integrity Analysis', 'Reset Integrity Analysis', 'unmount']) {
+      await select([file('holdout.json', async () => json)]); await assign(0, 'REFERENCE_LIVE_3_HOLDOUT');
+      await act(async () => button('Inspect Integrity Features').click()); await settle();
+      vi.useFakeTimers(); await act(async () => button('Validate HOLDOUT · velocity12').click());
+      await act(async () => { if (action === 'unmount') { root!.unmount(); root = null; } else button(action).click(); });
+      await act(async () => vi.runAllTimersAsync()); vi.useRealTimers();
+      expect(container.textContent).not.toContain('Y guard safety:'); expect(download).not.toHaveBeenCalled();
+    }
+  });
   it('requires explicit roles, presents distributions before the bounded sweep, and exports trace CSV/JSON locally', async () => {
     const { session } = await fullV3Trial(), fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
     await select(['clean.json', 'stress.json', 'live1.json', 'independent.json'].map((name, i) => file(name, async () => JSON.stringify({ ...session, captureId: `capture-${i}` }))));

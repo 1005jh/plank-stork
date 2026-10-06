@@ -3,6 +3,7 @@ import { INTEGRITY_ROLES, prepareIntegrityInputs, type IntegrityInput, type Inte
 import { createIntegrityEvidence, analyzeIntegrityConfig, createIntegrityReport, integrityTracesCsv,
   type IntegrityEvidence, type IntegrityReport, type IntegrityConfigResult } from '../discovery/analyzeIntegrity';
 import { integrityConfigs } from '../discovery/integrityGuard';
+import { HOLDOUT_ROLE, validateIntegrityHoldout, type HoldoutValidation } from '../discovery/holdoutValidation';
 import { readReplaySession } from '../replay/readReplaySession';
 import { useLocalDownload } from '../replay/useLocalDownload';
 
@@ -13,10 +14,11 @@ export const IntegrityAnalysis = memo(function IntegrityAnalysis() {
   const loaded = useRef<IntegrityInput[]>([]), prepared = useRef<IntegrityFixture[]>([]), generation = useRef(0), inputRef = useRef<HTMLInputElement>(null);
   const [inputs, setInputs] = useState<{ filename: string; captureId: string; role: IntegrityRole }[]>([]);
   const [evidence, setEvidence] = useState<IntegrityEvidence | null>(null), [report, setReport] = useState<IntegrityReport | null>(null);
+  const [holdoutReady, setHoldoutReady] = useState(false), [holdout, setHoldout] = useState<HoldoutValidation | null>(null);
   const [progress, setProgress] = useState<string | null>(null), [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null), { download, clear } = useLocalDownload();
   useEffect(() => () => { generation.current++; loaded.current = []; prepared.current = []; }, []);
-  function invalidate() { generation.current++; clear(); prepared.current = []; setEvidence(null); setReport(null); setError(null); setProgress(null); setSelected(null); }
+  function invalidate() { generation.current++; clear(); prepared.current = []; setEvidence(null); setReport(null); setHoldout(null); setHoldoutReady(false); setError(null); setProgress(null); setSelected(null); }
   async function load(files: File[]) {
     invalidate(); loaded.current = []; setInputs([]); const job = generation.current; setProgress('Reading integrity captures…');
     try {
@@ -31,13 +33,13 @@ export const IntegrityAnalysis = memo(function IntegrityAnalysis() {
     invalidate(); const job = generation.current; setProgress('Verifying LIVE parity and measuring integrity distributions…');
     try {
       await new Promise<void>((r) => window.setTimeout(r, 0)); if (job !== generation.current) return;
-      const fixtures = prepareIntegrityInputs(loaded.current), result = createIntegrityEvidence(fixtures);
-      if (job === generation.current) { prepared.current = fixtures; setEvidence(result); }
+      const fixtures = prepareIntegrityInputs(loaded.current), result = createIntegrityEvidence(fixtures.filter((f) => f.input.role !== HOLDOUT_ROLE));
+      if (job === generation.current) { prepared.current = fixtures; setEvidence(result); setHoldoutReady(fixtures.some((f) => f.input.role === HOLDOUT_ROLE)); }
     } catch (cause) { if (job === generation.current) setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { if (job === generation.current) setProgress(null); }
   }
   async function run() {
-    if (!evidence) return;
+    if (!evidence?.inputs.length) return;
     generation.current++; clear(); setReport(null); setSelected(null); setError(null);
     const job = generation.current; setProgress('Running fixed integrity grid…');
     try {
@@ -47,15 +49,28 @@ export const IntegrityAnalysis = memo(function IntegrityAnalysis() {
           await new Promise<void>((r) => window.setTimeout(r, 0)); if (job !== generation.current) return;
           setProgress(`${i} / ${configs.length} integrity configs × Y / fixed flexion`);
         }
-        results.push(analyzeIntegrityConfig(prepared.current, evidence, configs[i]));
+        results.push(analyzeIntegrityConfig(prepared.current.filter((f) => f.input.role !== HOLDOUT_ROLE), evidence, configs[i]));
       }
       if (job === generation.current) setReport(createIntegrityReport(evidence, results));
     } catch (cause) { if (job === generation.current) setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { if (job === generation.current) setProgress(null); }
   }
+  async function runHoldout() {
+    if (!holdoutReady) return;
+    generation.current++; clear(); setHoldout(null); setError(null);
+    const job = generation.current; setProgress('Validating pre-registered HOLDOUT · velocity12 only…');
+    try {
+      await new Promise<void>((r) => window.setTimeout(r, 0)); if (job !== generation.current) return;
+      const result = validateIntegrityHoldout(prepared.current.filter((f) => f.input.role === HOLDOUT_ROLE));
+      if (job === generation.current) setHoldout(result);
+    } catch (cause) { if (job === generation.current) setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { if (job === generation.current) setProgress(null); }
+  }
   const detail = report?.strategies.find((r) => r.id === selected);
   const exportJson = () => {
-    if (evidence) download(new Blob([JSON.stringify(report ?? evidence, null, 2)], { type: 'application/json' }), `plank-stork-step-4k1-${report ? 'results' : 'evidence'}.json`);
+    if (!evidence) return;
+    const result = holdout ? { ...(report ?? evidence), step: '4K.2A', holdoutValidation: holdout } : report ?? evidence;
+    download(new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' }), `plank-stork-step-${holdout ? '4k2a' : '4k1'}-${report || holdout ? 'results' : 'evidence'}.json`);
   };
   return <section aria-labelledby="integrity-title">
     <h3 id="integrity-title">STEP 4K.1 — Landmark Integrity Validation</h3>
@@ -68,13 +83,24 @@ export const IntegrityAnalysis = memo(function IntegrityAnalysis() {
         setInputs((prev) => prev.map((r, j) => j === i ? { ...r, role } : r));
       }}>{INTEGRITY_ROLES.map((role) => <option key={role}>{role}</option>)}</select></label></p>)}
     <p>Role은 직접 선택합니다. 모든 reference와 STRESS role이 있어야 전체 viable 판정이 가능합니다. 파일명으로 역할을 추정하지 않습니다.</p>
+    <p>STEP 4K.2A HOLDOUT은 별도 평가합니다. 사전 고정 Y velocity12만 사용하며 sweep/viableIntegrityConfigs에 포함하지 않습니다.</p>
     <button disabled={!inputs.length || inputs.some((i) => i.role === 'UNASSIGNED') || progress !== null} onClick={() => void inspect()}>Inspect Integrity Features</button>{' '}
-    <button disabled={!evidence || progress !== null} onClick={() => void run()}>Run Integrity Guard Comparison</button>{' '}
+    <button disabled={!evidence?.inputs.length || progress !== null} onClick={() => void run()}>Run Integrity Guard Comparison</button>{' '}
+    <button disabled={!holdoutReady || progress !== null} onClick={() => void runHoldout()}>Validate HOLDOUT · velocity12</button>{' '}
     <button disabled={progress === null} onClick={invalidate}>Cancel Integrity Analysis</button>{' '}
     <button onClick={() => { invalidate(); loaded.current = []; setInputs([]); if (inputRef.current) inputRef.current.value = ''; }}>Reset Integrity Analysis</button>{' '}
-    <button disabled={!evidence || progress !== null} onClick={exportJson}>Download Integrity JSON</button>{' '}
-    <button disabled={!evidence || progress !== null} onClick={() => { if (evidence) download(new Blob([integrityTracesCsv(evidence)], { type: 'text/csv;charset=utf-8' }), 'plank-stork-step-4k1-traces.csv'); }}>Download Integrity Traces CSV</button>
+    <button disabled={(!evidence?.inputs.length && !holdout) || progress !== null} onClick={exportJson}>Download Integrity JSON</button>{' '}
+    <button disabled={!evidence?.inputs.length || progress !== null} onClick={() => { if (evidence) download(new Blob([integrityTracesCsv(evidence)], { type: 'text/csv;charset=utf-8' }), 'plank-stork-step-4k1-traces.csv'); }}>Download Integrity Traces CSV</button>
     {progress && <p role="status">{progress}</p>}{error && <p role="alert">{error}</p>}
+    {holdout && <div>
+      <h4>STEP 4K.2A · Pre-registered HOLDOUT · velocity12</h4>
+      <p>Y guard safety: {holdout.acceptance.yGuardSafetyPass ? 'PASS' : 'FAIL'} · Fixed flexion full candidate: {holdout.acceptance.fullCandidatePass ? 'PASS' : 'FAIL'}</p>
+      {holdout.perFixture.map((f) => <details key={`${f.input.captureId}/${f.input.trialId}`}>
+        <summary>{f.input.filename} / trial {f.input.trialId} · LIVE parity MATCH · Y safety {f.acceptance.yGuardSafetyPass ? 'PASS' : 'FAIL'} · Full candidate {f.acceptance.fullCandidatePass ? 'PASS' : 'FAIL'}</summary>
+        <p>Expected-limb kick guard activations: {f.acceptance.expectedLimbKickActivations} · 0 초과이면 자동 PASS하지 않습니다.</p>
+        <pre>{JSON.stringify(f, null, 2)}</pre>
+      </details>)}
+    </div>}
     {evidence && <>
       <details><summary>Integrity LIVE parity / frozen baseline</summary><pre>{JSON.stringify(evidence.liveReplayParity, null, 2)}</pre></details>
       <p>속도는 인접한 recorded tMs의 차이로 계산합니다. Missing / dt≥400ms를 가로질러 누적하지 않습니다.</p>

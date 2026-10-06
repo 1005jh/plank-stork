@@ -3,11 +3,11 @@ import { discoveryStages, stageForTime, type DiscoveryStage } from './discoveryS
 import { flexionBaseline, flexionIncrease, kneeAngle, FLEXION_VISIBILITY, type Channel, type MultiFrame, type MultiRole } from './multiSignalFeatures';
 import { activeChannels, multiConfigId, multiConfigs, MultiSignalShadow, MULTI_DEFAULT, MULTI_SWEEP, type MultiConfig, type MultiEvent } from './multiSignalShadow';
 import { replayKneeKickV3 } from '../replay/kneeKickV3Replay';
-import { orderedFrames } from '../replay/landmarkReplay';
+import { orderedFrames, type CalibrationSelection } from '../replay/landmarkReplay';
 import { replayDetectorMode, type ReplaySession } from '../replay/replayTypes';
 import { KICK_STALE_MS, Y_KICK_V3_CONFIG } from '../pose/kick/kneeKickDetectorV3';
 
-export interface MultiInput { filename: string; role: MultiRole; session: ReplaySession }
+export interface MultiInput { filename: string; role: MultiRole; session: ReplaySession; calibrationSelection?: CalibrationSelection }
 type SeriesFrame = MultiFrame & { stageIndex: number | null; calibrationOnly: boolean; ankleVisible: Record<Limb, boolean> };
 export const MULTI_SETTINGS = {
   analysisOnly: true, y: Y_KICK_V3_CONFIG, sweep: MULTI_SWEEP, flexionVisibility: FLEXION_VISIBILITY,
@@ -65,7 +65,7 @@ function prepareOne(input: MultiInput, trialId: number, production: ReturnType<t
   const { session, filename, role } = input, trial = session.liveResult.trials.find((t) => t.id === trialId)!;
   const stages = discoveryStages(session, trial);
   if (stages.source !== 'GUIDED_STAGE_CHANGE') throw new Error(`${filename}: STEP 4J는 GUIDED_STAGE_CHANGE marker가 필요합니다.`);
-  const baseline = flexionBaseline(session, trial), yByTime = new Map(production.diagnostics.map((d) => [d.timestamp, d]));
+  const baseline = flexionBaseline(session, trial, input.calibrationSelection), yByTime = new Map(production.diagnostics.map((d) => [d.timestamp, d]));
   const frames: SeriesFrame[] = orderedFrames(session.poseFrames).flatMap((f) => {
     const y = yByTime.get(f.tMs); if (!y) return [];
     const stage = stageForTime(stages.stages, f.tMs);
@@ -100,7 +100,7 @@ export function prepareMultiInputs(inputs: readonly MultiInput[]): PreparedMulti
   const checked = inputs.flatMap((input) => input.session.liveResult.trials.map((trial) => {
     const key = `${input.session.captureId}/${trial.id}`;
     if (seen.has(key)) throw new Error('동일 capture/trial을 중복 입력할 수 없습니다.'); seen.add(key);
-    const production = replayKneeKickV3(input.session, trial.id), parity = liveParity(input.session, trial.id, production);
+    const production = replayKneeKickV3(input.session, trial.id, input.calibrationSelection), parity = liveParity(input.session, trial.id, production);
     if (parity.required && !parity.matched) throw new Error(`LIVE_V3_PARITY_MISMATCH ${input.filename}: ${JSON.stringify(parity)}`);
     return { input, trialId: trial.id, production };
   }));

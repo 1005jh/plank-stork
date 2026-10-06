@@ -1222,6 +1222,14 @@ Velocity veto는 **candidate entry 현재/직전 usable frame**에서만 검사�
 
 검증: `pnpm typecheck`, `pnpm build`, `pnpm --filter @plank-stork/controller-web test` 모두 성공했습니다. 기존608개를 유지하고30개를 추가해 **57 files / 638 tests**가 통과했습니다. 새 분석 패널은 카메라 metrics tick으로 큰 결과 표를 다시 렌더링하지 않도록 memo 처리했습니다. Controller main chunk **706.03kB**의 기존500kB 초과 경고는 남습니다.
 
+## STEP 4K.2A — Independent Holdout 사전 등록
+
+새 holdout 자료를 보기 전에 `Y_VELOCITY / 12 / minRatio:null`을 고정했습니다. [사전 등록 기준](docs/step-4k2a-preregistration.md)에 acceptance, calibration, report 구조를 기록했습니다. 이번 단계는 새 운동/촬영을 수행하지 않으며 production detector/live/MediaPipe는 변경하지 않습니다.
+
+Integrity 패널의 명시적 role에 `REFERENCE_LIVE_3_HOLDOUT`이 추가되었습니다. **Inspect Integrity Features**의 LIVE↔replay parity 선검사 후 **Validate HOLDOUT · velocity12**로 평가합니다. Y guard safety와 fixed flexion full candidate PASS/FAIL을 별도로 표시하고 **Download Integrity JSON**의 `holdoutValidation.perFixture`에 근거를 저장합니다. Expected-limb kick 중 guard activation이 있으면 full candidate를 자동 PASS하지 않습니다. 여러 trial의 결과를 모두 보존합니다.
+
+HOLDOUT은 기존37개 설정 sweep과 `viableIntegrityConfigs`에서 제외됩니다. 12가 실패해도10/15로 fallback하지 않습니다. 기존 네 역할의 exploratory 비교는 그대로 실행할 수 있습니다. Holdout calibration은 Guided 직전 마지막 successful/frozen 쌍을 사용하며 저장 baseline과 재구성 불일치 시 평가를 중단합니다. 새 독립 holdout의 실제 성공 여부는 아직 검증하지 않았습니다.
+
 ## 검증 및 빌드
 
 ```sh

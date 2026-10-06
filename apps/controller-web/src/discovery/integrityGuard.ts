@@ -5,6 +5,10 @@ import { KICK_STALE_MS, Y_KICK_CLEAR_THRESHOLD, Y_KICK_CLEAR_DWELL_MS } from '..
 
 export type IntegrityGuardType = 'NONE' | 'Y_VELOCITY' | 'KNEE_2D_VELOCITY' | 'SEGMENT_COLLAPSE' | 'Y_VELOCITY_OR_COLLAPSE';
 export interface IntegrityConfig { guardType: IntegrityGuardType; velocity: number | null; minRatio: number | null }
+// STEP 4K.2A: selected from 4K.1 before inspecting independent holdout data.
+export const PRE_REGISTERED_INTEGRITY_CONFIG = Object.freeze({
+  guardType: 'Y_VELOCITY', velocity: 12, minRatio: null,
+} as const satisfies IntegrityConfig);
 export const NO_INTEGRITY_GUARD: IntegrityConfig = { guardType: 'NONE', velocity: null, minRatio: null };
 export const FIXED_FLEXION_CONFIG: MultiConfig = { ...MULTI_DEFAULT, strategy: 'Y_OR_FLEXION', flexEnter: 15,
   flexDwellMs: 67, flexClear: 5, flexClearDwellMs: 150, returnPolicy: 'TRIGGER_CHANNEL_CLEAR' };

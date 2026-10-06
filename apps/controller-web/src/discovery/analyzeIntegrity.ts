@@ -2,7 +2,7 @@ import { stageForTime } from './discoveryStages';
 import { analyzeMultiFixture, type PreparedMultiFixture } from './analyzeMultiSignal';
 import { MULTI_DEFAULT } from './multiSignalShadow';
 import { integrityDistributions, INTEGRITY_FEATURE_SETTINGS, type IntegrityFixture, type IntegrityFrame } from './integrityFeatures';
-import { IntegrityShadow, FIXED_FLEXION_CONFIG, INTEGRITY_SWEEP, NO_INTEGRITY_GUARD, integrityConfigId, integrityConfigs, type IntegrityConfig } from './integrityGuard';
+import { IntegrityShadow, FIXED_FLEXION_CONFIG, INTEGRITY_SWEEP, NO_INTEGRITY_GUARD, PRE_REGISTERED_INTEGRITY_CONFIG, integrityConfigId, integrityConfigs, type IntegrityConfig } from './integrityGuard';
 
 export type IntegrityMode = 'Y_ONLY' | 'FIXED_Y_OR_FLEXION';
 export const INTEGRITY_SETTINGS = {
@@ -20,6 +20,8 @@ export const INTEGRITY_SETTINGS = {
 } as const;
 
 export function runIntegrityFixture(f: IntegrityFixture, config: IntegrityConfig, mode: IntegrityMode, collectTrace = false) {
+  if (f.input.role === 'REFERENCE_LIVE_3_HOLDOUT' && integrityConfigId(config) !== integrityConfigId(PRE_REGISTERED_INTEGRITY_CONFIG))
+    throw new Error('HOLDOUT_SWEEP_FORBIDDEN: only pre-registered velocity12 is allowed.');
   const evidence = mode === 'Y_ONLY' ? MULTI_DEFAULT : FIXED_FLEXION_CONFIG, detector = new IntegrityShadow(config, evidence);
   const emitted: NonNullable<ReturnType<IntegrityShadow['processFrame']>>[] = [];
   const channelTrace: { timestamp: number; LEFT: number; RIGHT: number }[] = [];
@@ -55,7 +57,12 @@ export function runIntegrityFixture(f: IntegrityFixture, config: IntegrityConfig
     softEpisodes: episodes, finalSoftTracking: detector.getSoftView(), channelTrace };
 }
 type FixtureResult = ReturnType<typeof runIntegrityFixture>;
+function rejectHoldout(fixtures: readonly { input: IntegrityFixture['input'] }[]) {
+  if (fixtures.some((f) => f.input.role === 'REFERENCE_LIVE_3_HOLDOUT'))
+    throw new Error('HOLDOUT_SWEEP_FORBIDDEN: use the pre-registered velocity12 validation only.');
+}
 export function createIntegrityEvidence(fixtures: readonly IntegrityFixture[]) {
+  rejectHoldout(fixtures);
   const references = fixtures.map((f) => ({ input: f.input,
     yOnly: runIntegrityFixture(f, NO_INTEGRITY_GUARD, 'Y_ONLY', true), fixedFlexion: runIntegrityFixture(f, NO_INTEGRITY_GUARD, 'FIXED_Y_OR_FLEXION', true) }));
   for (const [index, f] of fixtures.entries()) {
@@ -125,6 +132,7 @@ function accepted(result: FixtureResult, regression: ReturnType<typeof compare>)
   return safety && result.referenceAccepted;
 }
 export function analyzeIntegrityConfig(fixtures: readonly IntegrityFixture[], evidence: IntegrityEvidence, config: IntegrityConfig) {
+  rejectHoldout(fixtures); rejectHoldout(evidence.references);
   const completeRoles = ['REFERENCE_OLD_CLEAN', 'STRESS', 'REFERENCE_LIVE_1', 'REFERENCE_LIVE_2_INDEPENDENT'].every((role) => fixtures.some((f) => f.input.role === role)) &&
     fixtures.every((f) => f.input.role !== 'UNASSIGNED');
   const run = (mode: IntegrityMode) => {
@@ -140,6 +148,8 @@ export function analyzeIntegrityConfig(fixtures: readonly IntegrityFixture[], ev
 }
 export type IntegrityConfigResult = ReturnType<typeof analyzeIntegrityConfig>;
 export function createIntegrityReport(evidence: IntegrityEvidence, strategies: IntegrityConfigResult[], createdAt = new Date().toISOString()) {
+  rejectHoldout(evidence.references);
+  for (const s of strategies) { rejectHoldout(s.yOnly.perFixture); rejectHoldout(s.fixedFlexionDiagnostic.perFixture); }
   return { ...evidence, createdAt, strategies,
     viableIntegrityConfigs: strategies.filter((s) => s.yOnly.assessment === 'VIABLE').map((s) => ({ id: s.id, ...s.config })),
     viableFixedFlexionDiagnosticConfigs: strategies.filter((s) => s.fixedFlexionDiagnostic.assessment === 'VIABLE').map((s) => ({ id: s.id, ...s.config })) };

@@ -6,16 +6,16 @@ import { KneeKickDetectorV3, Y_KICK_V3_CONFIG, usableKneesV3, validKneeKickBasel
 import { extractKneeMotionFeatures } from '../pose/motion/kneeMotionFeatures';
 import { discoveryStages, stageForTime } from '../discovery/discoveryStages';
 import { summarizeTemporalSide, type TemporalPoint } from '../discovery/temporalEvidence';
-import { orderedFrames, replayLandmarks, replayCalibration, compareReplayResults, latestCalibrationStart } from './landmarkReplay';
+import { orderedFrames, replayLandmarks, replayCalibration, compareReplayResults, latestCalibrationStart, type CalibrationSelection } from './landmarkReplay';
 import { asPoseFrame, replayDetectorMode, type ReplayResult, type ReplaySession, type ReplayTrial } from './replayTypes';
 
-export function resolveV3ReplayBaseline(session: ReplaySession, trial: ReplayTrial) {
+export function resolveV3ReplayBaseline(session: ReplaySession, trial: ReplayTrial, selection: CalibrationSelection = 'LATEST_START') {
   if (trial.baselineV3 != null) {
     if (!validKneeKickBaselineV3(trial.baselineV3)) throw new Error('유효하지 않은 저장된 V3 baseline입니다.');
     return { source: 'STORED_V3' as const, baseline: { ...trial.baselineV3 }, calibrationOnly: null,
       scaleSource: 'STORED_V3', warnings: [] as string[] };
   }
-  const start = latestCalibrationStart(session, trial);
+  const start = latestCalibrationStart(session, trial, selection);
   if (start) {
     const neutral = new PoseFeatureAnalysis(), calibration = new KneeKickAnalysis();
     neutral.startCalibration(start.tMs);
@@ -45,10 +45,10 @@ export function resolveV3ReplayBaseline(session: ReplaySession, trial: ReplayTri
 }
 
 /** V3 primary parity runner. Old captures retain an explicitly labelled X reference. */
-export function replayKneeKickV3(session: ReplaySession, trialId: number) {
+export function replayKneeKickV3(session: ReplaySession, trialId: number, selection: CalibrationSelection = 'LATEST_START') {
   const trial = session.liveResult.trials.find((t) => t.id === trialId);
   if (!trial || trial.endMs === null) throw new Error('완료 또는 중지된 Guided trial이 필요합니다.');
-  const baseline = resolveV3ReplayBaseline(session, trial), detector = new KneeKickDetectorV3(), guided = new GuidedDetectorTest();
+  const baseline = resolveV3ReplayBaseline(session, trial, selection), detector = new KneeKickDetectorV3(), guided = new GuidedDetectorTest();
   detector.setBaseline(baseline.baseline); guided.start(trial.startMs, true);
   const stageDefinition = discoveryStages(session, trial);
   const beforeEnd = (t: number, order: number) => t < trial.endMs! || t === trial.endMs && order <= (trial.endOrder ?? Infinity);
@@ -110,7 +110,7 @@ export function replayKneeKickV3(session: ReplaySession, trialId: number) {
   let calibrationParity: ReturnType<typeof replayCalibration> | null = null;
   let calibrationWarning: string | null = null;
   if (isV3Live) {
-    try { calibrationParity = replayCalibration(session, trialId); }
+    try { calibrationParity = replayCalibration(session, trialId, selection); }
     catch (cause) { calibrationWarning = cause instanceof Error ? cause.message : String(cause); }
   }
   return { version: 1, detector: 'Y_KICK_V3' as const, replayMode: 'LANDMARK' as const, sourceCaptureId: session.captureId, trialId,
