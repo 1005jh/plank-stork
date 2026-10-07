@@ -8,6 +8,7 @@ import { readReplaySession } from '../replay/readReplaySession';
 import { useLocalDownload } from '../replay/useLocalDownload';
 import { TwistConfusionAnalysis } from './TwistConfusionAnalysis';
 import { BodyLocalAnalysis } from './BodyLocalAnalysis';
+import { GeometryReliabilityAnalysis } from './GeometryReliabilityAnalysis';
 
 const num = (v: number | null) => v === null ? '-' : v.toFixed(3);
 // Saved-file analysis has no live pose props. Camera metric ticks must not re-render
@@ -138,5 +139,5 @@ export const IntegrityAnalysis = memo(function IntegrityAnalysis() {
       }))}</tbody></table></div>
       {detail && <details open><summary>Guard episodes / recovery latency / events</summary><pre>{JSON.stringify(detail, null, 2)}</pre></details>}
     </>}
-  </section><TwistConfusionAnalysis /><BodyLocalAnalysis /></>;
+  </section><TwistConfusionAnalysis /><BodyLocalAnalysis /><GeometryReliabilityAnalysis /></>;
 });

@@ -10,7 +10,7 @@ export interface BodyInput { filename: string; role: BodyRole; session: ReplaySe
 export const BODY_STATUS = 'POST_FAILURE_EXPLORATORY' as const;
 export const BODY_STALE_MS = 400;
 // Numerical degeneracy only, not a learned motion threshold.
-const AXIS_EPSILON = 1e-8;
+export const AXIS_EPSILON = 1e-8;
 type XY = { x: number; y: number };
 const sub = (a: XY, b: XY): XY => ({ x: a.x - b.x, y: a.y - b.y });
 const center = (a: XY, b: XY): XY => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });

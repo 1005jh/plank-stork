@@ -1259,6 +1259,24 @@ HOLDOUT은 기존37개 설정 sweep과 `viableIntegrityConfigs`에서 제외됩�
 
 검증: `pnpm typecheck`, `pnpm build`, `pnpm --filter @plank-stork/controller-web test` 모두 성공. 기존681개를 유지하고42개를 추가하여 **67 files / 723 tests**가 통과했습니다. Controller main chunk767.27kB의 기존500kB 초과 경고는 남습니다.
 
+## STEP 4N — Pose Geometry Reliability / Projection Failure Analysis
+
+기존 다섯 capture의 **DIAGNOSTIC / POST_FAILURE_EXPLORATORY** 분석입니다. [실측 geometry·gate 결과·해석](docs/step-4n-findings.md)에 수치와 한계를 기록했습니다. World 좌표를 truth나 production signal로 간주하지 않습니다. Production/live/ReplayCapture/MediaPipe 및 기존 threshold는 변경하지 않았습니다.
+
+1. 별도 **STEP 4N — Pose Geometry Reliability**에서 기존 JSON을 선택하고 OLD CLEAN/STRESS/LIVE1/LIVE2/LIVE3 역할을 직접 지정합니다. Camera Start나 새 운동은 필요 없습니다.
+2. **Inspect Geometry Reliability**로 LIVE parity와 frozen baseline을 확인하고 image/world segment 길이·ratio·연속성, projection disagreement, 축 conditioning, 3D local coordinates, overlap/depth, assignment continuity의 분포와 trace를 먼저 봅니다.
+3. **Compare Reliability Markers**로 지정된 coarse cut20개와 descriptive profile4개를 비교합니다. Missing은 null이며 visibility 기준을 통과해도 geometry 품질이 보장된다고 가정하지 않습니다. Positive swapAdvantage도 identity swap 확정이 아닙니다.
+4. **Optional Quality-Gate Thought Experiment**는 고정 Y+flexion+integrity12의 entry에만24개 gate를 적용합니다. 기존 run을 취소하지 않으며 world detector나 kick threshold sweep은 없습니다.
+5. **Download Geometry JSON / Download Geometry Traces CSV**로 로컬 저장합니다. 기존4K/4L/4M 상태와 분리하고 역할 변경/파일 교체/Cancel/Reset/unmount 시 이전 작업을 폐기합니다.
+
+실측은 **CASE B(추정 geometry 자체 instability 가능성)**에 가장 가깝습니다. LIVE2 false의 world HK ratio는.179/.441, LIVE3 Y false는.449이며 정상 kick에서도 world 길이 변동이 있습니다. World motion 분포는 true/false가 겹칩니다. Projection 압축도 섞여 있어 원인을 단정하지 않습니다.
+
+Gate24개 중 **`IDENTITY_CONTINUITY/0` 1개만 EXPLORATORY_QUALITY_VIABLE**입니다. Image 또는 world의 swapAdvantage가 양수인 current entry를 막아 LIVE3 false를 제거하고 정상8개 이벤트의 entry/confirmation 시각을 모두 유지했습니다. .10/.20/.30은 탈락했으므로 넓은 분리 기준이나 production-ready 결과가 아닙니다. LIVE2 false 제거는 기존 integrity12의 효과입니다.
+
+Desktop `plank-stork-shadow-analysis/step-4n-results.json`, `step-4n-summary.json`, `step-4n-traces.csv`에54개 anchor/2,370개 trace row와 전체 결과가 있습니다. 기존 stored4K.1/4K.2/4L/4M436 report 일치 및 새4N 결정성을 확인했습니다. 다음 방향은 pose estimator/identity-continuity 한계 조사이며 world-assisted kick detector나 새 센서 도입으로 바로 넘어가지 않습니다.
+
+STEP4N 검증: `pnpm typecheck`, `pnpm build`, `pnpm --filter @plank-stork/controller-web test` 모두 성공. 기존723개+추가38개인 **71 files / 761 tests**가 통과했습니다. Controller main chunk799.47kB의 기존500kB 초과 경고는 남습니다.
+
 ## 검증 및 빌드
 
 ```sh
