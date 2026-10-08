@@ -1291,3 +1291,52 @@ curl http://localhost:3000/health
 빌드 결과는 각 패키지의 `dist/`에 생성됩니다. 빌드한 서버는 `pnpm --filter @plank-stork/server start`로 실행합니다. 웹 빌드는 `pnpm --filter @plank-stork/controller-web preview` 또는 `pnpm --filter @plank-stork/mobile preview`로 확인할 수 있습니다.
 
 `packages/protocol`에는 STEP 1 Socket 테스트 타입과 STEP 4B-2/4C/4D/4E calibration·validation·detector debug 요청/debug snapshot wire 타입이 있습니다. Raw Pose나 classifier 내부 계산 타입은 포함하지 않습니다. Web Worker, 사용자 독립 최종 threshold, cooldown, control strength, Pose → game control 변환, Room/Session, 로그인/인증, DB, Redis, Phaser/게임 로직, Capacitor/모바일 네이티브 기능, WebRTC, custom ML model은 구현하지 않습니다.
+
+## STEP 4O — Pose Estimator Continuity
+
+저장된 다섯 capture를 비교하는 `POST_FAILURE_EXPLORATORY` 실험입니다. 새 운동·촬영은 필요 없습니다. Production 설정과 live/ReplayCapture/detector는 그대로 사용합니다.
+
+1. localhost/HTTPS의 WebCodecs 지원 Chrome에서 별도 **STEP 4O — Pose Estimator Continuity**를 엽니다.
+2. 기존 JSON을 선택하고 각 role을 직접 지정한 뒤 matching WebM을 선택합니다. 파일명으로 role을 추정하지 않습니다. JSON의 `video.filename`과 선택한 이름, 이름에서 파싱 가능한 capture ID를 기존 guard로 검사합니다. 이름이 다르면 중단합니다. 단순 파일명 검증은 WebM 내용의 암호학적 증명이 아니므로 이름을 바꿔 다른 영상을 통과시키면 안 됩니다.
+3. **Validate Media Pair → Decode Frames → FULL_VIDEO_CONTROL → FULL_IMAGE → HEAVY_VIDEO → Compare Estimators** 순서로 실행합니다. 다섯 role과 세 variant가 모두 있어야 후보/attribution 평가가 가능합니다. 중간 결과, 오류, 진행 프레임 수를 확인하거나 Cancel할 수 있습니다.
+4. 각 variant의 raw pose JSON과 최종 비교 report를 로컬 다운로드합니다. Raw export의 `config`는 모든 `frames`에 공통인 variant/model/runningMode/GPU metadata이며, 각 프레임에는 media `tMs`, image/world primitive landmarks, pose present 여부, inference ms가 있습니다. 서버 업로드는 없습니다.
+5. 동일 variant 버튼을 다시 실행하면 직전 실행 대비 PTS, missingness, 좌표/geometry 오차, event·final state 차이를 표시합니다. GPU bit equality를 강제하지 않으며 좌표/geometry 절대 오차 `1e-5`는 진단 표시용입니다. Event 시간 비교 허용 오차는 기존 `1e-6ms`이고, event 변화는 숨기지 않습니다.
+
+최초 decode의 전체 PTS 목록과 SHA-256을 기준으로 매 variant를 다시 순차 decode합니다. 중복/역순/누락은 오류이며 drop하지 않습니다. 프레임은 사용 즉시 close하고, 모델은 완료/실패/취소 시 close합니다. Decode 속도나 inference duration을 detector clock으로 쓰지 않습니다. 기존 VIDEO replay와 같은 `media PTS × 1000 = capture tMs` mapping입니다.
+
+Full VIDEO/GPU control, Full IMAGE/GPU, Heavy VIDEO/GPU만 비교합니다. 옵션은 production에서 복사하되 experiment 전용 객체를 사용하며 GPU 실패 시 CPU로 바꾸지 않습니다. [공식 MediaPipe JS API](https://developers.google.com/edge/api/mediapipe/js/tasks-vision.poselandmarker)의 IMAGE `detect`와 VIDEO `detectForVideo`를 구분합니다. [공식 모델 목록](https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker)의 version 1 Full/Heavy asset을 사용합니다.
+
+각 variant에서 같은 recorded latest successful/frozen Neutral 구간으로 Y/body scale/segment/flexion baseline을 재계산합니다. OLD CLEAN만 first-Neutral compatibility를 허용하고 해당 구간을 평가에서 제외합니다. Neutral usable sample이 부족하면 baseline/detector 결과는 unavailable이며 stored baseline이나 동작 프레임으로 대체하지 않습니다. Geometry는 STEP 4N 함수/visibility 규칙을 그대로 재사용합니다. 기존 anchor는 ±750ms 관찰 창이며 새 event 시각을 강제하지 않습니다. ±100ms entry 주변 분포도 별도로 기록합니다.
+
+Descriptive count는 **프레임 수**입니다: image/world 각각 네 leg segment 중 하나라도 `abs(ratio−1) >= .50`; image/world 어느 쪽이든 swap advantage `>0` / `>.10`; pose missing; 4N의 8개 joint 중 image/world 어느 쪽이든 missing; image pelvis/torso axis velocity 중 하나라도 `abs >=720deg/s`. 관측 가능한 값의 수/분포와 missing joint observation 수도 함께 내보내므로 missing을 정상 geometry로 간주하지 않습니다. Detector는 production Y V3와 고정 Y_OR_FLEXION+velocity12 두 개뿐이며 geometry/identity gate는 추가하지 않습니다.
+
+후보 평가는 보수적으로 수행합니다. 모든 reference의 실제 KNEE stage에서 observable L1/R1과 false/wrong/duplicate/cross-gap/reacquisition false0을 요구하고 STRESS의 observable false/wrong/duplicate/cross-gap/reacquisition false0을 확인합니다. Known-false 창에서 segment/swap/missing count 감소와 전체 continuity count 악화 없음이 함께 있어야 `EXPLORATORY_ESTIMATOR_CANDIDATE`입니다. Event만 통과하면 `EVENT_ONLY_IMPROVEMENT`, missing/instability가 증가하면 후보로 승격하지 않습니다. Attribution은 기존 false anchor별 변화의 일치 여부를 이용한 보수적인 evidence label이며 원인 확정이나 자동 BEST가 아닙니다. 개선되지 않은 variant의 count가 control과 같다고 확인되지 않으면 단일 원인 sensitivity로 단정하지 않습니다.
+
+Performance의 median/p95/max와 estimated sustainable FPS는 offline inference-only 진단입니다. 제품 후보가 나오더라도 실제 live FPS는 별도 검증해야 합니다. 느린 variant의 frame을 생략해서 속도를 맞추지 않습니다.
+
+## STEP 4O.2 — Pose-Trace Forensic Media Pair Verification
+
+파일명이 변경된 기존 WebM은 일반 replay guard로 계속 거부합니다. 별도 로컬 forensic runner는 5개 JSON × 6개 WebM의 raw trajectory만 비교합니다. 원본을 rename/수정하지 않으며 카메라, Socket, production 경로와 연결하지 않습니다.
+
+```sh
+# inventory: STEP4O.1의 jsons/videos 목록과 원본 SHA-256을 가진 로컬 보고서
+node apps/controller-web/scripts/forensic-media.mjs prepare <inventory.json> <output-directory>
+node apps/controller-web/scripts/forensic-media.mjs infer <inventory.json> <output-directory>
+node apps/controller-web/scripts/forensic-media.mjs report <inventory.json> <output-directory>
+```
+
+`prepare`가 판정 규칙·코드 해시·원본 해시·전체 packet PTS·기존 stage/anchor를 사전 등록합니다. `infer`는 독립 Chrome profile에서 Apple/hardware GPU + WebCodecs로 Full VIDEO만 WebM별 한 번 실행하고 raw cache를 저장합니다. `FORENSIC_CHROME`으로 Chrome 실행 파일을 지정할 수 있습니다. localhost read-only 경로로 원본을 읽으며 브라우저에서도 파일 hash를 확인합니다. 중간 실패의 start marker는 자동 삭제/재시도하지 않습니다. 완료 cache는 재사용하고 원본/규칙 변경은 거부합니다. Chrome은 작업 종료 시 닫습니다.
+
+`report`는 offset 0, ±20ms monotonic one-to-one 대응으로 30쌍을 모두 동일하게 평가합니다. 파일명/예상 대응은 scorer 입력이 아닙니다. Image XY 8 joints 중 양쪽에서 최소 4개가 유효해야 frame error를 계산합니다. HIP visibility .7, 나머지 .5의 기존 4N 규칙을 사용하고 world는 보조 evidence입니다. Missing/상수 trajectory는 null로 유지합니다. 전체 및 stage/known-false anchor별 error, trajectory/delta correlation, missing confusion을 기록합니다.
+
+Coverage ≥.80, pose median ≤.05, p95 ≤.12, trajectory correlation ≥.90, delta correlation ≥.60을 모두 통과해야 합니다. 유일 후보·WebM 중복 winner 없음·runner-up 대비 분리 조건도 필요합니다. 결과를 보고 기준을 수정하지 않습니다. 모든 5쌍이 `TRACE_VERIFIED_MEDIA_MATCH`일 때만 STEP4O의 별도 검증 진입점을 허용할 수 있고, 하나라도 실패하면 Full IMAGE/Heavy를 실행하지 않습니다. 세부 실측과 판정은 [STEP4O.2 보고서](docs/step-4o2-forensic-verification.md)를 참고하세요.
+
+이번 실측은 30쌍 중 `TRACE_MISMATCH`22 / `TEMPORALLY_INCOMPATIBLE`8 / verified0입니다. 유사도 1위는 예상 대응과 5/5 같지만 고정 p95/trajectory/delta 기준을 통과하지 못했습니다. STEP4O Full IMAGE/Heavy는 실행하지 않았습니다. 전체 8,518프레임의 캐시/보고서를 보존했고 typecheck/build 및 기존801+추가29인 **77 files / 830 tests**를 통과했습니다.
+
+## STEP 4O.3 — Provisional Estimator Sensitivity
+
+STEP4O.2의 판정은 그대로 두고, 사용자가 지정한 5쌍만 `PROVISIONAL_MEDIA_PAIR / POST_FAILURE_EXPLORATORY / NON_DECISIONAL` 분석에 사용합니다. `runProvisionalEstimatorAnalysis`는 별도 CLI 전용 진입점이며 일반 replay/live/production에서는 호출하지 않습니다. Full VIDEO cache의 실제 media hash/config/전체 PTS를 검사하고, IMAGE/Heavy는 같은 모든 decoded frame에서 추론합니다. 각 variant는 같은 Neutral 구간에서 자기 baseline을 재계산합니다.
+
+실행 명령, 고정 비교 정책과 결과는 [STEP4O.3 보고서](docs/step-4o3-provisional-sensitivity.md)에 있습니다. **Media pairing이 provisional이므로 이 결과로 estimator의 우위를 확정할 수 없습니다.** 명확한 개선 패턴이 있더라도 후속 새 capture가 필요합니다. 기존 guard/forensic threshold/detector config는 변경하지 않습니다.
+
+실측: 5쌍×3 variant의 전체 PTS가 일치했고 variant별7,564프레임을 처리했습니다. 고정 Neutral 구간의 baseline 부족이 IMAGE2개/Heavy3개에서 발생해 종합 판정은 **INSUFFICIENT**, NEXT_VALIDATION_WORTHY는 없습니다. Full VIDEO에서 LIVE2/LIVE3의 기존 false가 재현되지 않았고, IMAGE의 일부 geometry 감소에는 missing 증가·true recall 손실이 동반됐습니다. Typecheck/build와 **79 files / 871 tests** 통과, 기존4K/4L/4M/4N report 일치. 이 결과는 variant 우위 확정이나 production 변경 근거가 아닙니다.

@@ -66,7 +66,7 @@ export type IntegrityFrame = BaseFrame & { measurements: Record<Limb, IntegrityM
 function calibrationSelection(input: IntegrityInput, latestFrozen: boolean): CalibrationSelection {
   return input.role === 'REFERENCE_LIVE_3_HOLDOUT' ? 'LATEST_FROZEN' : latestFrozen ? 'LATEST_FROZEN_OR_COMPATIBILITY' : 'LATEST_START';
 }
-function prepareOne(input: IntegrityInput, multi: PreparedMultiFixture, latestFrozen = false) {
+export function prepareIntegrityFixture(input: IntegrityInput, multi: PreparedMultiFixture, latestFrozen = false) {
   const trial = input.session.liveResult.trials.find((t) => t.id === multi.input.trialId)!;
   const selection = calibrationSelection(input, latestFrozen);
   const baseline = segmentBaseline(input.session, trial, selection), production = replayKneeKickV3(input.session, trial.id, selection);
@@ -98,11 +98,11 @@ function prepareOne(input: IntegrityInput, multi: PreparedMultiFixture, latestFr
   });
   return { ...multi, input: { ...multi.input, role: input.role }, frames, segmentBaseline: baseline, production };
 }
-export type IntegrityFixture = ReturnType<typeof prepareOne>;
+export type IntegrityFixture = ReturnType<typeof prepareIntegrityFixture>;
 export function prepareIntegrityInputs(inputs: readonly IntegrityInput[], latestFrozen = false): IntegrityFixture[] {
   const multi = prepareMultiInputs(inputs.map((i) => ({ ...i, calibrationSelection: calibrationSelection(i, latestFrozen), role: i.role.startsWith('REFERENCE_LIVE') ? 'REFERENCE_LIVE' : i.role as 'UNASSIGNED' | 'REFERENCE_OLD_CLEAN' | 'STRESS' })));
   assertYReferenceParity(multi);
-  return multi.map((m) => prepareOne(inputs.find((i) => i.session.captureId === m.input.captureId)!, m, latestFrozen));
+  return multi.map((m) => prepareIntegrityFixture(inputs.find((i) => i.session.captureId === m.input.captureId)!, m, latestFrozen));
 }
 export function distribution(values: readonly (number | null)[]) {
   const sorted = values.filter((n): n is number => n !== null && Number.isFinite(n)).sort((a, b) => a - b);

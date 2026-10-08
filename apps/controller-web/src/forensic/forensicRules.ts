@@ -1,0 +1,31 @@
+/** STEP4O.2 pre-registration. Freeze before inspecting any re-inferred trajectories. */
+export const FORENSIC_RULES = Object.freeze({
+  version: 1,
+  timestampToleranceMs: 20,
+  offsetMs: 0,
+  minFrameJoints: 4,
+  minCorrelationSamples: 30,
+  varianceEpsilon: 1e-12,
+  maxDeltaGapMs: 400,
+  minMatchedCoverage: .80,
+  maxMedianPoseError: .05,
+  maxP95PoseError: .12,
+  minMedianTrajectoryCorrelation: .90,
+  minMedianDeltaCorrelation: .60,
+  separationPoseRatio: .5,
+  separationCorrelationMargin: .20,
+  matching: 'Recorded chronological order; nearest unused inferred PTS within inclusive 20ms; earlier PTS wins an exact tie; no time-shift search.',
+  usable: 'STEP4N image rules: finite normalized XY and visibility >=.7 hips / >=.5 shoulders, knees, ankles. World is secondary, never gates XY.',
+  coverage: 'matchedFrames / all recorded poseFrames; also report usable / matched and usable / recorded separately.',
+  delta: 'Current and immediately previous matched pair, joint usable in both. Both clocks must have 0<dt<400ms. Raw dx/dy, no velocity resampling or smoothing.',
+  correlation: 'Pearson per joint axis with >=30 paired values and population variance >1e-12 on both traces. Median over non-null axes. Delta aggregates all non-null dx/dy axis correlations.',
+  temporal: 'Reject when last PTS +20ms cannot cover the last required Guided stage/anchor endpoint (anchors clipped to recorded capture evidence). Duration proximity alone never accepts.',
+  runnerUp: 'Among all other media with finite pose median and trajectory median and >=30 usable pose frames, lowest median XY error, then highest trajectory correlation, then media content hash. Includes temporally incompatible alternatives conservatively.',
+  uniqueness: 'Exactly one threshold-passing temporally-compatible candidate per JSON; no shared media winner. Separation required against the declared runner-up; missing runner-up is insufficient evidence.',
+} as const);
+export const FORENSIC_JOINTS = Object.freeze([
+  { index: 11, name: 'LEFT_SHOULDER', visibility: .5 }, { index: 12, name: 'RIGHT_SHOULDER', visibility: .5 },
+  { index: 23, name: 'LEFT_HIP', visibility: .7 }, { index: 24, name: 'RIGHT_HIP', visibility: .7 },
+  { index: 25, name: 'LEFT_KNEE', visibility: .5 }, { index: 26, name: 'RIGHT_KNEE', visibility: .5 },
+  { index: 27, name: 'LEFT_ANKLE', visibility: .5 }, { index: 28, name: 'RIGHT_ANKLE', visibility: .5 },
+].map((joint) => Object.freeze(joint)));

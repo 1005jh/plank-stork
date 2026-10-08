@@ -1,0 +1,2207 @@
+{
+  "scanId": "step-4o3-d9f80261159bbacf",
+  "registrationSha256": "d9f80261159bbacfcd539fb85feef4ef580a69a41defc010dbbb67de202f6fb3",
+  "rawRunHashes": [
+    {
+      "filename": "STRESS.FULL_VIDEO_CONTROL.json",
+      "sha256": "243dc938cd75ce699313bc89fd106f8886dbd1f647fe5cf831b2c19a1db7ce86"
+    },
+    {
+      "filename": "STRESS.FULL_IMAGE.json",
+      "sha256": "5fa5e1b755a32f2eae345682f32e61471afc662dfc810d5cb5ae70aec5bc8697"
+    },
+    {
+      "filename": "STRESS.HEAVY_VIDEO.json",
+      "sha256": "7bd497fc3c86d2f63f49464ad24fd2d45264f8688241fd0c06f5dad4ea3f4e17"
+    },
+    {
+      "filename": "REFERENCE_OLD_CLEAN.FULL_VIDEO_CONTROL.json",
+      "sha256": "58d804d8115d1d7a8f4ee837828a4aba6233426f74b4739a80cc5b4c33046ab2"
+    },
+    {
+      "filename": "REFERENCE_OLD_CLEAN.FULL_IMAGE.json",
+      "sha256": "408414b39deb64ff03af0167b00b8646f00fb6e0677089fe769fb30f3b813a80"
+    },
+    {
+      "filename": "REFERENCE_OLD_CLEAN.HEAVY_VIDEO.json",
+      "sha256": "1c9e7df3b4dc7041725721c67f5124c4b4797f417a8a234338b8fa6eb9487efc"
+    },
+    {
+      "filename": "REFERENCE_LIVE_1.FULL_VIDEO_CONTROL.json",
+      "sha256": "778a248a7b9c4ca5add332f1dc0ef15631270d946511a4ebb489d9fd1e94441d"
+    },
+    {
+      "filename": "REFERENCE_LIVE_1.FULL_IMAGE.json",
+      "sha256": "fc3361d6e79c528116d545d6f822d3894d031bbe730bb86ff696b009fb578649"
+    },
+    {
+      "filename": "REFERENCE_LIVE_1.HEAVY_VIDEO.json",
+      "sha256": "1200793e06d1a1b87bfa4807660039bcd2a3c4e2ee72c5d9d572d3951ea20c9d"
+    },
+    {
+      "filename": "REFERENCE_LIVE_2.FULL_VIDEO_CONTROL.json",
+      "sha256": "614a5a08fe1e5a8bf0bb18173a597b9178b9d24be87c769de23b29f34e733b51"
+    },
+    {
+      "filename": "REFERENCE_LIVE_2.FULL_IMAGE.json",
+      "sha256": "98774d647de6a5d19c240a76e12ccc0de9e5b9db407379499969dde15d1dda6e"
+    },
+    {
+      "filename": "REFERENCE_LIVE_2.HEAVY_VIDEO.json",
+      "sha256": "b233acbf2fb77f4c2f58b8469707f80e6823ff2b7e3a40120d0e72e78796f983"
+    },
+    {
+      "filename": "REFERENCE_LIVE_3.FULL_VIDEO_CONTROL.json",
+      "sha256": "b2362a609d5f9fd24611cc273a5bad63528604657fa2c0037916e4e53e66cf3e"
+    },
+    {
+      "filename": "REFERENCE_LIVE_3.FULL_IMAGE.json",
+      "sha256": "11b645a4141fffb020f3c8f285cafb33b2d48132c9fec6599b35379f54841794"
+    },
+    {
+      "filename": "REFERENCE_LIVE_3.HEAVY_VIDEO.json",
+      "sha256": "ebd3ee8e8fdb07e7e5c444a003038f05b103d3c41bed49d5ec206cac83ab4539"
+    }
+  ],
+  "reportDeterminism": true,
+  "version": 1,
+  "step": "4O.3",
+  "createdAt": "2026-10-08T17:34:48.371Z",
+  "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+  "analysisStatus": "POST_FAILURE_EXPLORATORY",
+  "decisionStatus": "NON_DECISIONAL",
+  "limitation": "Because media pairing is provisional, these results cannot establish estimator superiority.",
+  "policy": {
+    "geometry": "On BOTH LIVE2 and LIVE3 unions of original false windows: at least two of six existing anomaly counts decrease, none increase, and measured segment/swap observations do not decrease. Six counts: image/world segment extremes, positive/large swap, pose/joint missing.",
+    "recall": "For each detector separately, preserve every original-control correct KNEE stage on OLD/LIVE1/LIVE2/LIVE3. Stage recall is binary, duplicate correct events cannot compensate for a lost stage.",
+    "events": "False counts decrease on BOTH LIVE2 and LIVE3, all reference stage recall preserved, and false/wrong/duplicate/cross-gap/reacquisition counts never increase on any pair.",
+    "same": "NO_MATERIAL_DIFFERENCE requires identical detector stage/event counts and all six known-false anomaly counts. Mixed changes remain MIXED; no fitted similarity tolerance.",
+    "nextValidation": "Only combined event+geometry improvement for a detector with no adverse event change in the other detector. Still requires new capture before any decision.",
+    "performance": "Offline inference timing only. Full VIDEO may reuse the earlier run with different host load; timing does not establish live speed or superiority."
+  },
+  "complete": true,
+  "available": false,
+  "frameParity": [
+    {
+      "role": "STRESS",
+      "captureId": "plank-stork-replay-2026-09-30T11-39-17-364Z",
+      "identical": true,
+      "sequences": [
+        {
+          "variant": "FULL_VIDEO_CONTROL",
+          "decodedFrameCount": 1729,
+          "firstTimestamp": 0,
+          "lastTimestamp": 57572,
+          "timestampHash": "14024d518e3e930246c920020cb4dc1e45c784114a5d58a81611bf1b751e03e6",
+          "timestampUnit": "media PTS milliseconds"
+        },
+        {
+          "variant": "FULL_IMAGE",
+          "decodedFrameCount": 1729,
+          "firstTimestamp": 0,
+          "lastTimestamp": 57572,
+          "timestampHash": "14024d518e3e930246c920020cb4dc1e45c784114a5d58a81611bf1b751e03e6",
+          "timestampUnit": "media PTS milliseconds"
+        },
+        {
+          "variant": "HEAVY_VIDEO",
+          "decodedFrameCount": 1729,
+          "firstTimestamp": 0,
+          "lastTimestamp": 57572,
+          "timestampHash": "14024d518e3e930246c920020cb4dc1e45c784114a5d58a81611bf1b751e03e6",
+          "timestampUnit": "media PTS milliseconds"
+        }
+      ]
+    },
+    {
+      "role": "REFERENCE_OLD_CLEAN",
+      "captureId": "plank-stork-replay-2026-09-30T12-09-14-840Z",
+      "identical": true,
+      "sequences": [
+        {
+          "variant": "FULL_VIDEO_CONTROL",
+          "decodedFrameCount": 1248,
+          "firstTimestamp": 0,
+          "lastTimestamp": 41581,
+          "timestampHash": "f89df10436d58e966388af6956eac0c46eb52dce05c526b3a00611d74bb72d27",
+          "timestampUnit": "media PTS milliseconds"
+        },
+        {
+          "variant": "FULL_IMAGE",
+          "decodedFrameCount": 1248,
+          "firstTimestamp": 0,
+          "lastTimestamp": 41581,
+          "timestampHash": "f89df10436d58e966388af6956eac0c46eb52dce05c526b3a00611d74bb72d27",
+          "timestampUnit": "media PTS milliseconds"
+        },
+        {
+          "variant": "HEAVY_VIDEO",
+          "decodedFrameCount": 1248,
+          "firstTimestamp": 0,
+          "lastTimestamp": 41581,
+          "timestampHash": "f89df10436d58e966388af6956eac0c46eb52dce05c526b3a00611d74bb72d27",
+          "timestampUnit": "media PTS milliseconds"
+        }
+      ]
+    },
+    {
+      "role": "REFERENCE_LIVE_1",
+      "captureId": "plank-stork-replay-2026-10-03T16-39-36-229Z",
+      "identical": true,
+      "sequences": [
+        {
+          "variant": "FULL_VIDEO_CONTROL",
+          "decodedFrameCount": 1695,
+          "firstTimestamp": 0,
+          "lastTimestamp": 56440,
+          "timestampHash": "96a3781d721856e64a6a9499057a1c441e7f0b1526779e8b7b8914a7e01c4434",
+          "timestampUnit": "media PTS milliseconds"
+        },
+        {
+          "variant": "FULL_IMAGE",
+          "decodedFrameCount": 1695,
+          "firstTimestamp": 0,
+          "lastTimestamp": 56440,
+          "timestampHash": "96a3781d721856e64a6a9499057a1c441e7f0b1526779e8b7b8914a7e01c4434",
+          "timestampUnit": "media PTS milliseconds"
+        },
+        {
+          "variant": "HEAVY_VIDEO",
+          "decodedFrameCount": 1695,
+          "firstTimestamp": 0,
+          "lastTimestamp": 56440,
+          "timestampHash": "96a3781d721856e64a6a9499057a1c441e7f0b1526779e8b7b8914a7e01c4434",
+          "timestampUnit": "media PTS milliseconds"
+        }
+      ]
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "captureId": "plank-stork-replay-2026-10-05T14-37-39-718Z",
+      "identical": true,
+      "sequences": [
+        {
+          "variant": "FULL_VIDEO_CONTROL",
+          "decodedFrameCount": 1387,
+          "firstTimestamp": 0,
+          "lastTimestamp": 46178,
+          "timestampHash": "b3fc47c594f809878deda9abb8796aace9c1a9f31b1613d54d91e7bafad0861b",
+          "timestampUnit": "media PTS milliseconds"
+        },
+        {
+          "variant": "FULL_IMAGE",
+          "decodedFrameCount": 1387,
+          "firstTimestamp": 0,
+          "lastTimestamp": 46178,
+          "timestampHash": "b3fc47c594f809878deda9abb8796aace9c1a9f31b1613d54d91e7bafad0861b",
+          "timestampUnit": "media PTS milliseconds"
+        },
+        {
+          "variant": "HEAVY_VIDEO",
+          "decodedFrameCount": 1387,
+          "firstTimestamp": 0,
+          "lastTimestamp": 46178,
+          "timestampHash": "b3fc47c594f809878deda9abb8796aace9c1a9f31b1613d54d91e7bafad0861b",
+          "timestampUnit": "media PTS milliseconds"
+        }
+      ]
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "captureId": "plank-stork-replay-2026-10-06T11-19-04-864Z",
+      "identical": true,
+      "sequences": [
+        {
+          "variant": "FULL_VIDEO_CONTROL",
+          "decodedFrameCount": 1505,
+          "firstTimestamp": 0,
+          "lastTimestamp": 50109,
+          "timestampHash": "ebc954761f8d104e3f7957e867aab8e0e4c238a279c5d4cdce5d150cab1d3465",
+          "timestampUnit": "media PTS milliseconds"
+        },
+        {
+          "variant": "FULL_IMAGE",
+          "decodedFrameCount": 1505,
+          "firstTimestamp": 0,
+          "lastTimestamp": 50109,
+          "timestampHash": "ebc954761f8d104e3f7957e867aab8e0e4c238a279c5d4cdce5d150cab1d3465",
+          "timestampUnit": "media PTS milliseconds"
+        },
+        {
+          "variant": "HEAVY_VIDEO",
+          "decodedFrameCount": 1505,
+          "firstTimestamp": 0,
+          "lastTimestamp": 50109,
+          "timestampHash": "ebc954761f8d104e3f7957e867aab8e0e4c238a279c5d4cdce5d150cab1d3465",
+          "timestampUnit": "media PTS milliseconds"
+        }
+      ]
+    }
+  ],
+  "detectorConfigs": {
+    "PRODUCTION_Y_V3": {
+      "version": 3,
+      "experimental": true,
+      "evidence": "abs(deltaDyNorm)",
+      "direction": "LANDMARK_IDENTITY",
+      "enter": 0.4,
+      "enterDwellMs": 50,
+      "clearThreshold": 0.25,
+      "clearDwellMs": 100,
+      "trackingLossMinMs": 33,
+      "staleMs": 400,
+      "hipVisibility": 0.7,
+      "kneeVisibility": 0.5,
+      "arbitration": "FIRST_DWELL; simultaneous -> integrated supra-threshold area; exact tie -> WAIT_CLEAR BOTH"
+    },
+    "FIXED_REFERENCE": {
+      "evidence": {
+        "strategy": "Y_OR_FLEXION",
+        "xEnter": 0.28,
+        "xDwellMs": 50,
+        "flexEnter": 15,
+        "flexDwellMs": 67,
+        "flexClear": 5,
+        "flexClearDwellMs": 150,
+        "returnPolicy": "TRIGGER_CHANNEL_CLEAR"
+      },
+      "integrity": {
+        "guardType": "Y_VELOCITY",
+        "velocity": 12,
+        "minRatio": null
+      }
+    }
+  },
+  "variantConfigs": [
+    {
+      "variant": "FULL_VIDEO_CONTROL",
+      "model": "pose_landmarker_full",
+      "options": {
+        "runningMode": "VIDEO",
+        "numPoses": 1,
+        "minPoseDetectionConfidence": 0.5,
+        "minPosePresenceConfidence": 0.5,
+        "minTrackingConfidence": 0.5,
+        "outputSegmentationMasks": false,
+        "baseOptions": {
+          "modelAssetPath": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+          "delegate": "GPU"
+        }
+      }
+    },
+    {
+      "variant": "FULL_IMAGE",
+      "model": "pose_landmarker_full",
+      "options": {
+        "runningMode": "IMAGE",
+        "numPoses": 1,
+        "minPoseDetectionConfidence": 0.5,
+        "minPosePresenceConfidence": 0.5,
+        "minTrackingConfidence": 0.5,
+        "outputSegmentationMasks": false,
+        "baseOptions": {
+          "modelAssetPath": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+          "delegate": "GPU"
+        }
+      }
+    },
+    {
+      "variant": "HEAVY_VIDEO",
+      "model": "pose_landmarker_heavy",
+      "options": {
+        "runningMode": "VIDEO",
+        "numPoses": 1,
+        "minPoseDetectionConfidence": 0.5,
+        "minPosePresenceConfidence": 0.5,
+        "minTrackingConfidence": 0.5,
+        "outputSegmentationMasks": false,
+        "baseOptions": {
+          "modelAssetPath": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task",
+          "delegate": "GPU"
+        }
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "variant": "FULL_IMAGE",
+      "geometry": [
+        {
+          "role": "STRESS",
+          "trialId": 1,
+          "comparison": {
+            "improved": [],
+            "worsened": [],
+            "availabilityPreserved": true,
+            "enoughWindow": false,
+            "better": false,
+            "same": true
+          }
+        },
+        {
+          "role": "REFERENCE_OLD_CLEAN",
+          "trialId": 1,
+          "comparison": {
+            "improved": [],
+            "worsened": [],
+            "availabilityPreserved": true,
+            "enoughWindow": false,
+            "better": false,
+            "same": true
+          }
+        },
+        {
+          "role": "REFERENCE_LIVE_1",
+          "trialId": 1,
+          "comparison": {
+            "improved": [],
+            "worsened": [],
+            "availabilityPreserved": true,
+            "enoughWindow": false,
+            "better": false,
+            "same": true
+          }
+        },
+        {
+          "role": "REFERENCE_LIVE_2",
+          "trialId": 1,
+          "comparison": {
+            "improved": [
+              "segmentExtremeCount",
+              "worldSegmentExtremeCount",
+              "positiveSwapCount"
+            ],
+            "worsened": [
+              "poseMissingCount",
+              "jointMissingCount"
+            ],
+            "availabilityPreserved": false,
+            "enoughWindow": true,
+            "better": false,
+            "same": false
+          }
+        },
+        {
+          "role": "REFERENCE_LIVE_3",
+          "trialId": 1,
+          "comparison": {
+            "improved": [
+              "jointMissingCount"
+            ],
+            "worsened": [
+              "poseMissingCount"
+            ],
+            "availabilityPreserved": false,
+            "enoughWindow": true,
+            "better": false,
+            "same": false
+          }
+        }
+      ],
+      "geometryBetter": false,
+      "modes": [
+        {
+          "mode": "PRODUCTION_Y_V3",
+          "perPair": [
+            {
+              "role": "STRESS",
+              "trialId": 1,
+              "available": false,
+              "recallPreserved": false,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_OLD_CLEAN",
+              "trialId": 1,
+              "available": true,
+              "recallPreserved": false,
+              "noEventIncrease": true,
+              "falseReduced": true,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_1",
+              "trialId": 1,
+              "available": false,
+              "recallPreserved": false,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_2",
+              "trialId": 1,
+              "available": true,
+              "recallPreserved": false,
+              "noEventIncrease": true,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_3",
+              "trialId": 1,
+              "available": true,
+              "recallPreserved": false,
+              "noEventIncrease": true,
+              "falseReduced": false,
+              "same": false
+            }
+          ],
+          "recallPreserved": false,
+          "noEventIncrease": false,
+          "falseReducedBoth": false,
+          "eventBetter": false,
+          "difference": "NO_MATERIAL_DIFFERENCE"
+        },
+        {
+          "mode": "FIXED_REFERENCE",
+          "perPair": [
+            {
+              "role": "STRESS",
+              "trialId": 1,
+              "available": false,
+              "recallPreserved": false,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_OLD_CLEAN",
+              "trialId": 1,
+              "available": true,
+              "recallPreserved": false,
+              "noEventIncrease": true,
+              "falseReduced": true,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_1",
+              "trialId": 1,
+              "available": false,
+              "recallPreserved": false,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_2",
+              "trialId": 1,
+              "available": true,
+              "recallPreserved": false,
+              "noEventIncrease": true,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_3",
+              "trialId": 1,
+              "available": true,
+              "recallPreserved": false,
+              "noEventIncrease": true,
+              "falseReduced": false,
+              "same": false
+            }
+          ],
+          "recallPreserved": false,
+          "noEventIncrease": false,
+          "falseReducedBoth": false,
+          "eventBetter": false,
+          "difference": "NO_MATERIAL_DIFFERENCE"
+        }
+      ],
+      "available": false,
+      "material": false,
+      "adverseEvents": true,
+      "same": false,
+      "worse": true,
+      "nextValidation": "NO_CLEAR_VALIDATION_TRIGGER"
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "variant": "HEAVY_VIDEO",
+      "geometry": [
+        {
+          "role": "STRESS",
+          "trialId": 1,
+          "comparison": {
+            "improved": [],
+            "worsened": [],
+            "availabilityPreserved": true,
+            "enoughWindow": false,
+            "better": false,
+            "same": true
+          }
+        },
+        {
+          "role": "REFERENCE_OLD_CLEAN",
+          "trialId": 1,
+          "comparison": {
+            "improved": [],
+            "worsened": [],
+            "availabilityPreserved": true,
+            "enoughWindow": false,
+            "better": false,
+            "same": true
+          }
+        },
+        {
+          "role": "REFERENCE_LIVE_1",
+          "trialId": 1,
+          "comparison": {
+            "improved": [],
+            "worsened": [],
+            "availabilityPreserved": true,
+            "enoughWindow": false,
+            "better": false,
+            "same": true
+          }
+        },
+        {
+          "role": "REFERENCE_LIVE_2",
+          "trialId": 1,
+          "comparison": {
+            "improved": [
+              "segmentExtremeCount",
+              "worldSegmentExtremeCount",
+              "positiveSwapCount",
+              "poseMissingCount"
+            ],
+            "worsened": [
+              "jointMissingCount"
+            ],
+            "availabilityPreserved": false,
+            "enoughWindow": true,
+            "better": false,
+            "same": false
+          }
+        },
+        {
+          "role": "REFERENCE_LIVE_3",
+          "trialId": 1,
+          "comparison": {
+            "improved": [],
+            "worsened": [
+              "jointMissingCount"
+            ],
+            "availabilityPreserved": false,
+            "enoughWindow": true,
+            "better": false,
+            "same": false
+          }
+        }
+      ],
+      "geometryBetter": false,
+      "modes": [
+        {
+          "mode": "PRODUCTION_Y_V3",
+          "perPair": [
+            {
+              "role": "STRESS",
+              "trialId": 1,
+              "available": true,
+              "recallPreserved": true,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_OLD_CLEAN",
+              "trialId": 1,
+              "available": false,
+              "recallPreserved": false,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_1",
+              "trialId": 1,
+              "available": true,
+              "recallPreserved": true,
+              "noEventIncrease": true,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_2",
+              "trialId": 1,
+              "available": false,
+              "recallPreserved": false,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_3",
+              "trialId": 1,
+              "available": false,
+              "recallPreserved": false,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            }
+          ],
+          "recallPreserved": false,
+          "noEventIncrease": false,
+          "falseReducedBoth": false,
+          "eventBetter": false,
+          "difference": "NO_MATERIAL_DIFFERENCE"
+        },
+        {
+          "mode": "FIXED_REFERENCE",
+          "perPair": [
+            {
+              "role": "STRESS",
+              "trialId": 1,
+              "available": true,
+              "recallPreserved": true,
+              "noEventIncrease": true,
+              "falseReduced": true,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_OLD_CLEAN",
+              "trialId": 1,
+              "available": false,
+              "recallPreserved": false,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_1",
+              "trialId": 1,
+              "available": true,
+              "recallPreserved": true,
+              "noEventIncrease": true,
+              "falseReduced": true,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_2",
+              "trialId": 1,
+              "available": false,
+              "recallPreserved": false,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            },
+            {
+              "role": "REFERENCE_LIVE_3",
+              "trialId": 1,
+              "available": false,
+              "recallPreserved": false,
+              "noEventIncrease": false,
+              "falseReduced": false,
+              "same": false
+            }
+          ],
+          "recallPreserved": false,
+          "noEventIncrease": false,
+          "falseReducedBoth": false,
+          "eventBetter": false,
+          "difference": "NO_MATERIAL_DIFFERENCE"
+        }
+      ],
+      "available": false,
+      "material": false,
+      "adverseEvents": true,
+      "same": false,
+      "worse": true,
+      "nextValidation": "NO_CLEAR_VALIDATION_TRIGGER"
+    }
+  ],
+  "classification": "INSUFFICIENT",
+  "performance": [
+    {
+      "variant": "FULL_VIDEO_CONTROL",
+      "frames": 7564,
+      "medianMs": 13.700004577636719,
+      "p95Ms": 23.100006103515625,
+      "maxMs": 695.3999938964844,
+      "estimatedSustainableFps": 66.90596204737936,
+      "diagnosticOnly": true,
+      "reusedControlHasDifferentHostLoad": true
+    },
+    {
+      "variant": "FULL_IMAGE",
+      "frames": 7564,
+      "medianMs": 19.800003051757812,
+      "p95Ms": 21.400001525878906,
+      "maxMs": 475.8000030517578,
+      "estimatedSustainableFps": 54.36239525790171,
+      "diagnosticOnly": true,
+      "reusedControlHasDifferentHostLoad": false
+    },
+    {
+      "variant": "HEAVY_VIDEO",
+      "frames": 7564,
+      "medianMs": 28.300003051757812,
+      "p95Ms": 36.70000457763672,
+      "maxMs": 1207.1999969482422,
+      "estimatedSustainableFps": 36.340260895257444,
+      "diagnosticOnly": true,
+      "reusedControlHasDifferentHostLoad": false
+    }
+  ],
+  "focused": [
+    {
+      "role": "REFERENCE_LIVE_1",
+      "variant": "FULL_VIDEO_CONTROL",
+      "mode": "PRODUCTION_Y_V3",
+      "trialId": 1,
+      "right": 1,
+      "falseEvents": 1,
+      "neutralFalse": 1,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_1",
+      "variant": "FULL_VIDEO_CONTROL",
+      "mode": "FIXED_REFERENCE",
+      "trialId": 1,
+      "right": 0,
+      "falseEvents": 1,
+      "neutralFalse": 1,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_1",
+      "variant": "FULL_IMAGE",
+      "mode": "PRODUCTION_Y_V3",
+      "trialId": 1,
+      "right": null,
+      "falseEvents": null,
+      "neutralFalse": null,
+      "twistFalse": null
+    },
+    {
+      "role": "REFERENCE_LIVE_1",
+      "variant": "FULL_IMAGE",
+      "mode": "FIXED_REFERENCE",
+      "trialId": 1,
+      "right": null,
+      "falseEvents": null,
+      "neutralFalse": null,
+      "twistFalse": null
+    },
+    {
+      "role": "REFERENCE_LIVE_1",
+      "variant": "HEAVY_VIDEO",
+      "mode": "PRODUCTION_Y_V3",
+      "trialId": 1,
+      "right": 1,
+      "falseEvents": 1,
+      "neutralFalse": 1,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_1",
+      "variant": "HEAVY_VIDEO",
+      "mode": "FIXED_REFERENCE",
+      "trialId": 1,
+      "right": 1,
+      "falseEvents": 0,
+      "neutralFalse": 0,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_VIDEO_CONTROL",
+      "mode": "PRODUCTION_Y_V3",
+      "trialId": 1,
+      "right": 1,
+      "falseEvents": 0,
+      "neutralFalse": 0,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_VIDEO_CONTROL",
+      "mode": "FIXED_REFERENCE",
+      "trialId": 1,
+      "right": 1,
+      "falseEvents": 0,
+      "neutralFalse": 0,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_IMAGE",
+      "mode": "PRODUCTION_Y_V3",
+      "trialId": 1,
+      "right": 0,
+      "falseEvents": 0,
+      "neutralFalse": 0,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_IMAGE",
+      "mode": "FIXED_REFERENCE",
+      "trialId": 1,
+      "right": 0,
+      "falseEvents": 0,
+      "neutralFalse": 0,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "HEAVY_VIDEO",
+      "mode": "PRODUCTION_Y_V3",
+      "trialId": 1,
+      "right": null,
+      "falseEvents": null,
+      "neutralFalse": null,
+      "twistFalse": null
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "HEAVY_VIDEO",
+      "mode": "FIXED_REFERENCE",
+      "trialId": 1,
+      "right": null,
+      "falseEvents": null,
+      "neutralFalse": null,
+      "twistFalse": null
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_VIDEO_CONTROL",
+      "mode": "PRODUCTION_Y_V3",
+      "trialId": 1,
+      "right": 1,
+      "falseEvents": 0,
+      "neutralFalse": 0,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_VIDEO_CONTROL",
+      "mode": "FIXED_REFERENCE",
+      "trialId": 1,
+      "right": 1,
+      "falseEvents": 0,
+      "neutralFalse": 0,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_IMAGE",
+      "mode": "PRODUCTION_Y_V3",
+      "trialId": 1,
+      "right": 0,
+      "falseEvents": 0,
+      "neutralFalse": 0,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_IMAGE",
+      "mode": "FIXED_REFERENCE",
+      "trialId": 1,
+      "right": 0,
+      "falseEvents": 0,
+      "neutralFalse": 0,
+      "twistFalse": 0
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "HEAVY_VIDEO",
+      "mode": "PRODUCTION_Y_V3",
+      "trialId": 1,
+      "right": null,
+      "falseEvents": null,
+      "neutralFalse": null,
+      "twistFalse": null
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "HEAVY_VIDEO",
+      "mode": "FIXED_REFERENCE",
+      "trialId": 1,
+      "right": null,
+      "falseEvents": null,
+      "neutralFalse": null,
+      "twistFalse": null
+    }
+  ],
+  "nextValidationWorthy": false,
+  "nextStep": "REASSESS_VIEWPOINT_OCCLUSION_OBSERVABILITY_AND_SENSING",
+  "unmatchedMedia": {
+    "filename": "2차검증1.webm",
+    "status": "UNMATCHED_MEDIA"
+  },
+  "fullReportSha256": "adfb085e5ebf8f4b4fffc5ea331d485dfe2b6e0dd61215ae56a2f280e3198443",
+  "detectorMatrix": [
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "STRESS",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": {
+        "left": 0,
+        "right": 0,
+        "falseEvents": 0,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "STRESS",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": {
+        "left": 0,
+        "right": 0,
+        "falseEvents": 1,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 0,
+        "softGapCross": 0,
+        "softRecoveryFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "STRESS",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": null
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "STRESS",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": null
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "STRESS",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": {
+        "left": 0,
+        "right": 0,
+        "falseEvents": 2,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 1
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "STRESS",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": {
+        "left": 0,
+        "right": 1,
+        "falseEvents": 0,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 0,
+        "softGapCross": 0,
+        "softRecoveryFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_OLD_CLEAN",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": {
+        "left": 0,
+        "right": 1,
+        "falseEvents": 4,
+        "wrong": 1,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 2
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_OLD_CLEAN",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": {
+        "left": 0,
+        "right": 1,
+        "falseEvents": 3,
+        "wrong": 1,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 2,
+        "softGapCross": 0,
+        "softRecoveryFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_OLD_CLEAN",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": {
+        "left": 0,
+        "right": 0,
+        "falseEvents": 0,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_OLD_CLEAN",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": {
+        "left": 0,
+        "right": 0,
+        "falseEvents": 0,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 0,
+        "softGapCross": 0,
+        "softRecoveryFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_OLD_CLEAN",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": null
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_OLD_CLEAN",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": null
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_1",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": {
+        "left": 0,
+        "right": 1,
+        "falseEvents": 1,
+        "wrong": 1,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 2
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_1",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": {
+        "left": 0,
+        "right": 0,
+        "falseEvents": 1,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 1,
+        "softGapCross": 0,
+        "softRecoveryFalse": 1
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_1",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": null
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_1",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": null
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_1",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": {
+        "left": 0,
+        "right": 1,
+        "falseEvents": 1,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 1
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_1",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": {
+        "left": 0,
+        "right": 1,
+        "falseEvents": 0,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 0,
+        "softGapCross": 0,
+        "softRecoveryFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": {
+        "left": 1,
+        "right": 1,
+        "falseEvents": 0,
+        "wrong": 1,
+        "duplicates": 1,
+        "crossGap": 0,
+        "reacquisitionFalse": 1
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": {
+        "left": 1,
+        "right": 1,
+        "falseEvents": 0,
+        "wrong": 1,
+        "duplicates": 1,
+        "crossGap": 0,
+        "reacquisitionFalse": 1,
+        "softGapCross": 0,
+        "softRecoveryFalse": 1
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": {
+        "left": 2,
+        "right": 0,
+        "falseEvents": 0,
+        "wrong": 0,
+        "duplicates": 1,
+        "crossGap": 0,
+        "reacquisitionFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": {
+        "left": 2,
+        "right": 0,
+        "falseEvents": 0,
+        "wrong": 0,
+        "duplicates": 1,
+        "crossGap": 0,
+        "reacquisitionFalse": 0,
+        "softGapCross": 0,
+        "softRecoveryFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_2",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": null
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_2",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": null
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": {
+        "left": 1,
+        "right": 1,
+        "falseEvents": 0,
+        "wrong": 1,
+        "duplicates": 1,
+        "crossGap": 0,
+        "reacquisitionFalse": 1
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": {
+        "left": 1,
+        "right": 1,
+        "falseEvents": 0,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 0,
+        "softGapCross": 0,
+        "softRecoveryFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": {
+        "left": 0,
+        "right": 0,
+        "falseEvents": 0,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": {
+        "left": 0,
+        "right": 0,
+        "falseEvents": 0,
+        "wrong": 0,
+        "duplicates": 0,
+        "crossGap": 0,
+        "reacquisitionFalse": 0,
+        "softGapCross": 0,
+        "softRecoveryFalse": 0
+      }
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_3",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "mode": "PRODUCTION_Y_V3",
+      "result": null
+    },
+    {
+      "PAIRING_STATUS": "PROVISIONAL_MEDIA_PAIR",
+      "analysisStatus": "POST_FAILURE_EXPLORATORY",
+      "decisionStatus": "NON_DECISIONAL",
+      "role": "REFERENCE_LIVE_3",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "mode": "FIXED_REFERENCE",
+      "result": null
+    }
+  ],
+  "baselineDiagnostics": [
+    {
+      "role": "STRESS",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "status": "READY",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 20022.199996948242,
+        "startMs": 20035.59999847412,
+        "endMs": 21035.59999847412,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 30,
+      "rightUsable": 30,
+      "hipsUsable": 30
+    },
+    {
+      "role": "STRESS",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "status": "INSUFFICIENT_NEUTRAL_SAMPLES",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 20022.199996948242,
+        "startMs": 20035.59999847412,
+        "endMs": 21035.59999847412,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 9,
+      "rightUsable": 5,
+      "hipsUsable": 13
+    },
+    {
+      "role": "STRESS",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "status": "READY",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 20022.199996948242,
+        "startMs": 20035.59999847412,
+        "endMs": 21035.59999847412,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 30,
+      "rightUsable": 30,
+      "hipsUsable": 30
+    },
+    {
+      "role": "REFERENCE_OLD_CLEAN",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "status": "READY",
+      "interval": {
+        "source": "FIRST_NEUTRAL_COMPATIBILITY",
+        "calibrationStartMs": null,
+        "startMs": 7333.199996948242,
+        "endMs": 9333.199996948242,
+        "frameCount": 60,
+        "excludedStageIndex": 0
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 60,
+      "rightUsable": 60,
+      "hipsUsable": 60
+    },
+    {
+      "role": "REFERENCE_OLD_CLEAN",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "status": "READY",
+      "interval": {
+        "source": "FIRST_NEUTRAL_COMPATIBILITY",
+        "calibrationStartMs": null,
+        "startMs": 7333.199996948242,
+        "endMs": 9333.199996948242,
+        "frameCount": 60,
+        "excludedStageIndex": 0
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 44,
+      "rightUsable": 39,
+      "hipsUsable": 44
+    },
+    {
+      "role": "REFERENCE_OLD_CLEAN",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "status": "INSUFFICIENT_NEUTRAL_SAMPLES",
+      "interval": {
+        "source": "FIRST_NEUTRAL_COMPATIBILITY",
+        "calibrationStartMs": null,
+        "startMs": 7333.199996948242,
+        "endMs": 9333.199996948242,
+        "frameCount": 60,
+        "excludedStageIndex": 0
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 0,
+      "rightUsable": 0,
+      "hipsUsable": 60
+    },
+    {
+      "role": "REFERENCE_LIVE_1",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "status": "READY",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 21517,
+        "startMs": 21532.09999847412,
+        "endMs": 22532.09999847412,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 30,
+      "rightUsable": 30,
+      "hipsUsable": 30
+    },
+    {
+      "role": "REFERENCE_LIVE_1",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "status": "INSUFFICIENT_NEUTRAL_SAMPLES",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 21517,
+        "startMs": 21532.09999847412,
+        "endMs": 22532.09999847412,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 17,
+      "rightUsable": 9,
+      "hipsUsable": 17
+    },
+    {
+      "role": "REFERENCE_LIVE_1",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "status": "READY",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 21517,
+        "startMs": 21532.09999847412,
+        "endMs": 22532.09999847412,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 30,
+      "rightUsable": 30,
+      "hipsUsable": 30
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "status": "READY",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 11688.900001525879,
+        "startMs": 11705.700004577637,
+        "endMs": 12705.700004577637,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 30,
+      "rightUsable": 30,
+      "hipsUsable": 30
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "status": "READY",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 11688.900001525879,
+        "startMs": 11705.700004577637,
+        "endMs": 12705.700004577637,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 30,
+      "rightUsable": 30,
+      "hipsUsable": 30
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "status": "INSUFFICIENT_NEUTRAL_SAMPLES",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 11688.900001525879,
+        "startMs": 11705.700004577637,
+        "endMs": 12705.700004577637,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 0,
+      "rightUsable": 25,
+      "hipsUsable": 30
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "status": "READY",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 13351,
+        "startMs": 13385.400001525879,
+        "endMs": 14385.400001525879,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 30,
+      "rightUsable": 30,
+      "hipsUsable": 30
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "status": "READY",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 13351,
+        "startMs": 13385.400001525879,
+        "endMs": 14385.400001525879,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 22,
+      "rightUsable": 21,
+      "hipsUsable": 22
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "status": "INSUFFICIENT_NEUTRAL_SAMPLES",
+      "interval": {
+        "source": "LATEST_CALIBRATION_WINDOW",
+        "calibrationStartMs": 13351,
+        "startMs": 13385.400001525879,
+        "endMs": 14385.400001525879,
+        "frameCount": 30,
+        "excludedStageIndex": null
+      },
+      "requiredPerLimb": 20,
+      "leftUsable": 0,
+      "rightUsable": 0,
+      "hipsUsable": 30
+    }
+  ],
+  "knownFalseGeometry": [
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "baselineStatus": "READY",
+      "frameCount": 62,
+      "imageExtreme": 1,
+      "worldExtreme": 1,
+      "positiveSwapCount": 8,
+      "largeSwapCount": 0,
+      "poseMissingCount": 1,
+      "jointMissingCount": 1,
+      "bySpace": {
+        "image": {
+          "hipKneeDeviationMax": 0.35666318886398896,
+          "kneeAnkleDeviationMax": 0.818297993958426,
+          "segmentRatioVelocityAbsMax": 18.01171074457889,
+          "swapAdvantageMax": 0.06233453510742565,
+          "axisVelocity": {
+            "pelvis": {
+              "frames": 62,
+              "usable": 60,
+              "coverage": 0.967741935483871,
+              "min": -5369.987375413085,
+              "p05": -3980.925191574763,
+              "median": 31.659048903254792,
+              "p95": 2477.0133212053493,
+              "max": 5044.953376428387,
+              "absoluteMax": 5369.987375413085
+            },
+            "torso": {
+              "frames": 62,
+              "usable": 60,
+              "coverage": 0.967741935483871,
+              "min": -2988.4359932730663,
+              "p05": -2275.4154155773494,
+              "median": 3.0550291089656585,
+              "p95": 2909.545464354251,
+              "max": 4908.447908484481,
+              "absoluteMax": 4908.447908484481
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 61,
+            "rightHipKnee": 61,
+            "leftKneeAnkle": 61,
+            "rightKneeAnkle": 61
+          }
+        },
+        "world": {
+          "hipKneeDeviationMax": 0.6236429269878105,
+          "kneeAnkleDeviationMax": 0.7187387458577804,
+          "segmentRatioVelocityAbsMax": 17.282439037920383,
+          "swapAdvantageMax": 0.04644527818513297,
+          "axisVelocity": {
+            "pelvis": {
+              "absoluteMax": null
+            },
+            "torso": {
+              "absoluteMax": null
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 61,
+            "rightHipKnee": 61,
+            "leftKneeAnkle": 61,
+            "rightKneeAnkle": 61
+          }
+        }
+      }
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "baselineStatus": "READY",
+      "frameCount": 62,
+      "imageExtreme": 0,
+      "worldExtreme": 0,
+      "positiveSwapCount": 0,
+      "largeSwapCount": 0,
+      "poseMissingCount": 2,
+      "jointMissingCount": 4,
+      "bySpace": {
+        "image": {
+          "hipKneeDeviationMax": 0.10406099692608373,
+          "kneeAnkleDeviationMax": 0.09584900671081831,
+          "segmentRatioVelocityAbsMax": 2.930708149487368,
+          "swapAdvantageMax": -0.0005688157186207327,
+          "axisVelocity": {
+            "pelvis": {
+              "frames": 62,
+              "usable": 58,
+              "coverage": 0.9354838709677419,
+              "min": -1935.9898619009039,
+              "p05": -1019.8507421011534,
+              "median": -20.756893330191332,
+              "p95": 1237.9259107291753,
+              "max": 1987.4415931895182,
+              "absoluteMax": 1987.4415931895182
+            },
+            "torso": {
+              "frames": 62,
+              "usable": 58,
+              "coverage": 0.9354838709677419,
+              "min": -362.3393708903919,
+              "p05": -284.77107373868364,
+              "median": 9.997781566165703,
+              "p95": 294.47766427721365,
+              "max": 327.7041456555818,
+              "absoluteMax": 362.3393708903919
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 59,
+            "rightHipKnee": 60,
+            "leftKneeAnkle": 58,
+            "rightKneeAnkle": 60
+          }
+        },
+        "world": {
+          "hipKneeDeviationMax": 0.06565616238649508,
+          "kneeAnkleDeviationMax": 0.09659483422661297,
+          "segmentRatioVelocityAbsMax": 2.682172619091673,
+          "swapAdvantageMax": -0.05388110400943241,
+          "axisVelocity": {
+            "pelvis": {
+              "absoluteMax": null
+            },
+            "torso": {
+              "absoluteMax": null
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 59,
+            "rightHipKnee": 60,
+            "leftKneeAnkle": 58,
+            "rightKneeAnkle": 60
+          }
+        }
+      }
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "baselineStatus": "INSUFFICIENT_NEUTRAL_SAMPLES",
+      "frameCount": 62,
+      "imageExtreme": 0,
+      "worldExtreme": 0,
+      "positiveSwapCount": 0,
+      "largeSwapCount": 0,
+      "poseMissingCount": 0,
+      "jointMissingCount": 46,
+      "bySpace": {
+        "image": {
+          "hipKneeDeviationMax": 0.13183368620166092,
+          "kneeAnkleDeviationMax": 0.08740753953302405,
+          "segmentRatioVelocityAbsMax": 5.346919745560429,
+          "swapAdvantageMax": null,
+          "axisVelocity": {
+            "pelvis": {
+              "frames": 62,
+              "usable": 62,
+              "coverage": 1,
+              "min": -510.7905775205037,
+              "p05": -345.1009438636888,
+              "median": 73.31798004435005,
+              "p95": 788.5843246572288,
+              "max": 3602.0855380338985,
+              "absoluteMax": 3602.0855380338985
+            },
+            "torso": {
+              "frames": 62,
+              "usable": 62,
+              "coverage": 1,
+              "min": -117.42978735772643,
+              "p05": -58.27218559434588,
+              "median": 40.25460111976523,
+              "p95": 238.305267430836,
+              "max": 457.7576778125893,
+              "absoluteMax": 457.7576778125893
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 0,
+            "rightHipKnee": 43,
+            "leftKneeAnkle": 0,
+            "rightKneeAnkle": 43
+          }
+        },
+        "world": {
+          "hipKneeDeviationMax": 0.0997694277478407,
+          "kneeAnkleDeviationMax": 0.09133493792090341,
+          "segmentRatioVelocityAbsMax": 4.0980446897123635,
+          "swapAdvantageMax": -0.44318935036128804,
+          "axisVelocity": {
+            "pelvis": {
+              "absoluteMax": null
+            },
+            "torso": {
+              "absoluteMax": null
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 0,
+            "rightHipKnee": 43,
+            "leftKneeAnkle": 0,
+            "rightKneeAnkle": 43
+          }
+        }
+      }
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_VIDEO_CONTROL",
+      "trialId": 1,
+      "baselineStatus": "READY",
+      "frameCount": 48,
+      "imageExtreme": 0,
+      "worldExtreme": 0,
+      "positiveSwapCount": 0,
+      "largeSwapCount": 0,
+      "poseMissingCount": 0,
+      "jointMissingCount": 43,
+      "bySpace": {
+        "image": {
+          "hipKneeDeviationMax": 0.28297263617628343,
+          "kneeAnkleDeviationMax": 0.1311134879753515,
+          "segmentRatioVelocityAbsMax": 1.281568337940954,
+          "swapAdvantageMax": -0.1634026261189846,
+          "axisVelocity": {
+            "pelvis": {
+              "frames": 48,
+              "usable": 48,
+              "coverage": 1,
+              "min": -1045.1340647062673,
+              "p05": -248.45714086588387,
+              "median": 31.37995592245241,
+              "p95": 550.3660563377132,
+              "max": 640.4111064995243,
+              "absoluteMax": 1045.1340647062673
+            },
+            "torso": {
+              "frames": 48,
+              "usable": 48,
+              "coverage": 1,
+              "min": -109.05602393858537,
+              "p05": -96.45128600685081,
+              "median": 1.1924051548650074,
+              "p95": 67.74337688588358,
+              "max": 142.62951198826144,
+              "absoluteMax": 142.62951198826144
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 5,
+            "rightHipKnee": 48,
+            "leftKneeAnkle": 5,
+            "rightKneeAnkle": 48
+          }
+        },
+        "world": {
+          "hipKneeDeviationMax": 0.21274873700928043,
+          "kneeAnkleDeviationMax": 0.09824110701846223,
+          "segmentRatioVelocityAbsMax": 2.0052601126350864,
+          "swapAdvantageMax": -0.8861443991103849,
+          "axisVelocity": {
+            "pelvis": {
+              "absoluteMax": null
+            },
+            "torso": {
+              "absoluteMax": null
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 5,
+            "rightHipKnee": 48,
+            "leftKneeAnkle": 5,
+            "rightKneeAnkle": 48
+          }
+        }
+      }
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "FULL_IMAGE",
+      "trialId": 1,
+      "baselineStatus": "READY",
+      "frameCount": 48,
+      "imageExtreme": 0,
+      "worldExtreme": 0,
+      "positiveSwapCount": 0,
+      "largeSwapCount": 0,
+      "poseMissingCount": 12,
+      "jointMissingCount": 26,
+      "bySpace": {
+        "image": {
+          "hipKneeDeviationMax": 0.40286519893283845,
+          "kneeAnkleDeviationMax": 0.25562212393984907,
+          "segmentRatioVelocityAbsMax": 7.677435359672723,
+          "swapAdvantageMax": -0.1630805846140121,
+          "axisVelocity": {
+            "pelvis": {
+              "frames": 48,
+              "usable": 32,
+              "coverage": 0.6666666666666666,
+              "min": -5397.597687191199,
+              "p05": -504.8034054495756,
+              "median": -14.494015445756869,
+              "p95": 331.1355956601126,
+              "max": 361.091073647737,
+              "absoluteMax": 5397.597687191199
+            },
+            "torso": {
+              "frames": 48,
+              "usable": 32,
+              "coverage": 0.6666666666666666,
+              "min": -156.02256503196338,
+              "p05": -115.55448566715161,
+              "median": 4.960728182829895,
+              "p95": 142.5373543219701,
+              "max": 240.17319008860548,
+              "absoluteMax": 240.17319008860548
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 27,
+            "rightHipKnee": 34,
+            "leftKneeAnkle": 23,
+            "rightKneeAnkle": 32
+          }
+        },
+        "world": {
+          "hipKneeDeviationMax": 0.11741717226692516,
+          "kneeAnkleDeviationMax": 0.19189048116873697,
+          "segmentRatioVelocityAbsMax": 3.5273351000245174,
+          "swapAdvantageMax": -0.45538447396660364,
+          "axisVelocity": {
+            "pelvis": {
+              "absoluteMax": null
+            },
+            "torso": {
+              "absoluteMax": null
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 27,
+            "rightHipKnee": 34,
+            "leftKneeAnkle": 23,
+            "rightKneeAnkle": 32
+          }
+        }
+      }
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "variant": "HEAVY_VIDEO",
+      "trialId": 1,
+      "baselineStatus": "INSUFFICIENT_NEUTRAL_SAMPLES",
+      "frameCount": 48,
+      "imageExtreme": 0,
+      "worldExtreme": 0,
+      "positiveSwapCount": 0,
+      "largeSwapCount": 0,
+      "poseMissingCount": 0,
+      "jointMissingCount": 48,
+      "bySpace": {
+        "image": {
+          "hipKneeDeviationMax": null,
+          "kneeAnkleDeviationMax": null,
+          "segmentRatioVelocityAbsMax": null,
+          "swapAdvantageMax": null,
+          "axisVelocity": {
+            "pelvis": {
+              "frames": 48,
+              "usable": 48,
+              "coverage": 1,
+              "min": -2112.7147821595513,
+              "p05": -1135.4899509729603,
+              "median": 7.359020342793489,
+              "p95": 1176.3581053250625,
+              "max": 2168.6418632586165,
+              "absoluteMax": 2168.6418632586165
+            },
+            "torso": {
+              "frames": 48,
+              "usable": 48,
+              "coverage": 1,
+              "min": -58.06892654340407,
+              "p05": -32.304489682453344,
+              "median": 4.446118038123595,
+              "p95": 45.37669355139684,
+              "max": 48.72125727787547,
+              "absoluteMax": 58.06892654340407
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 0,
+            "rightHipKnee": 0,
+            "leftKneeAnkle": 0,
+            "rightKneeAnkle": 0
+          }
+        },
+        "world": {
+          "hipKneeDeviationMax": null,
+          "kneeAnkleDeviationMax": null,
+          "segmentRatioVelocityAbsMax": null,
+          "swapAdvantageMax": null,
+          "axisVelocity": {
+            "pelvis": {
+              "absoluteMax": null
+            },
+            "torso": {
+              "absoluteMax": null
+            }
+          },
+          "segmentObservationCount": {
+            "leftHipKnee": 0,
+            "rightHipKnee": 0,
+            "leftKneeAnkle": 0,
+            "rightKneeAnkle": 0
+          }
+        }
+      }
+    }
+  ],
+  "integrity": [
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/3차검증2.json",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/3차검증.webm",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/plank-stork-shadow-analysis/step-4o2/86edc4e950eafb8c8c03ab486d6d445fffcb99bafdcfd50dbb1eed16feec2236.trace.json",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/clean인가요.json",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/clean인가.webm",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/plank-stork-shadow-analysis/step-4o2/a5eb248cadc4e2c176592f90bccf098a99ef293b6206276787d60a4bc6a3421c.trace.json",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/4gi replay json.json",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/4gi replay webm.webm",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/plank-stork-shadow-analysis/step-4o2/cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934.trace.json",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/4j result json.json",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/4j result webm.webm",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/plank-stork-shadow-analysis/step-4o2/cf1225c4779277f8c00f1c0e568750f9f4fc567f82f092407d9901ecdccfa54b.trace.json",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/4k.2a json.json",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/4k.2a webm.webm",
+      "unchanged": true
+    },
+    {
+      "path": "/Users/gimjeonghyeon/Desktop/plank-stork-shadow-analysis/step-4o2/d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809.trace.json",
+      "unchanged": true
+    }
+  ],
+  "productionUnchanged": true,
+  "regressions": {
+    "createdAt": "2026-10-08T17:35:41.305Z",
+    "step4K1": true,
+    "step4L": true,
+    "step4K2": true,
+    "step4M436": true,
+    "step4N24": true
+  },
+  "verification": {
+    "typecheck": "PASS",
+    "build": "PASS",
+    "testCommand": "pnpm --filter @plank-stork/controller-web test",
+    "testFiles": 79,
+    "tests": 871,
+    "priorTests": 830,
+    "newTests": 41,
+    "diffCheck": "PASS",
+    "commitOrPush": false
+  }
+}

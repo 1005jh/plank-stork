@@ -61,7 +61,7 @@ export function signalStats(points: readonly { timestamp: number; value: number 
       return { threshold, longestAboveMs, framesAbove };
     }) };
 }
-function prepareOne(input: MultiInput, trialId: number, production: ReturnType<typeof replayKneeKickV3>) {
+export function prepareMultiFixture(input: MultiInput, trialId: number, production: ReturnType<typeof replayKneeKickV3>) {
   const { session, filename, role } = input, trial = session.liveResult.trials.find((t) => t.id === trialId)!;
   const stages = discoveryStages(session, trial);
   if (stages.source !== 'GUIDED_STAGE_CHANGE') throw new Error(`${filename}: STEP 4J는 GUIDED_STAGE_CHANGE marker가 필요합니다.`);
@@ -93,7 +93,7 @@ function prepareOne(input: MultiInput, trialId: number, production: ReturnType<t
   return { input: { filename, captureId: session.captureId, trialId, role }, stages: stages.stages, stageSignals, frames,
     baseline, yBaseline: production.baseline, productionY: production.result, liveReplayParity: liveParity(session, trialId, production) };
 }
-export type PreparedMultiFixture = ReturnType<typeof prepareOne>;
+export type PreparedMultiFixture = ReturnType<typeof prepareMultiFixture>;
 export function prepareMultiInputs(inputs: readonly MultiInput[]): PreparedMultiFixture[] {
   const seen = new Set<string>();
   // All new LIVE parity checks finish before any multi-signal extraction/sweep begins.
@@ -104,7 +104,7 @@ export function prepareMultiInputs(inputs: readonly MultiInput[]): PreparedMulti
     if (parity.required && !parity.matched) throw new Error(`LIVE_V3_PARITY_MISMATCH ${input.filename}: ${JSON.stringify(parity)}`);
     return { input, trialId: trial.id, production };
   }));
-  return checked.map(({ input, trialId, production }) => prepareOne(input, trialId, production));
+  return checked.map(({ input, trialId, production }) => prepareMultiFixture(input, trialId, production));
 }
 function outcome(stage: DiscoveryStage, fixture: PreparedMultiFixture, config: MultiConfig, events: MultiEvent[]) {
   const frames = fixture.frames.filter((f) => f.stageIndex === stage.stageIndex && !f.calibrationOnly), channels = activeChannels(config);

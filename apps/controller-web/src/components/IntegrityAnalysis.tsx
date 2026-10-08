@@ -1,3 +1,4 @@
+import { EstimatorContinuityAnalysis } from './EstimatorContinuityAnalysis';
 import { memo, useEffect, useRef, useState } from 'react';
 import { INTEGRITY_ROLES, prepareIntegrityInputs, type IntegrityInput, type IntegrityRole, type IntegrityFixture } from '../discovery/integrityFeatures';
 import { createIntegrityEvidence, analyzeIntegrityConfig, createIntegrityReport, integrityTracesCsv,
@@ -139,5 +140,5 @@ export const IntegrityAnalysis = memo(function IntegrityAnalysis() {
       }))}</tbody></table></div>
       {detail && <details open><summary>Guard episodes / recovery latency / events</summary><pre>{JSON.stringify(detail, null, 2)}</pre></details>}
     </>}
-  </section><TwistConfusionAnalysis /><BodyLocalAnalysis /><GeometryReliabilityAnalysis /></>;
+  </section><TwistConfusionAnalysis /><BodyLocalAnalysis /><GeometryReliabilityAnalysis /><EstimatorContinuityAnalysis /></>;
 });

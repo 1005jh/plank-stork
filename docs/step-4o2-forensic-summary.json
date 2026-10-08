@@ -1,0 +1,1798 @@
+{
+  "reportId": "step-4o2-47474b3d5010f1c4",
+  "forensicReportSha256": "70517dcb9b9ae373f59cea61b45f38d9526e3236f0e813b2251dac4df455fe45",
+  "preregistrationSha256": "47474b3d5010f1c4e94cea6e9aa0f76d97f8abba086acddbf8115c939e0d484d",
+  "frozenAt": "2026-10-08T12:48:46.870Z",
+  "reportedAt": "2026-10-08T12:58:48.150860+00:00",
+  "statusCounts": {
+    "TEMPORALLY_INCOMPATIBLE": 8,
+    "TRACE_MISMATCH": 22
+  },
+  "allVerified": false,
+  "fourOExecuted": false,
+  "blockedCaptures": [
+    "plank-stork-replay-2026-09-30T11-39-17-364Z",
+    "plank-stork-replay-2026-10-03T16-39-36-229Z",
+    "plank-stork-replay-2026-10-05T14-37-39-718Z",
+    "plank-stork-replay-2026-10-06T11-19-04-864Z",
+    "plank-stork-replay-2026-09-30T12-09-14-840Z"
+  ],
+  "rows": [
+    {
+      "role": "STRESS",
+      "captureId": "plank-stork-replay-2026-09-30T11-39-17-364Z",
+      "thresholdPassingCount": 0,
+      "winnerMediaId": null,
+      "bestScoringMediaId": "86edc4e950eafb8c8c03ab486d6d445fffcb99bafdcfd50dbb1eed16feec2236",
+      "runnerUpMediaId": "a5eb248cadc4e2c176592f90bccf098a99ef293b6206276787d60a4bc6a3421c",
+      "separation": {
+        "pose": false,
+        "trajectory": false
+      },
+      "separationPass": false,
+      "uniqueWinner": false,
+      "sharedMediaWinner": false,
+      "verified": false,
+      "bestScoringFilename": "3차검증.webm",
+      "runnerUpFilename": "clean인가.webm",
+      "expectedMappingMatchesBestScoringOnly": true,
+      "descriptiveBestVsRunnerUpSeparation": {
+        "pose": true,
+        "trajectory": true
+      },
+      "note": "No accepted winner. Descriptive separation cannot override failed thresholds."
+    },
+    {
+      "role": "REFERENCE_LIVE_1",
+      "captureId": "plank-stork-replay-2026-10-03T16-39-36-229Z",
+      "thresholdPassingCount": 0,
+      "winnerMediaId": null,
+      "bestScoringMediaId": "cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934",
+      "runnerUpMediaId": "d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809",
+      "separation": {
+        "pose": false,
+        "trajectory": false
+      },
+      "separationPass": false,
+      "uniqueWinner": false,
+      "sharedMediaWinner": false,
+      "verified": false,
+      "bestScoringFilename": "4gi replay webm.webm",
+      "runnerUpFilename": "4k.2a webm.webm",
+      "expectedMappingMatchesBestScoringOnly": true,
+      "descriptiveBestVsRunnerUpSeparation": {
+        "pose": true,
+        "trajectory": true
+      },
+      "note": "No accepted winner. Descriptive separation cannot override failed thresholds."
+    },
+    {
+      "role": "REFERENCE_LIVE_2",
+      "captureId": "plank-stork-replay-2026-10-05T14-37-39-718Z",
+      "thresholdPassingCount": 0,
+      "winnerMediaId": null,
+      "bestScoringMediaId": "cf1225c4779277f8c00f1c0e568750f9f4fc567f82f092407d9901ecdccfa54b",
+      "runnerUpMediaId": "d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809",
+      "separation": {
+        "pose": false,
+        "trajectory": false
+      },
+      "separationPass": false,
+      "uniqueWinner": false,
+      "sharedMediaWinner": false,
+      "verified": false,
+      "bestScoringFilename": "4j result webm.webm",
+      "runnerUpFilename": "4k.2a webm.webm",
+      "expectedMappingMatchesBestScoringOnly": true,
+      "descriptiveBestVsRunnerUpSeparation": {
+        "pose": true,
+        "trajectory": true
+      },
+      "note": "No accepted winner. Descriptive separation cannot override failed thresholds."
+    },
+    {
+      "role": "REFERENCE_LIVE_3",
+      "captureId": "plank-stork-replay-2026-10-06T11-19-04-864Z",
+      "thresholdPassingCount": 0,
+      "winnerMediaId": null,
+      "bestScoringMediaId": "d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809",
+      "runnerUpMediaId": "cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934",
+      "separation": {
+        "pose": false,
+        "trajectory": false
+      },
+      "separationPass": false,
+      "uniqueWinner": false,
+      "sharedMediaWinner": false,
+      "verified": false,
+      "bestScoringFilename": "4k.2a webm.webm",
+      "runnerUpFilename": "4gi replay webm.webm",
+      "expectedMappingMatchesBestScoringOnly": true,
+      "descriptiveBestVsRunnerUpSeparation": {
+        "pose": true,
+        "trajectory": true
+      },
+      "note": "No accepted winner. Descriptive separation cannot override failed thresholds."
+    },
+    {
+      "role": "REFERENCE_OLD_CLEAN",
+      "captureId": "plank-stork-replay-2026-09-30T12-09-14-840Z",
+      "thresholdPassingCount": 0,
+      "winnerMediaId": null,
+      "bestScoringMediaId": "a5eb248cadc4e2c176592f90bccf098a99ef293b6206276787d60a4bc6a3421c",
+      "runnerUpMediaId": "cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934",
+      "separation": {
+        "pose": false,
+        "trajectory": false
+      },
+      "separationPass": false,
+      "uniqueWinner": false,
+      "sharedMediaWinner": false,
+      "verified": false,
+      "bestScoringFilename": "clean인가.webm",
+      "runnerUpFilename": "4gi replay webm.webm",
+      "expectedMappingMatchesBestScoringOnly": true,
+      "descriptiveBestVsRunnerUpSeparation": {
+        "pose": false,
+        "trajectory": true
+      },
+      "note": "No accepted winner. Descriptive separation cannot override failed thresholds."
+    }
+  ],
+  "matrix": [
+    {
+      "captureId": "plank-stork-replay-2026-09-30T11-39-17-364Z",
+      "mediaId": "a6a3b8ca107223bf1d8ea896039fdb914ba5cbb86b1a2f06a0f2491220c40a3d",
+      "status": "TEMPORALLY_INCOMPATIBLE",
+      "matchedFrames": 939,
+      "usablePoseFrames": 448,
+      "coverage": 0.5427745664739885,
+      "usableCoverageOfRecorded": 0.2589595375722543,
+      "usableCoverageOfMatched": 0.47710330138445156,
+      "poseError": {
+        "count": 448,
+        "median": 0.5057693598230291,
+        "p90": 0.5544619143502286,
+        "p95": 0.5692271249429942,
+        "max": 0.6090086456053659
+      },
+      "visibilityError": {
+        "count": 4808,
+        "median": 0.12941431067883968,
+        "p90": 0.9291611276566982,
+        "p95": 0.9510793015360832,
+        "max": 0.9991622344241478
+      },
+      "medianCorrelationAcrossAxes": -0.14730880422328027,
+      "medianMotionDeltaCorrelation": 0.0004731110909096084,
+      "medianDeltaRMSE": 0.029452291305166755,
+      "temporal": {
+        "captureDurationMs": 57628.5,
+        "lastPts": 31751,
+        "durationMinusLastPtsMs": 25877.5,
+        "requiredEndMs": 46663.59999847412,
+        "compatible": false
+      },
+      "checks": {
+        "matchedCoverage": false,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 601,
+        "recordedOnly": 116,
+        "inferredOnly": 222,
+        "bothMissing": 0
+      },
+      "role": "STRESS",
+      "mediaFilename": "2차검증1.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T11-39-17-364Z",
+      "mediaId": "86edc4e950eafb8c8c03ab486d6d445fffcb99bafdcfd50dbb1eed16feec2236",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1713,
+      "usablePoseFrames": 1051,
+      "coverage": 0.9901734104046243,
+      "usableCoverageOfRecorded": 0.607514450867052,
+      "usableCoverageOfMatched": 0.613543490951547,
+      "poseError": {
+        "count": 1051,
+        "median": 0.014359678182751946,
+        "p90": 0.05300947061255662,
+        "p95": 0.1229446971242643,
+        "max": 0.9875414147549137
+      },
+      "visibilityError": {
+        "count": 8544,
+        "median": 0.0051826536655426025,
+        "p90": 0.08881741762161255,
+        "p95": 0.15028595924377441,
+        "max": 0.8262330442667007
+      },
+      "medianCorrelationAcrossAxes": 0.8922631267133031,
+      "medianMotionDeltaCorrelation": 0.12416199886320528,
+      "medianDeltaRMSE": 0.028224530923067166,
+      "temporal": {
+        "captureDurationMs": 57628.5,
+        "lastPts": 57572,
+        "durationMinusLastPtsMs": 56.5,
+        "requiredEndMs": 46663.59999847412,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": true,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 1068,
+        "recordedOnly": 208,
+        "inferredOnly": 103,
+        "bothMissing": 334
+      },
+      "role": "STRESS",
+      "mediaFilename": "3차검증.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T11-39-17-364Z",
+      "mediaId": "cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1675,
+      "usablePoseFrames": 869,
+      "coverage": 0.9682080924855492,
+      "usableCoverageOfRecorded": 0.5023121387283237,
+      "usableCoverageOfMatched": 0.5188059701492538,
+      "poseError": {
+        "count": 869,
+        "median": 0.17232779261690023,
+        "p90": 0.43434347065992784,
+        "p95": 0.48570019887023386,
+        "max": 0.7642167109978166
+      },
+      "visibilityError": {
+        "count": 7424,
+        "median": 0.03671768307685852,
+        "p90": 0.3614580035209656,
+        "p95": 0.5222830474376678,
+        "max": 0.8915678337216377
+      },
+      "medianCorrelationAcrossAxes": 0.2031277639698053,
+      "medianMotionDeltaCorrelation": -0.010734179379954419,
+      "medianDeltaRMSE": 0.02985903746770979,
+      "temporal": {
+        "captureDurationMs": 57628.5,
+        "lastPts": 56440,
+        "durationMinusLastPtsMs": 1188.5,
+        "requiredEndMs": 46663.59999847412,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 928,
+        "recordedOnly": 315,
+        "inferredOnly": 277,
+        "bothMissing": 155
+      },
+      "role": "STRESS",
+      "mediaFilename": "4gi replay webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T11-39-17-364Z",
+      "mediaId": "cf1225c4779277f8c00f1c0e568750f9f4fc567f82f092407d9901ecdccfa54b",
+      "status": "TEMPORALLY_INCOMPATIBLE",
+      "matchedFrames": 1366,
+      "usablePoseFrames": 933,
+      "coverage": 0.7895953757225433,
+      "usableCoverageOfRecorded": 0.5393063583815029,
+      "usableCoverageOfMatched": 0.6830161054172768,
+      "poseError": {
+        "count": 933,
+        "median": 0.2487765475592206,
+        "p90": 0.32690725061166265,
+        "p95": 0.42226269660342053,
+        "max": 0.7042945680863799
+      },
+      "visibilityError": {
+        "count": 7464,
+        "median": 0.01848265528678894,
+        "p90": 0.4359821081161499,
+        "p95": 0.5843376219272614,
+        "max": 0.8536162227392197
+      },
+      "medianCorrelationAcrossAxes": -0.13934999628018277,
+      "medianMotionDeltaCorrelation": 0.012978190912063984,
+      "medianDeltaRMSE": 0.03000974048570031,
+      "temporal": {
+        "captureDurationMs": 57628.5,
+        "lastPts": 46178,
+        "durationMinusLastPtsMs": 11450.5,
+        "requiredEndMs": 46663.59999847412,
+        "compatible": false
+      },
+      "checks": {
+        "matchedCoverage": false,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 933,
+        "recordedOnly": 80,
+        "inferredOnly": 310,
+        "bothMissing": 43
+      },
+      "role": "STRESS",
+      "mediaFilename": "4j result webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T11-39-17-364Z",
+      "mediaId": "d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1482,
+      "usablePoseFrames": 849,
+      "coverage": 0.8566473988439306,
+      "usableCoverageOfRecorded": 0.4907514450867052,
+      "usableCoverageOfMatched": 0.5728744939271255,
+      "poseError": {
+        "count": 849,
+        "median": 0.17157432736800998,
+        "p90": 0.38810717036842773,
+        "p95": 0.4014343824131842,
+        "max": 0.5262110518273349
+      },
+      "visibilityError": {
+        "count": 6912,
+        "median": 0.01645481586456299,
+        "p90": 0.3172626197338104,
+        "p95": 0.41758692264556885,
+        "max": 0.8393752723932266
+      },
+      "medianCorrelationAcrossAxes": 0.07723672178040195,
+      "medianMotionDeltaCorrelation": -0.008551688868965212,
+      "medianDeltaRMSE": 0.026998613137085306,
+      "temporal": {
+        "captureDurationMs": 57628.5,
+        "lastPts": 50109,
+        "durationMinusLastPtsMs": 7519.5,
+        "requiredEndMs": 46663.59999847412,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 864,
+        "recordedOnly": 224,
+        "inferredOnly": 271,
+        "bothMissing": 123
+      },
+      "role": "STRESS",
+      "mediaFilename": "4k.2a webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T11-39-17-364Z",
+      "mediaId": "a5eb248cadc4e2c176592f90bccf098a99ef293b6206276787d60a4bc6a3421c",
+      "status": "TEMPORALLY_INCOMPATIBLE",
+      "matchedFrames": 1230,
+      "usablePoseFrames": 792,
+      "coverage": 0.7109826589595376,
+      "usableCoverageOfRecorded": 0.4578034682080925,
+      "usableCoverageOfMatched": 0.6439024390243903,
+      "poseError": {
+        "count": 792,
+        "median": 0.168616961805734,
+        "p90": 0.4405906549930724,
+        "p95": 0.4787764169565609,
+        "max": 1.1694828173637983
+      },
+      "visibilityError": {
+        "count": 6400,
+        "median": 0.029211431741714478,
+        "p90": 0.47445499897003174,
+        "p95": 0.655717521905899,
+        "max": 0.8707666248083115
+      },
+      "medianCorrelationAcrossAxes": -0.08153524497749084,
+      "medianMotionDeltaCorrelation": -0.005074195307526789,
+      "medianDeltaRMSE": 0.047683093589139317,
+      "temporal": {
+        "captureDurationMs": 57628.5,
+        "lastPts": 41581,
+        "durationMinusLastPtsMs": 16047.5,
+        "requiredEndMs": 46663.59999847412,
+        "compatible": false
+      },
+      "checks": {
+        "matchedCoverage": false,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 800,
+        "recordedOnly": 136,
+        "inferredOnly": 233,
+        "bothMissing": 61
+      },
+      "role": "STRESS",
+      "mediaFilename": "clean인가.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-03T16-39-36-229Z",
+      "mediaId": "a6a3b8ca107223bf1d8ea896039fdb914ba5cbb86b1a2f06a0f2491220c40a3d",
+      "status": "TEMPORALLY_INCOMPATIBLE",
+      "matchedFrames": 927,
+      "usablePoseFrames": 378,
+      "coverage": 0.5475487300649734,
+      "usableCoverageOfRecorded": 0.22327229769639692,
+      "usableCoverageOfMatched": 0.4077669902912621,
+      "poseError": {
+        "count": 378,
+        "median": 0.5409814654290441,
+        "p90": 0.6243696375667365,
+        "p95": 0.6854423430031061,
+        "max": 0.9044966684417668
+      },
+      "visibilityError": {
+        "count": 4504,
+        "median": 0.2878773361444473,
+        "p90": 0.9576813859266622,
+        "p95": 0.988378697540611,
+        "max": 0.9993382989196107
+      },
+      "medianCorrelationAcrossAxes": 0.07621110022813406,
+      "medianMotionDeltaCorrelation": 0.006377273782807058,
+      "medianDeltaRMSE": 0.053061677063276344,
+      "temporal": {
+        "captureDurationMs": 56481.70000457764,
+        "lastPts": 31751,
+        "durationMinusLastPtsMs": 24730.700004577637,
+        "requiredEndMs": 47913.40000152588,
+        "compatible": false
+      },
+      "checks": {
+        "matchedCoverage": false,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 563,
+        "recordedOnly": 117,
+        "inferredOnly": 247,
+        "bothMissing": 0
+      },
+      "role": "REFERENCE_LIVE_1",
+      "mediaFilename": "2차검증1.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-03T16-39-36-229Z",
+      "mediaId": "86edc4e950eafb8c8c03ab486d6d445fffcb99bafdcfd50dbb1eed16feec2236",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1659,
+      "usablePoseFrames": 829,
+      "coverage": 0.9799173065564087,
+      "usableCoverageOfRecorded": 0.4896633195510927,
+      "usableCoverageOfMatched": 0.49969861362266427,
+      "poseError": {
+        "count": 829,
+        "median": 0.16482393849821061,
+        "p90": 0.4098991758288897,
+        "p95": 0.429528346774938,
+        "max": 1.1978127642944711
+      },
+      "visibilityError": {
+        "count": 7184,
+        "median": 0.03789472579956055,
+        "p90": 0.3486984372138977,
+        "p95": 0.5552638471126556,
+        "max": 0.8647176399827003
+      },
+      "medianCorrelationAcrossAxes": 0.11448153746881305,
+      "medianMotionDeltaCorrelation": 0.017305795805918085,
+      "medianDeltaRMSE": 0.031861436705496654,
+      "temporal": {
+        "captureDurationMs": 56481.70000457764,
+        "lastPts": 57572,
+        "durationMinusLastPtsMs": -1090.2999954223633,
+        "requiredEndMs": 47913.40000152588,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 898,
+        "recordedOnly": 410,
+        "inferredOnly": 227,
+        "bothMissing": 124
+      },
+      "role": "REFERENCE_LIVE_1",
+      "mediaFilename": "3차검증.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-03T16-39-36-229Z",
+      "mediaId": "cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1673,
+      "usablePoseFrames": 1028,
+      "coverage": 0.9881866509155346,
+      "usableCoverageOfRecorded": 0.607206142941524,
+      "usableCoverageOfMatched": 0.6144650328750747,
+      "poseError": {
+        "count": 1028,
+        "median": 0.02133218994752497,
+        "p90": 0.08597703294413647,
+        "p95": 0.1344089946403972,
+        "max": 0.7853175267477212
+      },
+      "visibilityError": {
+        "count": 8816,
+        "median": 0.010306552052497864,
+        "p90": 0.12476537376642227,
+        "p95": 0.2370275817811489,
+        "max": 0.727603942155838
+      },
+      "medianCorrelationAcrossAxes": 0.7034683359819778,
+      "medianMotionDeltaCorrelation": 0.11195375009385679,
+      "medianDeltaRMSE": 0.048777714073089305,
+      "temporal": {
+        "captureDurationMs": 56481.70000457764,
+        "lastPts": 56440,
+        "durationMinusLastPtsMs": 41.70000457763672,
+        "requiredEndMs": 47913.40000152588,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": true,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 1102,
+        "recordedOnly": 218,
+        "inferredOnly": 108,
+        "bothMissing": 245
+      },
+      "role": "REFERENCE_LIVE_1",
+      "mediaFilename": "4gi replay webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-03T16-39-36-229Z",
+      "mediaId": "cf1225c4779277f8c00f1c0e568750f9f4fc567f82f092407d9901ecdccfa54b",
+      "status": "TEMPORALLY_INCOMPATIBLE",
+      "matchedFrames": 1354,
+      "usablePoseFrames": 992,
+      "coverage": 0.7997637330183107,
+      "usableCoverageOfRecorded": 0.5859421145894861,
+      "usableCoverageOfMatched": 0.7326440177252584,
+      "poseError": {
+        "count": 992,
+        "median": 0.1491924624839882,
+        "p90": 0.2564053511064159,
+        "p95": 0.34316338269765617,
+        "max": 0.950247470673451
+      },
+      "visibilityError": {
+        "count": 8080,
+        "median": 0.04503120481967926,
+        "p90": 0.4195433259010315,
+        "p95": 0.5318247973918915,
+        "max": 0.8591737076640129
+      },
+      "medianCorrelationAcrossAxes": -0.07513850854590032,
+      "medianMotionDeltaCorrelation": 0.011445629920731372,
+      "medianDeltaRMSE": 0.03947201891546771,
+      "temporal": {
+        "captureDurationMs": 56481.70000457764,
+        "lastPts": 46178,
+        "durationMinusLastPtsMs": 10303.700004577637,
+        "requiredEndMs": 47913.40000152588,
+        "compatible": false
+      },
+      "checks": {
+        "matchedCoverage": false,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 1010,
+        "recordedOnly": 92,
+        "inferredOnly": 218,
+        "bothMissing": 34
+      },
+      "role": "REFERENCE_LIVE_1",
+      "mediaFilename": "4j result webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-03T16-39-36-229Z",
+      "mediaId": "d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1464,
+      "usablePoseFrames": 932,
+      "coverage": 0.8647371529828707,
+      "usableCoverageOfRecorded": 0.5505020673360898,
+      "usableCoverageOfMatched": 0.6366120218579235,
+      "poseError": {
+        "count": 932,
+        "median": 0.07903695031076473,
+        "p90": 0.20908043299022822,
+        "p95": 0.2403056122966142,
+        "max": 1.03568652287465
+      },
+      "visibilityError": {
+        "count": 7624,
+        "median": 0.04180765151977539,
+        "p90": 0.3861144781112671,
+        "p95": 0.5080778300762177,
+        "max": 0.8113304823637009
+      },
+      "medianCorrelationAcrossAxes": 0.0015976243941358739,
+      "medianMotionDeltaCorrelation": 0.010373220560997432,
+      "medianDeltaRMSE": 0.039456517044097826,
+      "temporal": {
+        "captureDurationMs": 56481.70000457764,
+        "lastPts": 50109,
+        "durationMinusLastPtsMs": 6372.700004577637,
+        "requiredEndMs": 47913.40000152588,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 953,
+        "recordedOnly": 255,
+        "inferredOnly": 162,
+        "bothMissing": 94
+      },
+      "role": "REFERENCE_LIVE_1",
+      "mediaFilename": "4k.2a webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-03T16-39-36-229Z",
+      "mediaId": "a5eb248cadc4e2c176592f90bccf098a99ef293b6206276787d60a4bc6a3421c",
+      "status": "TEMPORALLY_INCOMPATIBLE",
+      "matchedFrames": 1224,
+      "usablePoseFrames": 826,
+      "coverage": 0.7229769639692853,
+      "usableCoverageOfRecorded": 0.48789131718842293,
+      "usableCoverageOfMatched": 0.6748366013071896,
+      "poseError": {
+        "count": 826,
+        "median": 0.10757279920958307,
+        "p90": 0.31634146266348556,
+        "p95": 0.35205818933170496,
+        "max": 0.7476360623122298
+      },
+      "visibilityError": {
+        "count": 6744,
+        "median": 0.049914538860321045,
+        "p90": 0.4451940655708313,
+        "p95": 0.643998920917511,
+        "max": 0.9609108194708824
+      },
+      "medianCorrelationAcrossAxes": -0.06856303214014939,
+      "medianMotionDeltaCorrelation": 0.006952159708753056,
+      "medianDeltaRMSE": 0.05615333790297804,
+      "temporal": {
+        "captureDurationMs": 56481.70000457764,
+        "lastPts": 41581,
+        "durationMinusLastPtsMs": 14900.700004577637,
+        "requiredEndMs": 47913.40000152588,
+        "compatible": false
+      },
+      "checks": {
+        "matchedCoverage": false,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 843,
+        "recordedOnly": 128,
+        "inferredOnly": 182,
+        "bothMissing": 71
+      },
+      "role": "REFERENCE_LIVE_1",
+      "mediaFilename": "clean인가.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-05T14-37-39-718Z",
+      "mediaId": "a6a3b8ca107223bf1d8ea896039fdb914ba5cbb86b1a2f06a0f2491220c40a3d",
+      "status": "TEMPORALLY_INCOMPATIBLE",
+      "matchedFrames": 908,
+      "usablePoseFrames": 547,
+      "coverage": 0.65465032444124,
+      "usableCoverageOfRecorded": 0.39437635183850034,
+      "usableCoverageOfMatched": 0.6024229074889867,
+      "poseError": {
+        "count": 547,
+        "median": 0.44225007968352287,
+        "p90": 0.5365380758691356,
+        "p95": 0.6294209997527996,
+        "max": 0.6889183721578361
+      },
+      "visibilityError": {
+        "count": 5680,
+        "median": 0.4856426299083978,
+        "p90": 0.9358500813759747,
+        "p95": 0.9875203236297239,
+        "max": 0.9992139712558128
+      },
+      "medianCorrelationAcrossAxes": 0.044903004965824514,
+      "medianMotionDeltaCorrelation": 0.003593712738942696,
+      "medianDeltaRMSE": 0.035100490103525527,
+      "temporal": {
+        "captureDurationMs": 46216.20000457764,
+        "lastPts": 31751,
+        "durationMinusLastPtsMs": 14465.200004577637,
+        "requiredEndMs": 38078.90000152588,
+        "compatible": false
+      },
+      "checks": {
+        "matchedCoverage": false,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 710,
+        "recordedOnly": 112,
+        "inferredOnly": 85,
+        "bothMissing": 1
+      },
+      "role": "REFERENCE_LIVE_2",
+      "mediaFilename": "2차검증1.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-05T14-37-39-718Z",
+      "mediaId": "86edc4e950eafb8c8c03ab486d6d445fffcb99bafdcfd50dbb1eed16feec2236",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1331,
+      "usablePoseFrames": 796,
+      "coverage": 0.9596250901225667,
+      "usableCoverageOfRecorded": 0.5739005046863734,
+      "usableCoverageOfMatched": 0.5980465815176559,
+      "poseError": {
+        "count": 796,
+        "median": 0.24176585123451505,
+        "p90": 0.2976604174076866,
+        "p95": 0.3477644077593978,
+        "max": 0.683770234005119
+      },
+      "visibilityError": {
+        "count": 6496,
+        "median": 0.0232124924659729,
+        "p90": 0.4030897319316864,
+        "p95": 0.5569315254688263,
+        "max": 0.8138741850852966
+      },
+      "medianCorrelationAcrossAxes": -0.07567032779670571,
+      "medianMotionDeltaCorrelation": -0.0038907302437312533,
+      "medianDeltaRMSE": 0.03339615106599368,
+      "temporal": {
+        "captureDurationMs": 46216.20000457764,
+        "lastPts": 57572,
+        "durationMinusLastPtsMs": -11355.799995422363,
+        "requiredEndMs": 38078.90000152588,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 812,
+        "recordedOnly": 341,
+        "inferredOnly": 93,
+        "bothMissing": 85
+      },
+      "role": "REFERENCE_LIVE_2",
+      "mediaFilename": "3차검증.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-05T14-37-39-718Z",
+      "mediaId": "cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1335,
+      "usablePoseFrames": 839,
+      "coverage": 0.9625090122566691,
+      "usableCoverageOfRecorded": 0.6049026676279741,
+      "usableCoverageOfMatched": 0.6284644194756555,
+      "poseError": {
+        "count": 839,
+        "median": 0.1458673140464459,
+        "p90": 0.21810429674767545,
+        "p95": 0.25402161081112246,
+        "max": 0.7327469317459054
+      },
+      "visibilityError": {
+        "count": 6976,
+        "median": 0.05093476176261902,
+        "p90": 0.40512412786483765,
+        "p95": 0.5110266804695129,
+        "max": 0.8355320990085602
+      },
+      "medianCorrelationAcrossAxes": 0.09508397591744695,
+      "medianMotionDeltaCorrelation": 0.0714320392664997,
+      "medianDeltaRMSE": 0.03793290109750093,
+      "temporal": {
+        "captureDurationMs": 46216.20000457764,
+        "lastPts": 56440,
+        "durationMinusLastPtsMs": -10223.799995422363,
+        "requiredEndMs": 38078.90000152588,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 872,
+        "recordedOnly": 281,
+        "inferredOnly": 108,
+        "bothMissing": 74
+      },
+      "role": "REFERENCE_LIVE_2",
+      "mediaFilename": "4gi replay webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-05T14-37-39-718Z",
+      "mediaId": "cf1225c4779277f8c00f1c0e568750f9f4fc567f82f092407d9901ecdccfa54b",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1331,
+      "usablePoseFrames": 1117,
+      "coverage": 0.9596250901225667,
+      "usableCoverageOfRecorded": 0.8053352559480894,
+      "usableCoverageOfMatched": 0.8392186326070623,
+      "poseError": {
+        "count": 1117,
+        "median": 0.020239114648527748,
+        "p90": 0.11713971287114157,
+        "p95": 0.20086167594538143,
+        "max": 0.5030372969317596
+      },
+      "visibilityError": {
+        "count": 8936,
+        "median": 0.005660802125930786,
+        "p90": 0.10689491033554077,
+        "p95": 0.19158953428268433,
+        "max": 0.7267500460147858
+      },
+      "medianCorrelationAcrossAxes": 0.7153598221195091,
+      "medianMotionDeltaCorrelation": 0.022973453231551436,
+      "medianDeltaRMSE": 0.060638364029823165,
+      "temporal": {
+        "captureDurationMs": 46216.20000457764,
+        "lastPts": 46178,
+        "durationMinusLastPtsMs": 38.20000457763672,
+        "requiredEndMs": 38078.90000152588,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": true,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 1117,
+        "recordedOnly": 34,
+        "inferredOnly": 93,
+        "bothMissing": 87
+      },
+      "role": "REFERENCE_LIVE_2",
+      "mediaFilename": "4j result webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-05T14-37-39-718Z",
+      "mediaId": "d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1331,
+      "usablePoseFrames": 1000,
+      "coverage": 0.9596250901225667,
+      "usableCoverageOfRecorded": 0.7209805335255948,
+      "usableCoverageOfMatched": 0.7513148009015778,
+      "poseError": {
+        "count": 1000,
+        "median": 0.13800789200855682,
+        "p90": 0.24388933190392476,
+        "p95": 0.30463169156346975,
+        "max": 0.7952287227847898
+      },
+      "visibilityError": {
+        "count": 8032,
+        "median": 0.016430526971817017,
+        "p90": 0.3252434730529785,
+        "p95": 0.44362926483154297,
+        "max": 0.7858299314975739
+      },
+      "medianCorrelationAcrossAxes": -0.17560071469282879,
+      "medianMotionDeltaCorrelation": 0.016030370828678444,
+      "medianDeltaRMSE": 0.041514057454010454,
+      "temporal": {
+        "captureDurationMs": 46216.20000457764,
+        "lastPts": 50109,
+        "durationMinusLastPtsMs": -3892.7999954223633,
+        "requiredEndMs": 38078.90000152588,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 1004,
+        "recordedOnly": 146,
+        "inferredOnly": 82,
+        "bothMissing": 99
+      },
+      "role": "REFERENCE_LIVE_2",
+      "mediaFilename": "4k.2a webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-05T14-37-39-718Z",
+      "mediaId": "a5eb248cadc4e2c176592f90bccf098a99ef293b6206276787d60a4bc6a3421c",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1200,
+      "usablePoseFrames": 972,
+      "coverage": 0.8651766402307137,
+      "usableCoverageOfRecorded": 0.7007930785868781,
+      "usableCoverageOfMatched": 0.81,
+      "poseError": {
+        "count": 972,
+        "median": 0.1880955906927243,
+        "p90": 0.31103868523619377,
+        "p95": 0.40649174441900315,
+        "max": 0.9041072116207813
+      },
+      "visibilityError": {
+        "count": 7840,
+        "median": 0.030544281005859375,
+        "p90": 0.34321123361587524,
+        "p95": 0.4787604510784149,
+        "max": 0.8943395465612411
+      },
+      "medianCorrelationAcrossAxes": 0.01663938025153183,
+      "medianMotionDeltaCorrelation": 0.006846247092158723,
+      "medianDeltaRMSE": 0.057206092413029944,
+      "temporal": {
+        "captureDurationMs": 46216.20000457764,
+        "lastPts": 41581,
+        "durationMinusLastPtsMs": 4635.200004577637,
+        "requiredEndMs": 38078.90000152588,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 980,
+        "recordedOnly": 128,
+        "inferredOnly": 23,
+        "bothMissing": 69
+      },
+      "role": "REFERENCE_LIVE_2",
+      "mediaFilename": "clean인가.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-06T11-19-04-864Z",
+      "mediaId": "a6a3b8ca107223bf1d8ea896039fdb914ba5cbb86b1a2f06a0f2491220c40a3d",
+      "status": "TEMPORALLY_INCOMPATIBLE",
+      "matchedFrames": 943,
+      "usablePoseFrames": 446,
+      "coverage": 0.6278295605858855,
+      "usableCoverageOfRecorded": 0.2969374167776298,
+      "usableCoverageOfMatched": 0.47295864262990456,
+      "poseError": {
+        "count": 446,
+        "median": 0.49971255020699235,
+        "p90": 0.5624429197525305,
+        "p95": 0.6023099725120317,
+        "max": 0.7004263289438009
+      },
+      "visibilityError": {
+        "count": 4872,
+        "median": 0.2238201362779364,
+        "p90": 0.8861692249774933,
+        "p95": 0.9511063732206821,
+        "max": 0.9992961070383899
+      },
+      "medianCorrelationAcrossAxes": 0.030851768980055212,
+      "medianMotionDeltaCorrelation": 0.027984963752671805,
+      "medianDeltaRMSE": 0.03155530485302887,
+      "temporal": {
+        "captureDurationMs": 50151.90000152588,
+        "lastPts": 31751,
+        "durationMinusLastPtsMs": 18400.90000152588,
+        "requiredEndMs": 40243.5,
+        "compatible": false
+      },
+      "checks": {
+        "matchedCoverage": false,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 609,
+        "recordedOnly": 116,
+        "inferredOnly": 218,
+        "bothMissing": 0
+      },
+      "role": "REFERENCE_LIVE_3",
+      "mediaFilename": "2차검증1.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-06T11-19-04-864Z",
+      "mediaId": "86edc4e950eafb8c8c03ab486d6d445fffcb99bafdcfd50dbb1eed16feec2236",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1496,
+      "usablePoseFrames": 780,
+      "coverage": 0.996005326231691,
+      "usableCoverageOfRecorded": 0.5193075898801598,
+      "usableCoverageOfMatched": 0.5213903743315508,
+      "poseError": {
+        "count": 780,
+        "median": 0.19469589632386775,
+        "p90": 0.3711413475110522,
+        "p95": 0.38900090442998325,
+        "max": 0.8801060319212041
+      },
+      "visibilityError": {
+        "count": 6408,
+        "median": 0.013951689004898071,
+        "p90": 0.43842485547065735,
+        "p95": 0.5659161508083344,
+        "max": 0.9363578800112009
+      },
+      "medianCorrelationAcrossAxes": 0.022983256517923475,
+      "medianMotionDeltaCorrelation": -0.008302677960577553,
+      "medianDeltaRMSE": 0.025163765458401714,
+      "temporal": {
+        "captureDurationMs": 50151.90000152588,
+        "lastPts": 57572,
+        "durationMinusLastPtsMs": -7420.099998474121,
+        "requiredEndMs": 40243.5,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 801,
+        "recordedOnly": 354,
+        "inferredOnly": 196,
+        "bothMissing": 145
+      },
+      "role": "REFERENCE_LIVE_3",
+      "mediaFilename": "3차검증.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-06T11-19-04-864Z",
+      "mediaId": "cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1500,
+      "usablePoseFrames": 842,
+      "coverage": 0.9986684420772304,
+      "usableCoverageOfRecorded": 0.5605858854860186,
+      "usableCoverageOfMatched": 0.5613333333333334,
+      "poseError": {
+        "count": 842,
+        "median": 0.10638832673360583,
+        "p90": 0.21898912862629544,
+        "p95": 0.2366473698314791,
+        "max": 0.8931556627264269
+      },
+      "visibilityError": {
+        "count": 6952,
+        "median": 0.046733707189559937,
+        "p90": 0.48800674080848694,
+        "p95": 0.6350248456001282,
+        "max": 0.9712879899889231
+      },
+      "medianCorrelationAcrossAxes": -0.04846112908708916,
+      "medianMotionDeltaCorrelation": 0.009080190530047872,
+      "medianDeltaRMSE": 0.03819233167176897,
+      "temporal": {
+        "captureDurationMs": 50151.90000152588,
+        "lastPts": 56440,
+        "durationMinusLastPtsMs": -6288.099998474121,
+        "requiredEndMs": 40243.5,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 869,
+        "recordedOnly": 289,
+        "inferredOnly": 214,
+        "bothMissing": 128
+      },
+      "role": "REFERENCE_LIVE_3",
+      "mediaFilename": "4gi replay webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-06T11-19-04-864Z",
+      "mediaId": "cf1225c4779277f8c00f1c0e568750f9f4fc567f82f092407d9901ecdccfa54b",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1381,
+      "usablePoseFrames": 1055,
+      "coverage": 0.9194407456724367,
+      "usableCoverageOfRecorded": 0.7023968042609854,
+      "usableCoverageOfMatched": 0.7639391745112237,
+      "poseError": {
+        "count": 1055,
+        "median": 0.13868964583577997,
+        "p90": 0.25464747571932017,
+        "p95": 0.30545504981319416,
+        "max": 0.8001693091725279
+      },
+      "visibilityError": {
+        "count": 8512,
+        "median": 0.01803600788116455,
+        "p90": 0.4271090626716614,
+        "p95": 0.5362416207790375,
+        "max": 0.9480821508914232
+      },
+      "medianCorrelationAcrossAxes": -0.08844188134194475,
+      "medianMotionDeltaCorrelation": -0.019909438943072323,
+      "medianDeltaRMSE": 0.03652436226181134,
+      "temporal": {
+        "captureDurationMs": 50151.90000152588,
+        "lastPts": 46178,
+        "durationMinusLastPtsMs": 3973.900001525879,
+        "requiredEndMs": 40243.5,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 1064,
+        "recordedOnly": 64,
+        "inferredOnly": 192,
+        "bothMissing": 61
+      },
+      "role": "REFERENCE_LIVE_3",
+      "mediaFilename": "4j result webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-06T11-19-04-864Z",
+      "mediaId": "d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1500,
+      "usablePoseFrames": 1053,
+      "coverage": 0.9986684420772304,
+      "usableCoverageOfRecorded": 0.7010652463382158,
+      "usableCoverageOfMatched": 0.702,
+      "poseError": {
+        "count": 1053,
+        "median": 0.04625973004894598,
+        "p90": 0.17675433511039634,
+        "p95": 0.23223409820942933,
+        "max": 0.36947691495876733
+      },
+      "visibilityError": {
+        "count": 8560,
+        "median": 0.01016893982887268,
+        "p90": 0.23795056343078613,
+        "p95": 0.34971582889556885,
+        "max": 0.8783145621418953
+      },
+      "medianCorrelationAcrossAxes": 0.6598435684097351,
+      "medianMotionDeltaCorrelation": 0.06606219735948823,
+      "medianDeltaRMSE": 0.03594388571568447,
+      "temporal": {
+        "captureDurationMs": 50151.90000152588,
+        "lastPts": 50109,
+        "durationMinusLastPtsMs": 42.900001525878906,
+        "requiredEndMs": 40243.5,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": true,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 1070,
+        "recordedOnly": 88,
+        "inferredOnly": 79,
+        "bothMissing": 263
+      },
+      "role": "REFERENCE_LIVE_3",
+      "mediaFilename": "4k.2a webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-10-06T11-19-04-864Z",
+      "mediaId": "a5eb248cadc4e2c176592f90bccf098a99ef293b6206276787d60a4bc6a3421c",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1238,
+      "usablePoseFrames": 892,
+      "coverage": 0.8242343541944075,
+      "usableCoverageOfRecorded": 0.5938748335552596,
+      "usableCoverageOfMatched": 0.7205169628432956,
+      "poseError": {
+        "count": 892,
+        "median": 0.1376969667820179,
+        "p90": 0.35093610069844094,
+        "p95": 0.4252647486803579,
+        "max": 1.0514642992132321
+      },
+      "visibilityError": {
+        "count": 7160,
+        "median": 0.033341050148010254,
+        "p90": 0.49226945638656616,
+        "p95": 0.6882163733243942,
+        "max": 0.9489034749567509
+      },
+      "medianCorrelationAcrossAxes": -0.08344460590402543,
+      "medianMotionDeltaCorrelation": 0.02411100095064113,
+      "medianDeltaRMSE": 0.046640346223010755,
+      "temporal": {
+        "captureDurationMs": 50151.90000152588,
+        "lastPts": 41581,
+        "durationMinusLastPtsMs": 8570.900001525879,
+        "requiredEndMs": 40243.5,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 895,
+        "recordedOnly": 122,
+        "inferredOnly": 145,
+        "bothMissing": 76
+      },
+      "role": "REFERENCE_LIVE_3",
+      "mediaFilename": "clean인가.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T12-09-14-840Z",
+      "mediaId": "a6a3b8ca107223bf1d8ea896039fdb914ba5cbb86b1a2f06a0f2491220c40a3d",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 946,
+      "usablePoseFrames": 543,
+      "coverage": 0.7580128205128205,
+      "usableCoverageOfRecorded": 0.43509615384615385,
+      "usableCoverageOfMatched": 0.5739957716701902,
+      "poseError": {
+        "count": 543,
+        "median": 0.5318251639071011,
+        "p90": 0.5904684805092634,
+        "p95": 0.6047648303881874,
+        "max": 0.8662865454504052
+      },
+      "visibilityError": {
+        "count": 5712,
+        "median": 0.4510374292731285,
+        "p90": 0.9378794878721237,
+        "p95": 0.9669320611283183,
+        "max": 0.9964092775480822
+      },
+      "medianCorrelationAcrossAxes": 0.06795870415040496,
+      "medianMotionDeltaCorrelation": 0.02897911034224978,
+      "medianDeltaRMSE": 0.031313001197382555,
+      "temporal": {
+        "captureDurationMs": 41620.09999847412,
+        "lastPts": 31751,
+        "durationMinusLastPtsMs": 9869.099998474121,
+        "requiredEndMs": 29333.199996948242,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": false,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 714,
+        "recordedOnly": 117,
+        "inferredOnly": 115,
+        "bothMissing": 0
+      },
+      "role": "REFERENCE_OLD_CLEAN",
+      "mediaFilename": "2차검증1.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T12-09-14-840Z",
+      "mediaId": "86edc4e950eafb8c8c03ab486d6d445fffcb99bafdcfd50dbb1eed16feec2236",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1238,
+      "usablePoseFrames": 640,
+      "coverage": 0.9919871794871795,
+      "usableCoverageOfRecorded": 0.5128205128205128,
+      "usableCoverageOfMatched": 0.5169628432956381,
+      "poseError": {
+        "count": 640,
+        "median": 0.1630035590616591,
+        "p90": 0.3997871773160536,
+        "p95": 0.4259896700414599,
+        "max": 0.46683892868237303
+      },
+      "visibilityError": {
+        "count": 5432,
+        "median": 0.029382258653640747,
+        "p90": 0.4660206735134125,
+        "p95": 0.5738129019737244,
+        "max": 0.8076145499944687
+      },
+      "medianCorrelationAcrossAxes": 0.08574638002569418,
+      "medianMotionDeltaCorrelation": 0.008888622523833885,
+      "medianDeltaRMSE": 0.031884564041516204,
+      "temporal": {
+        "captureDurationMs": 41620.09999847412,
+        "lastPts": 57572,
+        "durationMinusLastPtsMs": -15951.900001525879,
+        "requiredEndMs": 29333.199996948242,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 679,
+        "recordedOnly": 213,
+        "inferredOnly": 199,
+        "bothMissing": 147
+      },
+      "role": "REFERENCE_OLD_CLEAN",
+      "mediaFilename": "3차검증.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T12-09-14-840Z",
+      "mediaId": "cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1245,
+      "usablePoseFrames": 656,
+      "coverage": 0.9975961538461539,
+      "usableCoverageOfRecorded": 0.5256410256410257,
+      "usableCoverageOfMatched": 0.5269076305220883,
+      "poseError": {
+        "count": 656,
+        "median": 0.08828498514284558,
+        "p90": 0.15501936320011206,
+        "p95": 0.21899340065877285,
+        "max": 0.43679810441356315
+      },
+      "visibilityError": {
+        "count": 5664,
+        "median": 0.06773415207862854,
+        "p90": 0.4872492849826813,
+        "p95": 0.6166830658912659,
+        "max": 0.9146701358258724
+      },
+      "medianCorrelationAcrossAxes": -0.003459384011681498,
+      "medianMotionDeltaCorrelation": 0.007238215027435067,
+      "medianDeltaRMSE": 0.04261145301927171,
+      "temporal": {
+        "captureDurationMs": 41620.09999847412,
+        "lastPts": 56440,
+        "durationMinusLastPtsMs": -14819.900001525879,
+        "requiredEndMs": 29333.199996948242,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 708,
+        "recordedOnly": 185,
+        "inferredOnly": 241,
+        "bothMissing": 111
+      },
+      "role": "REFERENCE_OLD_CLEAN",
+      "mediaFilename": "4gi replay webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T12-09-14-840Z",
+      "mediaId": "cf1225c4779277f8c00f1c0e568750f9f4fc567f82f092407d9901ecdccfa54b",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1246,
+      "usablePoseFrames": 883,
+      "coverage": 0.9983974358974359,
+      "usableCoverageOfRecorded": 0.7075320512820513,
+      "usableCoverageOfMatched": 0.7086677367576244,
+      "poseError": {
+        "count": 883,
+        "median": 0.1804416463174422,
+        "p90": 0.26205193639259916,
+        "p95": 0.28600145426486334,
+        "max": 0.4717219558164506
+      },
+      "visibilityError": {
+        "count": 7104,
+        "median": 0.03213655948638916,
+        "p90": 0.420937180519104,
+        "p95": 0.5202798843383789,
+        "max": 0.8059034496545792
+      },
+      "medianCorrelationAcrossAxes": -0.008844468980461047,
+      "medianMotionDeltaCorrelation": -0.021763024361874637,
+      "medianDeltaRMSE": 0.036795115617719566,
+      "temporal": {
+        "captureDurationMs": 41620.09999847412,
+        "lastPts": 46178,
+        "durationMinusLastPtsMs": -4557.900001525879,
+        "requiredEndMs": 29333.199996948242,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 888,
+        "recordedOnly": 6,
+        "inferredOnly": 304,
+        "bothMissing": 48
+      },
+      "role": "REFERENCE_OLD_CLEAN",
+      "mediaFilename": "4j result webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T12-09-14-840Z",
+      "mediaId": "d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1245,
+      "usablePoseFrames": 746,
+      "coverage": 0.9975961538461539,
+      "usableCoverageOfRecorded": 0.5977564102564102,
+      "usableCoverageOfMatched": 0.5991967871485944,
+      "poseError": {
+        "count": 746,
+        "median": 0.1010995862347498,
+        "p90": 0.17303958933628855,
+        "p95": 0.23992951854755526,
+        "max": 0.6709229361035327
+      },
+      "visibilityError": {
+        "count": 6064,
+        "median": 0.03326636552810669,
+        "p90": 0.4060690402984619,
+        "p95": 0.49263444542884827,
+        "max": 0.8022560179233551
+      },
+      "medianCorrelationAcrossAxes": -0.04408792781256358,
+      "medianMotionDeltaCorrelation": -0.0020374837234474726,
+      "medianDeltaRMSE": 0.04054515310242755,
+      "temporal": {
+        "captureDurationMs": 41620.09999847412,
+        "lastPts": 50109,
+        "durationMinusLastPtsMs": -8488.900001525879,
+        "requiredEndMs": 29333.199996948242,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 758,
+        "recordedOnly": 135,
+        "inferredOnly": 264,
+        "bothMissing": 88
+      },
+      "role": "REFERENCE_OLD_CLEAN",
+      "mediaFilename": "4k.2a webm.webm"
+    },
+    {
+      "captureId": "plank-stork-replay-2026-09-30T12-09-14-840Z",
+      "mediaId": "a5eb248cadc4e2c176592f90bccf098a99ef293b6206276787d60a4bc6a3421c",
+      "status": "TRACE_MISMATCH",
+      "matchedFrames": 1242,
+      "usablePoseFrames": 859,
+      "coverage": 0.9951923076923077,
+      "usableCoverageOfRecorded": 0.688301282051282,
+      "usableCoverageOfMatched": 0.6916264090177133,
+      "poseError": {
+        "count": 859,
+        "median": 0.053260004417185855,
+        "p90": 0.16838479824660516,
+        "p95": 0.2028073313322349,
+        "max": 0.5479621256285054
+      },
+      "visibilityError": {
+        "count": 6912,
+        "median": 0.015641838312149048,
+        "p90": 0.27817678451538086,
+        "p95": 0.37894827127456665,
+        "max": 0.7114938497543335
+      },
+      "medianCorrelationAcrossAxes": 0.4028756778858934,
+      "medianMotionDeltaCorrelation": 0.01335286988284095,
+      "medianDeltaRMSE": 0.04561642681805736,
+      "temporal": {
+        "captureDurationMs": 41620.09999847412,
+        "lastPts": 41581,
+        "durationMinusLastPtsMs": 39.099998474121094,
+        "requiredEndMs": 29333.199996948242,
+        "compatible": true
+      },
+      "checks": {
+        "matchedCoverage": true,
+        "medianPoseError": false,
+        "p95PoseError": false,
+        "trajectoryCorrelation": false,
+        "motionDeltaCorrelation": false
+      },
+      "thresholdPass": false,
+      "poseMissingAgreement": {
+        "bothPresent": 864,
+        "recordedOnly": 28,
+        "inferredOnly": 178,
+        "bothMissing": 172
+      },
+      "role": "REFERENCE_OLD_CLEAN",
+      "mediaFilename": "clean인가.webm"
+    }
+  ],
+  "media": [
+    {
+      "filename": "2차검증1.webm",
+      "mediaId": "a6a3b8ca107223bf1d8ea896039fdb914ba5cbb86b1a2f06a0f2491220c40a3d",
+      "sequence": {
+        "decodedFrameCount": 954,
+        "firstTimestamp": 0,
+        "lastTimestamp": 31751,
+        "timestampHash": "c4002d674b492d73d557083c9cd5d64d4ac3a9700e1833bff1e20dd9235d0c89",
+        "timestampUnit": "media PTS milliseconds"
+      },
+      "status": "UNMATCHED_MEDIA"
+    },
+    {
+      "filename": "3차검증.webm",
+      "mediaId": "86edc4e950eafb8c8c03ab486d6d445fffcb99bafdcfd50dbb1eed16feec2236",
+      "sequence": {
+        "decodedFrameCount": 1729,
+        "firstTimestamp": 0,
+        "lastTimestamp": 57572,
+        "timestampHash": "14024d518e3e930246c920020cb4dc1e45c784114a5d58a81611bf1b751e03e6",
+        "timestampUnit": "media PTS milliseconds"
+      },
+      "status": "UNMATCHED_MEDIA"
+    },
+    {
+      "filename": "4gi replay webm.webm",
+      "mediaId": "cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934",
+      "sequence": {
+        "decodedFrameCount": 1695,
+        "firstTimestamp": 0,
+        "lastTimestamp": 56440,
+        "timestampHash": "96a3781d721856e64a6a9499057a1c441e7f0b1526779e8b7b8914a7e01c4434",
+        "timestampUnit": "media PTS milliseconds"
+      },
+      "status": "UNMATCHED_MEDIA"
+    },
+    {
+      "filename": "4j result webm.webm",
+      "mediaId": "cf1225c4779277f8c00f1c0e568750f9f4fc567f82f092407d9901ecdccfa54b",
+      "sequence": {
+        "decodedFrameCount": 1387,
+        "firstTimestamp": 0,
+        "lastTimestamp": 46178,
+        "timestampHash": "b3fc47c594f809878deda9abb8796aace9c1a9f31b1613d54d91e7bafad0861b",
+        "timestampUnit": "media PTS milliseconds"
+      },
+      "status": "UNMATCHED_MEDIA"
+    },
+    {
+      "filename": "4k.2a webm.webm",
+      "mediaId": "d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809",
+      "sequence": {
+        "decodedFrameCount": 1505,
+        "firstTimestamp": 0,
+        "lastTimestamp": 50109,
+        "timestampHash": "ebc954761f8d104e3f7957e867aab8e0e4c238a279c5d4cdce5d150cab1d3465",
+        "timestampUnit": "media PTS milliseconds"
+      },
+      "status": "UNMATCHED_MEDIA"
+    },
+    {
+      "filename": "clean인가.webm",
+      "mediaId": "a5eb248cadc4e2c176592f90bccf098a99ef293b6206276787d60a4bc6a3421c",
+      "sequence": {
+        "decodedFrameCount": 1248,
+        "firstTimestamp": 0,
+        "lastTimestamp": 41581,
+        "timestampHash": "f89df10436d58e966388af6956eac0c46eb52dce05c526b3a00611d74bb72d27",
+        "timestampUnit": "media PTS milliseconds"
+      },
+      "status": "UNMATCHED_MEDIA"
+    }
+  ],
+  "sourceIntegrity": [
+    {
+      "filename": "3차검증2.json",
+      "sha256": "5bca7f005cf4877a605476f443ab137ff727a67530cce22a52a103941f6ae995",
+      "unchanged": true
+    },
+    {
+      "filename": "4gi replay json.json",
+      "sha256": "b9b0eba48acc774f6ee5f85c806b84065d8d3baf081352f5f74ee00055eca641",
+      "unchanged": true
+    },
+    {
+      "filename": "4j result json.json",
+      "sha256": "4c5e22df125c877b4a1cfef491cdf28e72c64fa67b5412120a3b4f40ddcd5e7b",
+      "unchanged": true
+    },
+    {
+      "filename": "4k.2a json.json",
+      "sha256": "2ad774bfcaa4507630e20b3f1bdcbaeed5b609b9050770914618c2a79f1988a0",
+      "unchanged": true
+    },
+    {
+      "filename": "clean인가요.json",
+      "sha256": "f9df5993353a47fc78e613a4cd41c7937664c5d7b7b19f34be2a9b9c1701a1a8",
+      "unchanged": true
+    },
+    {
+      "filename": "2차검증1.webm",
+      "sha256": "a6a3b8ca107223bf1d8ea896039fdb914ba5cbb86b1a2f06a0f2491220c40a3d",
+      "unchanged": true
+    },
+    {
+      "filename": "3차검증.webm",
+      "sha256": "86edc4e950eafb8c8c03ab486d6d445fffcb99bafdcfd50dbb1eed16feec2236",
+      "unchanged": true
+    },
+    {
+      "filename": "4gi replay webm.webm",
+      "sha256": "cef6a379dcd2e89d5337c8d7910707237b2224415d0985315bb815c4918ab934",
+      "unchanged": true
+    },
+    {
+      "filename": "4j result webm.webm",
+      "sha256": "cf1225c4779277f8c00f1c0e568750f9f4fc567f82f092407d9901ecdccfa54b",
+      "unchanged": true
+    },
+    {
+      "filename": "4k.2a webm.webm",
+      "sha256": "d24f118e3de2b93dc16db5d8a6cc3117c68b6b45fc66d93c282dff082d5e6809",
+      "unchanged": true
+    },
+    {
+      "filename": "clean인가.webm",
+      "sha256": "a5eb248cadc4e2c176592f90bccf098a99ef293b6206276787d60a4bc6a3421c",
+      "unchanged": true
+    }
+  ],
+  "productionAndGeneralGuardUnchangedFromHEAD": true,
+  "regression": {
+    "createdAt": "2026-10-08T12:52:41.135Z",
+    "step4K1": true,
+    "step4L": true,
+    "step4K2": true,
+    "step4M436": true,
+    "step4N24": true
+  },
+  "verification": {
+    "typecheck": "PASS",
+    "build": "PASS",
+    "buildWarning": "existing controller bundle 821.62kB exceeds 500kB",
+    "testCommand": "pnpm --filter @plank-stork/controller-web test",
+    "testFiles": 77,
+    "tests": 830,
+    "existingTests": 801,
+    "addedTests": 29,
+    "testResult": "PASS",
+    "firstConcurrentTestRun": "Stopped after timeouts during GPU inference; same command passed alone after inference closed. No timeout changes.",
+    "diffCheck": "PASS",
+    "commitOrPush": false
+  }
+}
