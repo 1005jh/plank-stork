@@ -3,8 +3,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePoseCamera } from '../camera/usePoseCamera';
 import { PoseCamera } from './PoseCamera';
-import { MockMediaRecorder, captureCamera, mockRecorder } from '../replay/testFixtures';
+import { MockMediaRecorder, captureCamera, mockRecorder, fixtureFinalizer } from '../replay/testFixtures';
 import { PoseFeatureAnalysis } from '../pose/features/poseFeatureAnalysis';
+
+vi.mock('../replay/mediaArtifact', async (original) => ({ ...await original<typeof import('../replay/mediaArtifact')>(), finalizeMediaArtifact: (...args: Parameters<typeof fixtureFinalizer>) => fixtureFinalizer(...args) }));
 
 vi.mock('../camera/usePoseCamera', () => ({ usePoseCamera: vi.fn() }));
 

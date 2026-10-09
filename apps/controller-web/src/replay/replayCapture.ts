@@ -1,3 +1,6 @@
+import { finalizeMediaArtifact } from './mediaArtifact';
+import { EstimatorNeutralReadiness } from '../capture/estimatorNeutralReadiness';
+import { ESTIMATOR_VALIDATION_PROTOCOL_V1 as PROTOCOL } from '../capture/estimatorValidationProtocol';
 import { diagnosticConfig } from '../pose/kick/kneeKickDiagnostics';
 import { Y_KICK_V3_CONFIG } from '../pose/kick/kneeKickDetectorV3';
 import { POSE_MODEL_URL } from '../pose/poseConstants';
@@ -12,7 +15,17 @@ export function captureMime(recorder: typeof MediaRecorder): string {
 }
 
 /** Passive observer. No camera acquisition, canvas capture, detector clock reads or per-frame React updates. */
+export type ArtifactState = 'IDLE' | 'RECORDING' | 'STOPPING' | 'WEBM_READY' | 'HASHING' | 'MEDIA_INSPECTION' | 'ARTIFACT_READY' | 'ARTIFACT_FAILED';
 export class ReplayCapture {
+  constructor(private finalize = finalizeMediaArtifact) {}
+  private artifactState: ArtifactState = 'IDLE';
+  private finalizationAbort: AbortController | null = null;
+  private readiness = new EstimatorNeutralReadiness();
+  canStartGuided = (now: number) => !this.isRecording() || this.readiness.canStart(now - this.session!.timing.captureStartPerformanceMs);
+  private isRecording() { return !!this.recorder && this.stopAt === null; }
+  cancelFinalization = () => { this.finalizationAbort?.abort(); };
+  dispose = () => { void this.stop(performance.now()); this.cancelFinalization(); };
+
   private recorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private session: ReplaySession | null = null;
@@ -30,7 +43,7 @@ export class ReplayCapture {
   private error: string | null = null;
 
   start(camera: CaptureCamera | null, mirrored: boolean, now: number, Recorder = globalThis.MediaRecorder): boolean {
-    if (this.recorder) return false;
+    if (this.recorder || ['STOPPING', 'WEBM_READY', 'HASHING', 'MEDIA_INSPECTION'].includes(this.artifactState)) return false;
     try {
       if (!camera || !camera.stream.getVideoTracks().some((track) => track.readyState === 'live')) throw new Error('Camera RUNNING 상태에서 시작하세요.');
       if (!Recorder) throw new Error('MediaRecorder를 지원하지 않는 브라우저입니다.');
@@ -38,7 +51,7 @@ export class ReplayCapture {
       const createdAt = new Date().toISOString();
       const captureId = `plank-stork-replay-${createdAt.replace(/[:.]/g, '-')}`;
       this.session = {
-        version: 1, captureId, createdAt, detectorMode: 'Y_V3', detectorConfigV3: { ...Y_KICK_V3_CONFIG },
+        version: 2, captureId, createdAt, attemptId: captureId, validation: { protocolId: PROTOCOL.id, mediaIntegrityReady: false, estimatorReferenceReady: false, trialHasEstimatorReference: false, guidedTrialCompleted: false, status: 'INCOMPLETE', invalidReasons: [] }, detectorMode: 'Y_V3', detectorConfigV3: { ...Y_KICK_V3_CONFIG },
         video: { filename: `${captureId}.webm`, mimeType: recorder.mimeType, videoBitsPerSecond: recorder.videoBitsPerSecond,
           width: camera.width, height: camera.height, nominalFrameRate: camera.stream.getVideoTracks()[0].getSettings().frameRate ?? null,
           sourceVideoTimeAtStart: camera.videoTime },
@@ -49,7 +62,7 @@ export class ReplayCapture {
       };
       this.chunks = []; this.blob = null; this.error = null; this.order = 0; this.trial = null;
       this.seenMarkers.clear(); this.frozen = false; this.lastEventKey = ''; this.lastLegacyEventKey = ''; this.stopAt = null; this.stopped = false;
-      this.stopping = null; this.recorder = recorder;
+      this.stopping = null; this.recorder = recorder; this.readiness = new EstimatorNeutralReadiness(); this.artifactState = 'RECORDING'; this.finalizationAbort = new AbortController();
       recorder.addEventListener('dataavailable', this.onData);
       recorder.addEventListener('stop', this.onStop);
       recorder.addEventListener('error', this.onError);
@@ -58,12 +71,13 @@ export class ReplayCapture {
       return true;
     } catch (error) {
       this.error = error instanceof Error ? error.message : String(error);
-      this.detach(); this.session = null; this.blob = null; this.chunks = []; this.stopped = true; return false;
+      this.detach(); this.session = null; this.blob = null; this.chunks = []; this.stopped = true; this.artifactState = 'ARTIFACT_FAILED'; return false;
     }
   }
   private onData = (event: BlobEvent) => { if (event.data.size) this.chunks.push(event.data); };
-  private onError = () => { this.error = 'WebM 녹화 중 오류가 발생했습니다. 저장된 부분을 확인하세요.'; void this.stop(performance.now()); };
+  private onError = () => { this.session?.validation?.invalidReasons.push('MEDIA_RECORDER_ERROR'); this.error = 'WebM 녹화 중 오류가 발생했습니다. 저장된 부분을 확인하세요.'; void this.stop(performance.now()); };
   private onStop = () => {
+    this.stopping ??= new Promise((resolve) => { this.resolveStop = resolve; });
     if (this.session && this.recorder) {
       this.session.video.mimeType = this.recorder.mimeType;
       this.session.video.videoBitsPerSecond = this.recorder.videoBitsPerSecond;
@@ -75,8 +89,30 @@ export class ReplayCapture {
       this.session.timing.durationMs = Math.max(0, this.stopAt - this.session.timing.captureStartPerformanceMs);
     }
     this.blob = new Blob(this.chunks, { type: this.session?.video.mimeType });
-    this.chunks = []; this.stopped = true; this.detach(); this.resolveStop?.(); this.resolveStop = null;
+    this.chunks = []; this.stopped = true; this.detach(); this.artifactState = 'WEBM_READY';
+    void this.finalizeArtifact();
   };
+  private async finalizeArtifact() {
+    const session = this.session!, blob = this.blob!, signal = this.finalizationAbort!.signal;
+    try {
+      session.video.integrity = await this.finalize(blob, session.video, signal, (phase) => { this.artifactState = phase; });
+      if (signal.aborted) throw new Error('Artifact finalization cancelled.');
+      session.validation!.mediaIntegrityReady = true; this.artifactState = 'ARTIFACT_READY';
+    } catch (cause) {
+      this.error = cause instanceof Error ? cause.message : String(cause); this.artifactState = 'ARTIFACT_FAILED';
+      session.validation!.invalidReasons.push('MEDIA_FINALIZATION_FAILED');
+    } finally {
+      this.updateValidation(); this.resolveStop?.(); this.resolveStop = null;
+    }
+  }
+  private updateValidation() {
+    if (!this.session?.validation) return;
+    const session = this.session, v = session.validation!, trials = session.liveResult.trials;
+    v.estimatorReferenceReady = !!this.readiness.getView(this.stopAt === null ? session.timing.durationMs : this.stopAt - session.timing.captureStartPerformanceMs).reference;
+    v.trialHasEstimatorReference = trials.length > 0 && trials.every((t) => !!t.estimatorNeutralReference);
+    v.guidedTrialCompleted = trials.length > 0 && trials.every((t) => session.markers.some((m) => m.type === 'GUIDED_TEST_COMPLETE' && m.trialId === t.id));
+    v.status = v.mediaIntegrityReady && v.estimatorReferenceReady && v.trialHasEstimatorReference && v.guidedTrialCompleted && v.invalidReasons.length === 0 ? 'VALIDATION_CAPTURE_COMPLETE' : 'INCOMPLETE';
+  }
   private detach() {
     this.recorder?.removeEventListener('dataavailable', this.onData);
     this.recorder?.removeEventListener('stop', this.onStop);
@@ -92,6 +128,7 @@ export class ReplayCapture {
   neutralStarted = (timestamp: number) => {
     if (!this.recorder || this.stopAt !== null) return;
     this.frozen = false;
+    this.readiness.reset(timestamp - this.session!.timing.captureStartPerformanceMs);
     this.marker('NEUTRAL_CALIBRATION_START', timestamp, `neutral-${timestamp}`);
   };
   observe = (event: KickObservation, read: () => KickSnapshot) => {
@@ -103,10 +140,18 @@ export class ReplayCapture {
       session.detectorMode = snapshot.detectorMode;
       const legacy = snapshot.legacyShadow;
       const order = ++this.order;
+      let reference: ReturnType<EstimatorNeutralReadiness['takeReference']> = null;
+      if (event.kind === 'START') {
+        reference = this.readiness.takeReference(tMs);
+        if (!reference) {
+          session.validation!.invalidReasons.push('INVALID_MISSING_ESTIMATOR_REFERENCE');
+          this.marker('INVALID_MISSING_ESTIMATOR_REFERENCE', event.timestamp, `invalid-${order}`);
+        }
+      }
       if (event.kind === 'START' && snapshot.detector.baseline && legacy.detector.baseline) {
         this.finishTrial(event.timestamp);
         const id = session.liveResult.trials.length + 1;
-        this.trial = { id, startMs: tMs, startOrder: order, endMs: null, endOrder: null, baseline: { ...legacy.detector.baseline }, neutralBaseline: session.liveResult.neutralBaseline ? { ...session.liveResult.neutralBaseline } : null,
+        this.trial = { id, ...(reference ? { estimatorNeutralReference: structuredClone(reference) } : {}), validationStatus: reference ? 'REFERENCE_READY' : 'INVALID_MISSING_ESTIMATOR_REFERENCE', startMs: tMs, startOrder: order, endMs: null, endOrder: null, baseline: { ...legacy.detector.baseline }, neutralBaseline: session.liveResult.neutralBaseline ? { ...session.liveResult.neutralBaseline } : null,
           baselineV3: snapshot.baselineV3 ? { ...snapshot.baselineV3 } : null,
           legacyXShadow: { result: { poseFrameCount: 0, poseUsableFrameCount: 0, events: [], finalState: legacy.detector.state, guidedSummary: legacy.guided.summary } },
           result: { poseFrameCount: 0, poseUsableFrameCount: 0, events: [], finalState: snapshot.detector.state, guidedSummary: snapshot.guided.summary } };
@@ -117,6 +162,7 @@ export class ReplayCapture {
         const previous = session.poseFrames.at(-1);
         if (previous && tMs <= previous.tMs) return;
         session.poseFrames.push(copyPoseFrame(event.frame, origin, order));
+        this.readiness.process(event.frame, tMs, event.neutral.collectionState === 'FROZEN');
         if (event.neutral.collectionState === 'FROZEN') {
           session.liveResult.neutralBaseline = event.neutral.baseline ? { ...event.neutral.baseline } : null;
           if (!this.frozen) { this.marker('NEUTRAL_FROZEN', event.timestamp, `frozen-${order}`); this.frozen = true; }
@@ -169,6 +215,7 @@ export class ReplayCapture {
       if (event.kind === 'RESET') this.finishTrial(event.timestamp);
     } catch (error) {
       console.warn('[Replay capture] observation failed', error);
+      this.session?.validation?.invalidReasons.push('CAPTURE_OBSERVATION_FAILED');
       this.error = error instanceof Error ? error.message : String(error);
       void this.stop(event.timestamp); // Capture errors never stop live inference.
     }
@@ -179,9 +226,9 @@ export class ReplayCapture {
     this.marker('GUIDED_TEST_STOP', timestamp, `end-${this.trial.id}`, { trialId: this.trial.id });
   }
   stop(now: number): Promise<void> {
-    if (!this.recorder) return Promise.resolve();
     if (this.stopping) return this.stopping;
-    this.stopAt = now; this.finishTrial(now);
+    if (!this.recorder) return Promise.resolve();
+    this.artifactState = 'STOPPING'; this.stopAt = now; this.finishTrial(now);
     this.marker('CAPTURE_STOP', now, 'capture-stop');
     if (this.session) this.session.timing.durationMs = Math.max(0, now - this.session.timing.captureStartPerformanceMs);
     this.stopping = new Promise((resolve) => { this.resolveStop = resolve; });
@@ -191,13 +238,15 @@ export class ReplayCapture {
     return this.stopping;
   }
   getView(now: number) {
-    return { status: !this.session ? 'IDLE' : this.stopped ? 'RECORDED' : 'RECORDING', stopping: this.stopAt !== null && !this.stopped,
+    return { artifactState: this.artifactState, validation: this.session?.validation ? structuredClone(this.session.validation) : null, readiness: this.readiness.getView(this.session ? (this.stopAt ?? now) - this.session.timing.captureStartPerformanceMs : 0),
+      guidedStartAllowed: this.canStartGuided(now), finalizing: ['STOPPING', 'WEBM_READY', 'HASHING', 'MEDIA_INSPECTION'].includes(this.artifactState),
+      status: !this.session ? 'IDLE' : this.stopped ? 'RECORDED' : 'RECORDING', stopping: this.stopAt !== null && !this.stopped,
       durationMs: this.session ? (this.stopAt ?? now) - this.session.timing.captureStartPerformanceMs : 0,
       size: this.blob?.size ?? this.chunks.reduce((sum, chunk) => sum + chunk.size, 0), poseFrameCount: this.session?.poseFrames.length ?? 0,
-      mimeType: this.session?.video.mimeType ?? '-', error: this.error, downloadable: this.stopped && this.blob !== null };
+      mimeType: this.session?.video.mimeType ?? '-', error: this.error, downloadable: this.artifactState === 'ARTIFACT_READY' };
   }
   getFiles() {
-    if (!this.session || !this.blob || !this.stopped) throw new Error('Stop Replay Capture 후 다운로드하세요.');
+    if (!this.session || !this.blob || this.artifactState !== 'ARTIFACT_READY') throw new Error('Stop Replay Capture 후 ARTIFACT_READY까지 기다리세요. NOT VALIDATION READY.');
     const session = { ...this.session, markers: [...this.session.markers].sort((a, b) => a.tMs - b.tMs || a.order - b.order) };
     return { video: this.blob, filename: session.video.filename, jsonFilename: `${session.captureId}.json`, json: JSON.stringify(session, null, 2) };
   }

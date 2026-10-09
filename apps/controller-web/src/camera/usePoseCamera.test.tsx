@@ -1,4 +1,4 @@
-import { ReplayCapture } from '../replay/replayCapture';
+import { createTestCapture } from '../replay/testFixtures';
 import { MockMediaRecorder, mockRecorder } from '../replay/testFixtures';
 import { KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
 import { act, StrictMode } from 'react';
@@ -392,7 +392,7 @@ describe('Pose camera lifecycle and measurement', () => {
     const context = camera.getCaptureContext()!;
     Object.defineProperty(track, 'readyState', { value: 'live', configurable: true });
     Object.defineProperty(track, 'getSettings', { value: () => ({ frameRate: 30 }), configurable: true });
-    const capture = new ReplayCapture(), kick = new KneeKickAnalysis();
+    const capture = createTestCapture(), kick = new KneeKickAnalysis();
     expect(capture.start(context, true, now, mockRecorder)).toBe(true);
     onValidationFrame = (raw) => capture.observe({ kind: 'FRAME', timestamp: raw.timestamp, frame: raw, neutral: motionContext().neutral }, () => kick.getReplaySnapshot());
     vi.mocked(result.close).mockImplementationOnce(() => { result.landmarks[0][0].x = 999; });

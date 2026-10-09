@@ -21,9 +21,10 @@ describe('action panel and live camera integration', () => {
   const button = (label: string) => [...container.querySelectorAll('button')].find((item) => item.textContent === label)!;
   const panel = () => container.querySelector('.actions-panel')!;
 
+  // Fake interval callbacks are synchronous; flush every tick without an extra async act task.
   async function advance(ms: number) {
     now += ms;
-    await act(async () => vi.advanceTimersByTime(ms));
+    act(() => vi.advanceTimersByTime(ms));
   }
 
   function frame(values = features()) {

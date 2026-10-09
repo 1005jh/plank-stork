@@ -12,7 +12,7 @@ export function useReplayCapture() {
   const stop = useCallback(() => capture.stop(performance.now()), [capture]);
   useEffect(() => {
     const timer = window.setInterval(() => setView(capture.getView(performance.now())), 250);
-    return () => { window.clearInterval(timer); void stop(); };
+    return () => { window.clearInterval(timer); capture.dispose(); };
   }, [capture, stop]);
   function start(camera: CaptureCamera | null, mirrored: boolean) {
     files.clear(); capture.start(camera, mirrored, performance.now()); setView(capture.getView(performance.now()));
@@ -21,5 +21,5 @@ export function useReplayCapture() {
     const saved = capture.getFiles();
     files.download(kind === 'video' ? saved.video : new Blob([saved.json], { type: 'application/json' }), kind === 'video' ? saved.filename : saved.jsonFilename);
   }
-  return { view, start, stop, download, observe: capture.observe, neutralStarted: capture.neutralStarted };
+  return { view, start, stop, download, observe: capture.observe, neutralStarted: capture.neutralStarted, canStartGuided: () => capture.canStartGuided(performance.now()), cancelFinalization: capture.cancelFinalization };
 }

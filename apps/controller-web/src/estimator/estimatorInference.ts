@@ -1,3 +1,4 @@
+import { validateReplayMediaArtifact, ReplayMediaValidationCache, verifyMediaSequence, verifyMediaDimensions } from '../replay/mediaArtifact';
 import { decodeWebMFrames, replayAborted } from '../replay/decodedVideoSource';
 import { replayVideoSourceError, replayVideoSourceFromFilename } from '../replay/replayVideoSource';
 import { copyPoseFrame, type ReplayPoseFrame, type ReplaySession } from '../replay/replayTypes';
@@ -6,6 +7,7 @@ import { POSE_VIDEO_OPTIONS } from '../pose/createPoseLandmarker';
 import { createEstimator, estimatorConfig, type EstimatorVariant } from './estimatorConfig';
 
 export function validateEstimatorMedia(session: ReplaySession, file: File) {
+  if (session.version === 2) throw new Error('V2 requires async cryptographic media validation.');
   const selected = replayVideoSourceFromFilename(file.name);
   const error = replayVideoSourceError({ filename: session.video.filename, sourceCaptureId: session.captureId }, selected);
   if (error) throw new Error(error);
@@ -15,6 +17,16 @@ export function validateEstimatorMedia(session: ReplaySession, file: File) {
   }
   return { captureId: session.captureId, expectedFilename: session.video.filename, selected,
     validation: 'EXISTING_FILENAME_CAPTURE_ID_GUARD' as const, limitation: 'Filename identity only; no verified WebM container capture metadata.' };
+}
+export async function validateEstimatorMediaArtifact(session: ReplaySession, file: File, signal: AbortSignal, cache = new ReplayMediaValidationCache()) {
+  if (session.version !== 2) return validateEstimatorMedia(session, file);
+  const identity = await validateReplayMediaArtifact(session, file, signal, cache);
+  if (session.pose.delegate !== 'GPU' || session.pose.modelUrl !== POSE_MODEL_URL ||
+      Object.entries(POSE_VIDEO_OPTIONS).some(([key, value]) => session.pose.settings[key] !== value)) {
+    throw new Error('FULL_VIDEO control requires the recorded Full / VIDEO / GPU configuration.');
+  }
+  if (session.validation?.status !== 'VALIDATION_CAPTURE_COMPLETE') throw new Error('INVALID_CAPTURE: incomplete validation capture.');
+  return identity;
 }
 export function acceptTimestamp(timestamps: number[], timestamp: number) {
   if (!Number.isFinite(timestamp) || timestamp < 0 || timestamps.length && timestamp <= timestamps.at(-1)!) {
@@ -34,22 +46,23 @@ export function verifyFrameSequence(plan: FramePlan, timestamps: readonly number
 }
 function check(signal: AbortSignal) { if (signal.aborted) throw replayAborted(); }
 async function yieldForCancel(signal: AbortSignal) { check(signal); await new Promise<void>((r) => setTimeout(r, 0)); check(signal); }
-export async function decodeEstimatorFrames(file: File, session: ReplaySession, signal: AbortSignal, progress: (count: number) => void = () => {}) {
-  validateEstimatorMedia(session, file); check(signal);
+export async function decodeEstimatorFrames(file: File, session: ReplaySession, signal: AbortSignal, progress: (count: number) => void = () => {}, cache = new ReplayMediaValidationCache()) {
+  if (session.version === 2) await validateEstimatorMediaArtifact(session, file, signal, cache); else validateEstimatorMedia(session, file); check(signal);
   const timestamps: number[] = [];
   for await (const frame of decodeWebMFrames(file, signal)) {
-    try { check(signal); acceptTimestamp(timestamps, frame.timestamp * 1000); }
+    try { check(signal); verifyMediaDimensions(session, frame); acceptTimestamp(timestamps, frame.timestamp * 1000); }
     finally { frame.close(); }
     if (timestamps.length % 30 === 0) { progress(timestamps.length); await yieldForCancel(signal); }
   }
   check(signal);
-  const sequence = await frameSequence(timestamps); check(signal);
+  const sequence = await frameSequence(timestamps); check(signal); verifyMediaSequence(session, sequence);
   return { timestamps, sequence };
 }
 export type EstimatorPoseFrame = ReplayPoseFrame & { posePresent: boolean; inferenceMs: number };
 export async function runEstimator(file: File, session: ReplaySession, variant: EstimatorVariant, plan: FramePlan,
-  signal: AbortSignal, progress: (count: number) => void = () => {}) {
-  const mediaIdentity = validateEstimatorMedia(session, file); check(signal);
+  signal: AbortSignal, progress: (count: number) => void = () => {}, cache = new ReplayMediaValidationCache()) {
+  const mediaIdentity = session.version === 2 ? await validateEstimatorMediaArtifact(session, file, signal, cache) : validateEstimatorMedia(session, file); check(signal);
+  verifyMediaSequence(session, plan.sequence);
   const canvas = document.createElement('canvas'), landmarker = await createEstimator(variant);
   try {
     check(signal);
@@ -58,6 +71,7 @@ export async function runEstimator(file: File, session: ReplaySession, variant: 
     for await (const frame of decodeWebMFrames(file, signal)) {
       try {
         check(signal);
+        verifyMediaDimensions(session, frame);
         const timestamp = frame.timestamp * 1000;
         acceptTimestamp(timestamps, timestamp);
         if (timestamp !== plan.timestamps[frames.length]) throw new Error('Decoded frame sequence mismatch. Comparison refused.');
@@ -76,7 +90,7 @@ export async function runEstimator(file: File, session: ReplaySession, variant: 
       await yieldForCancel(signal);
     }
     check(signal); verifyFrameSequence(plan, timestamps);
-    const sequence = await frameSequence(timestamps); check(signal);
+    const sequence = await frameSequence(timestamps); check(signal); verifyMediaSequence(session, sequence);
     return { variant, config, mediaIdentity, sequence, frames, frameSequenceParity: true as const,
       clock: 'decoded media PTS * 1000 = existing VIDEO replay capture tMs mapping' as const };
   } finally { landmarker.close(); canvas.width = 0; canvas.height = 0; }

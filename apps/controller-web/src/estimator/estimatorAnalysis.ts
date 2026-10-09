@@ -1,7 +1,8 @@
+import { usableKneesV3 } from '../pose/kick/kneeKickDetectorV3';
 import { BODY_ROLES, type BodyInput } from '../discovery/bodyLocalFeatures';
 import { prepareGeometryInputs, rawReliabilityGeometry, freezeGeometryBaseline, measureReliabilityFrame, GEOMETRY_JOINTS } from '../discovery/geometryReliabilityFeatures';
 import { createGeometryEvidence } from '../discovery/analyzeGeometryReliability';
-import { neutralCalibrationWindow } from '../discovery/multiSignalFeatures';
+import { neutralCalibrationWindow, type AnalysisNeutralWindow } from '../discovery/multiSignalFeatures';
 import { distribution, prepareIntegrityFixture, type IntegrityRole } from '../discovery/integrityFeatures';
 import { prepareMultiFixture } from '../discovery/analyzeMultiSignal';
 import { runIntegrityFixture } from '../discovery/analyzeIntegrity';
@@ -22,16 +23,27 @@ export function estimatorAnchors(input: BodyInput) {
   }));
 }
 export type EstimatorAnchors = ReturnType<typeof estimatorAnchors>;
+/** V2 uses a frozen, capture-time reference. V1 keeps its original 1s marker semantics. */
+export function estimatorNeutralWindow(session: ReplaySession, trial: ReplayTrial, role: BodyInput['role']): AnalysisNeutralWindow {
+  if (session.version === 1) return neutralCalibrationWindow(session, trial, role === 'REFERENCE_OLD_CLEAN' ? 'LATEST_FROZEN_OR_COMPATIBILITY' : 'LATEST_FROZEN');
+  const ref = trial.estimatorNeutralReference;
+  if (!ref) throw new Error('INVALID_MISSING_ESTIMATOR_REFERENCE');
+  const frames = session.poseFrames.filter((f) => f.tMs >= ref.startMs && f.tMs <= ref.endMs);
+  return { source: 'ESTIMATOR_NEUTRAL_REFERENCE', calibrationStartMs: ref.calibrationStartMs,
+    startMs: ref.startMs, endMs: ref.endMs, frameCount: frames.length, frames, excludedStageIndex: null };
+}
 export function rebuildEstimatorBaseline(session: ReplaySession, trial: ReplayTrial, run: Pick<EstimatorRun, 'frames'>, role: BodyInput['role']) {
-  const selection = role === 'REFERENCE_OLD_CLEAN' ? 'LATEST_FROZEN_OR_COMPATIBILITY' : 'LATEST_FROZEN';
-  // Select the interval from the original markers, not from variant-dependent readiness or stored numeric baselines.
-  const { frames: _original, ...window } = neutralCalibrationWindow(session, trial, selection);
+  const { frames: _original, ...window } = estimatorNeutralWindow(session, trial, role);
   if (window.source === 'FIRST_NEUTRAL_COMPATIBILITY' && role !== 'REFERENCE_OLD_CLEAN') throw new Error('Only OLD CLEAN may use first-Neutral compatibility.');
-  const neutral = run.frames.filter((f) => window.source === 'FIRST_NEUTRAL_COMPATIBILITY' ?
-    f.tMs >= window.startMs && f.tMs < window.endMs : f.tMs > window.startMs && f.tMs <= window.endMs);
-  const y = buildKneeKickBaselineV3(neutral.map((f) => extractKneeMotionFeatures(f.landmarks)));
+  const neutral = run.frames.filter((f) => window.source === 'ESTIMATOR_NEUTRAL_REFERENCE' ? f.tMs >= window.startMs && f.tMs <= window.endMs :
+    window.source === 'FIRST_NEUTRAL_COMPATIBILITY' ? f.tMs >= window.startMs && f.tMs < window.endMs : f.tMs > window.startMs && f.tMs <= window.endMs);
+  const samples = neutral.map((f) => extractKneeMotionFeatures(f.landmarks));
+  const y = buildKneeKickBaselineV3(samples);
   const geometry = freezeGeometryBaseline(neutral.map((f) => rawReliabilityGeometry(f.landmarks, f.worldLandmarks)), y?.bodyScale ?? NaN);
-  return { window: { ...window, frameCount: neutral.length }, y, geometry };
+  return { window: { ...window, frameCount: neutral.length }, y, geometry,
+    ...(session.version === 2 ? { neutralFrameCount: neutral.length, leftUsableSamples: samples.filter((s) => usableKneesV3(s).left).length,
+      rightUsableSamples: samples.filter((s) => usableKneesV3(s).right).length, bodyScale: y?.bodyScale ?? null,
+      baselineStatus: y ? 'READY' : 'INSUFFICIENT_VARIANT_NEUTRAL' } : {}) };
 }
 type Row = { timestamp: number; stageIndex: number | null; calibrationOnly: boolean; posePresent: boolean;
   values: Record<string, number | null>; flags: Record<string, boolean | null>; jointMissing: number };
@@ -82,10 +94,11 @@ export function analyzeEstimator<Identity extends object>(input: BodyInput, run:
         liveResult: { ...input.session.liveResult, trials: [rebuiltTrial] } };
       // Direct preparation deliberately bypasses recorded LIVE parity gating. Original LANDMARK paths keep their oracle.
       const production = replayKneeKickV3(session, trial.id);
+      const reference = session.version === 2 ? estimatorNeutralWindow(session, rebuiltTrial, input.role) : undefined;
       const multi = prepareMultiFixture({ filename: input.filename, session, role: input.role === 'STRESS' ? 'STRESS' : 'REFERENCE_LIVE',
-        calibrationSelection: input.role === 'REFERENCE_OLD_CLEAN' ? 'LATEST_FROZEN_OR_COMPATIBILITY' : 'LATEST_FROZEN' }, trial.id, production);
+        calibrationSelection: input.role === 'REFERENCE_OLD_CLEAN' ? 'LATEST_FROZEN_OR_COMPATIBILITY' : 'LATEST_FROZEN' }, trial.id, production, reference);
       const fixture = prepareIntegrityFixture({ filename: input.filename, session,
-        role: input.role === 'REFERENCE_LIVE_2' ? 'REFERENCE_LIVE_2_INDEPENDENT' : input.role === 'REFERENCE_LIVE_3' ? 'REFERENCE_LIVE_3_HOLDOUT' : input.role as IntegrityRole }, multi, true);
+        role: input.role === 'REFERENCE_LIVE_2' ? 'REFERENCE_LIVE_2_INDEPENDENT' : input.role === 'REFERENCE_LIVE_3' ? 'REFERENCE_LIVE_3_HOLDOUT' : input.role as IntegrityRole }, multi, true, reference);
       // Stored baseline bypasses compatibility exclusion in the production runner; exclude OLD's baseline frames explicitly.
       // They are Neutral only, but must not contribute event evidence or detector arming history.
       if (baseline.window.excludedStageIndex !== null) {
@@ -104,7 +117,7 @@ export function analyzeEstimator<Identity extends object>(input: BodyInput, run:
         summary: continuitySummary(trace), nearEntry: continuitySummary(trace.filter((r) => Math.abs(r.timestamp - a.candidateStart) <= 100)), trace }; });
     const evaluated = rows.filter((r) => !r.calibrationOnly && r.stageIndex !== null);
     const knownFalseRows = evaluated.filter((r) => windows.some((a) => a.kind === 'FALSE_EVENT' && r.timestamp >= a.startMs && r.timestamp <= a.endMs));
-    return { trialId: trial.id, baseline, baselineStatus: baseline.y ? 'READY' : 'INSUFFICIENT_NEUTRAL_SAMPLES',
+    return { trialId: trial.id, baseline, baselineStatus: baseline.y ? 'READY' : input.session.version === 2 ? 'INSUFFICIENT_VARIANT_NEUTRAL' : 'INSUFFICIENT_NEUTRAL_SAMPLES',
       geometryContinuity: continuitySummary(evaluated), knownFalseContinuity: continuitySummary(knownFalseRows), anchorComparisons, detectorReplay };
   });
   const performance = distribution(run.frames.map((f) => f.inferenceMs));

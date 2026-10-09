@@ -1340,3 +1340,11 @@ STEP4O.2의 판정은 그대로 두고, 사용자가 지정한 5쌍만 `PROVISIO
 실행 명령, 고정 비교 정책과 결과는 [STEP4O.3 보고서](docs/step-4o3-provisional-sensitivity.md)에 있습니다. **Media pairing이 provisional이므로 이 결과로 estimator의 우위를 확정할 수 없습니다.** 명확한 개선 패턴이 있더라도 후속 새 capture가 필요합니다. 기존 guard/forensic threshold/detector config는 변경하지 않습니다.
 
 실측: 5쌍×3 variant의 전체 PTS가 일치했고 variant별7,564프레임을 처리했습니다. 고정 Neutral 구간의 baseline 부족이 IMAGE2개/Heavy3개에서 발생해 종합 판정은 **INSUFFICIENT**, NEXT_VALIDATION_WORTHY는 없습니다. Full VIDEO에서 LIVE2/LIVE3의 기존 false가 재현되지 않았고, IMAGE의 일부 geometry 감소에는 missing 증가·true recall 손실이 동반됐습니다. Typecheck/build와 **79 files / 871 tests** 통과, 기존4K/4L/4M/4N report 일치. 이 결과는 variant 우위 확정이나 production 변경 근거가 아닙니다.
+
+## STEP 4P — Capture Integrity + Estimator Neutral Readiness
+
+새 Replay Capture는 V2 JSON에 최종 WebM의 SHA-256/byteLength와 전체 decoded PTS/dimension manifest를 저장합니다. Stop 후 **ARTIFACT_READY**까지 기다려 WebM + JSON을 저장하세요. V2는 파일명을 바꿔도 bytes/manifest가 같으면 허용하며, V1의 기존 filename/captureId guard는 유지합니다.
+
+Capture 중 Neutral은 production FROZEN 후에도 자세를 유지해야 합니다. 최근 3초에서 양쪽 shoulder/hip/knee/ankle이 모두 usable인 frame 60개가 확보되면 **Estimator Neutral reference READY**가 됩니다. Capture panel에서 missing joint와 counts를 확인할 수 있습니다. Capture 중 desktop/remote Guided 시작은 이 reference가 있어야 가능하고, 시작 후에는 pose loss와 무관하게 기존 22초 timeline을 진행합니다.
+
+다음 실제 attempt는 기존 foot-side 배치를 유지하고 **Camera → Replay Capture → Neutral → reference READY → Guided 1회 → Stop → ARTIFACT_READY → WebM/JSON 저장** 순서로 진행합니다. 실패도 보존하고 결과를 보고 threshold를 바꾸지 않습니다. 이번 STEP에서는 실제 운동·capture·새 estimator 비교를 수행하지 않았습니다. [구현, 호환성, 사전 고정 protocol 및 검증](docs/step-4p-capture-hardening.md)을 참고하세요.

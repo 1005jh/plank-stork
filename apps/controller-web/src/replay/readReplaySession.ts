@@ -1,3 +1,4 @@
+import { validateReplayV2 } from './validateReplayV2';
 import type { ReplaySession } from './replayTypes';
 import { validKneeKickBaselineV3 } from '../pose/kick/kneeKickDetectorV3';
 
@@ -14,7 +15,7 @@ export function readReplaySession(json: string): ReplaySession {
   const timed = (value: { tMs: number; order: number }) => value && nonnegative(value.tMs) && nonnegative(value.order);
   const states = ['NOT_READY', 'ARMED', 'CANDIDATE', 'WAIT_CLEAR', 'WAIT_RETURN', 'TRIGGERED_LEFT', 'TRIGGERED_RIGHT'];
   try {
-    if ((data.detectorMode !== undefined && !['Y_V3', 'LEGACY_X'].includes(data.detectorMode)) || data.version !== 1 || typeof data.captureId !== 'string' || !data.captureId || !nonnegative(data.timing.durationMs) ||
+    if ((data.detectorMode !== undefined && !['Y_V3', 'LEGACY_X'].includes(data.detectorMode)) || ![1, 2].includes(data.version) || typeof data.captureId !== 'string' || !data.captureId || !nonnegative(data.timing.durationMs) ||
         !number(data.timing.captureStartPerformanceMs) || typeof data.video.filename !== 'string' ||
         !number(data.video.width) || !number(data.video.height) || !['GPU', 'CPU'].includes(data.pose.delegate) ||
         typeof data.pose.modelUrl !== 'string' || typeof data.pose.settings !== 'object' || !data.pose.settings ||
@@ -30,6 +31,7 @@ export function readReplaySession(json: string): ReplaySession {
           Array.isArray(trial.result.events) && trial.result.events.every((event) => number(event.id) && nonnegative(event.tMs) && ['KNEE_LEFT', 'KNEE_RIGHT'].includes(event.direction)))) {
       throw new Error('invalid');
     }
+    if (data.version === 2) validateReplayV2(data);
     // The table reads summaries; reject missing/incorrect nested keys here, not during render.
     if (data.liveResult.kickBaselineV3 != null && !validKneeKickBaselineV3(data.liveResult.kickBaselineV3)) throw new Error('V3 baseline');
     for (const trial of data.liveResult.trials) {
@@ -45,6 +47,6 @@ export function readReplaySession(json: string): ReplaySession {
         ![null, true, false].includes(summary[name].directionCorrect)) throw new Error('summary');
       }
     }
-  } catch { throw new Error('지원하는 STEP 4F version 1 Replay JSON이 아닙니다. 원본 Capture JSON을 선택하세요.'); }
+  } catch { throw new Error('지원하는 STEP 4F version 1 / STEP 4P version 2 Replay JSON이 아닙니다. 원본 Capture JSON을 선택하세요.'); }
   return data;
 }

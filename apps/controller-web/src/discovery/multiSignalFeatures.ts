@@ -48,8 +48,9 @@ export function neutralCalibrationWindow(session: ReplaySession, trial: ReplayTr
   return { source, calibrationStartMs: start?.tMs ?? null, startMs, endMs, frameCount: selected.length, frames: selected,
     excludedStageIndex: source === 'FIRST_NEUTRAL_COMPATIBILITY' ? 0 : null };
 }
-export function flexionBaseline(session: ReplaySession, trial: ReplayTrial, selection: CalibrationSelection = 'LATEST_START') {
-  const { frames, ...window } = neutralCalibrationWindow(session, trial, selection);
+export type AnalysisNeutralWindow = Omit<ReturnType<typeof neutralCalibrationWindow>, 'source'> & { source: ReturnType<typeof neutralCalibrationWindow>['source'] | 'ESTIMATOR_NEUTRAL_REFERENCE' };
+export function flexionBaseline(session: ReplaySession, trial: ReplayTrial, selection: CalibrationSelection = 'LATEST_START', analysisWindow?: AnalysisNeutralWindow) {
+  const { frames, ...window } = analysisWindow ?? neutralCalibrationWindow(session, trial, selection);
   const values = (side: Limb) => frames.map((f) => kneeAngle(f.landmarks, side)).filter((n): n is number => n !== null);
   const left = values('LEFT'), right = values('RIGHT');
   return { ...window, LEFT: { neutralAngle: median(left), usableFrames: left.length }, RIGHT: { neutralAngle: median(right), usableFrames: right.length } };

@@ -1,3 +1,4 @@
+import { validateReplayMediaArtifact, ReplayMediaValidationCache } from '../replay/mediaArtifact';
 import { compareVideoCoverage } from '../replay/videoReplayMetrics';
 import { ReplayVideoDiagnostics } from './ReplayVideoDiagnostics';
 import { useEffect, useRef, useState } from 'react';
@@ -21,6 +22,8 @@ function ResultRow({ name, result }: { name: string; result: ReplayResult | null
     <td>{summary?.NEUTRAL.falseKickCount ?? '-'}</td><td>{knee('KNEE_LEFT')}</td><td>{knee('KNEE_RIGHT')}</td><td>{result?.finalState ?? '-'}</td></tr>;
 }
 export function ReplayRunner() {
+  const cache = useRef(new ReplayMediaValidationCache());
+  const [identity, setIdentity] = useState<Awaited<ReturnType<typeof validateReplayMediaArtifact>> | null>(null);
   const [session, setSession] = useState<ReplaySession | null>(null);
   const [file, setFile] = useState<File | null>(null), [trialId, setTrialId] = useState(1);
   const [landmark, setLandmark] = useState<ReplayOutput | null>(null), [videoResult, setVideoResult] = useState<ReplayOutput | null>(null);
@@ -30,12 +33,12 @@ export function ReplayRunner() {
   const video = useRef<HTMLCanvasElement>(null), abort = useRef<AbortController | null>(null), generation = useRef(0), mounted = useRef(false);
   const videoInput = useRef<HTMLInputElement>(null);
   const downloads = useLocalDownload();
-  const videoSourceError = session && file ? replayVideoSourceError(
+  const videoSourceError = session?.version === 1 && file ? replayVideoSourceError(
     { filename: session.video.filename, sourceCaptureId: session.captureId }, replayVideoSourceFromFilename(file.name),
   ) : null;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; abort.current?.abort(); }; }, []);
   function resetResults() {
-    generation.current++; abort.current?.abort(); downloads.clear();
+    generation.current++; abort.current?.abort(); downloads.clear(); cache.current = new ReplayMediaValidationCache(); setIdentity(null);
     setLandmark(null); setVideoResult(null); setCalibration(null); setV3(null); setError(null); setProgress('');
   }
   async function loadJson(file: File | undefined) {
@@ -67,15 +70,18 @@ export function ReplayRunner() {
   async function runVideo() {
     if (!session || !file || !video.current || busy) return;
     // Guard execution as well as the button, before initializing any replay resources.
-    if (replayVideoSourceError(
+    if (session.version === 1 && replayVideoSourceError(
       { filename: session.video.filename, sourceCaptureId: session.captureId }, replayVideoSourceFromFilename(file.name),
     )) return;
     const id = ++generation.current, controller = new AbortController(); abort.current = controller;
-    setBusy(true); setError(null); setVideoResult(null); setProgress('MediaPipe 초기화 중…');
+    setBusy(true); setError(null); setVideoResult(null); setProgress('Media identity 검증 중…');
     try {
+      const verified = await validateReplayMediaArtifact(session, file, controller.signal, cache.current);
+      if (!mounted.current || generation.current !== id) return;
+      setIdentity(verified);
       const output = await inferReplayVideo(video.current, file, session, controller.signal, (tMs, count) => {
         if (mounted.current && generation.current === id) setProgress(`${(tMs / 1000).toFixed(1)}s · ${count} pose frames`);
-      });
+      }, cache.current);
       if (!mounted.current || generation.current !== id) return;
       const result = replayLandmarks(session, trialId, output.frames, 'VIDEO');
       result.videoDiagnostics = compareVideoCoverage(session, trialId, output.frames, output.diagnostics);
@@ -100,6 +106,7 @@ export function ReplayRunner() {
     <label>Replay JSON <input type="file" accept=".json,application/json" onChange={(event) => void loadJson(event.target.files?.[0])} /></label>{' '}
     <label>Replay WebM <input ref={videoInput} type="file" accept=".webm,video/webm" onChange={(event) => { resetResults(); setFile(event.target.files?.[0] ?? null); }} /></label>
     {session && <p>Capture: {session.captureId} · Detector: {replayDetectorMode(session)} · Recorded delegate: {session.pose.delegate} · Expected video: {session.video.filename}</p>}
+    {identity && <p>{identity.validation} · renamed: {String(identity.renamed)}</p>}
     {videoSourceError && <p role="alert">{videoSourceError}</p>}
     {session && JSON.stringify(session.liveResult.detectorConfig) !== JSON.stringify(diagnosticConfig()) && <p>저장된 detector 설정과 현재 설정이 다릅니다. 비교 결과에 차이가 생길 수 있습니다.</p>}
     {session && <label>Guided trial <select value={trialId} onChange={(event) => { resetResults(); setTrialId(Number(event.target.value)); }}>

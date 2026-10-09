@@ -1,5 +1,5 @@
 import { LIMBS, median, type Limb } from './discoveryFeatures';
-import { kneeAngle, neutralCalibrationWindow } from './multiSignalFeatures';
+import { kneeAngle, neutralCalibrationWindow, type AnalysisNeutralWindow } from './multiSignalFeatures';
 import { prepareMultiInputs, assertYReferenceParity, type PreparedMultiFixture } from './analyzeMultiSignal';
 import { replayKneeKickV3 } from '../replay/kneeKickV3Replay';
 import { orderedFrames, type CalibrationSelection } from '../replay/landmarkReplay';
@@ -38,8 +38,8 @@ export function integrityGeometry(points: readonly ReplayPoint[], world: readonl
     worldHipKneeLength: length(wh, wk, true), worldKneeAnkleLength: length(wk, wa, true), worldKneeAngle: worldAngle(wh, wk, wa),
     visibility: { hip: visibility(23 + offset), otherHip: visibility(24 - offset), knee: visibility(25 + offset), ankle: visibility(27 + offset) } };
 }
-export function segmentBaseline(session: ReplaySession, trial: ReplayTrial, selection: CalibrationSelection = 'LATEST_START') {
-  const { frames, ...window } = neutralCalibrationWindow(session, trial, selection);
+export function segmentBaseline(session: ReplaySession, trial: ReplayTrial, selection: CalibrationSelection = 'LATEST_START', analysisWindow?: AnalysisNeutralWindow) {
+  const { frames, ...window } = analysisWindow ?? neutralCalibrationWindow(session, trial, selection);
   const side = (limb: Limb) => {
     const raw = frames.map((f) => integrityGeometry(f.landmarks, f.worldLandmarks, limb));
     const summary = (key: 'hipKneeLength' | 'kneeAnkleLength') => {
@@ -66,10 +66,10 @@ export type IntegrityFrame = BaseFrame & { measurements: Record<Limb, IntegrityM
 function calibrationSelection(input: IntegrityInput, latestFrozen: boolean): CalibrationSelection {
   return input.role === 'REFERENCE_LIVE_3_HOLDOUT' ? 'LATEST_FROZEN' : latestFrozen ? 'LATEST_FROZEN_OR_COMPATIBILITY' : 'LATEST_START';
 }
-export function prepareIntegrityFixture(input: IntegrityInput, multi: PreparedMultiFixture, latestFrozen = false) {
+export function prepareIntegrityFixture(input: IntegrityInput, multi: PreparedMultiFixture, latestFrozen = false, analysisWindow?: AnalysisNeutralWindow) {
   const trial = input.session.liveResult.trials.find((t) => t.id === multi.input.trialId)!;
   const selection = calibrationSelection(input, latestFrozen);
-  const baseline = segmentBaseline(input.session, trial, selection), production = replayKneeKickV3(input.session, trial.id, selection);
+  const baseline = segmentBaseline(input.session, trial, selection, analysisWindow), production = replayKneeKickV3(input.session, trial.id, selection);
   const rawByTime = new Map(orderedFrames(input.session.poseFrames).map((f) => [f.tMs, f]));
   const diagByTime = new Map(production.diagnostics.map((d) => [d.timestamp, d]));
   let previous: IntegrityFrame | null = null;

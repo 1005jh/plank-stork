@@ -1,3 +1,4 @@
+import { captureCamera, fixtureFinalizer, mockRecorder } from '../replay/testFixtures';
 import { KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
 import { motionFrame } from '../pose/motion/testFixtures';
 import { act, createRef, StrictMode, useEffect } from 'react';
@@ -11,6 +12,7 @@ import { features, prototypes, RECORD_STARTS } from '../pose/actions/testFixture
 import { POSE_ACTIONS } from '../pose/actions/poseActionTypes';
 import { KneeMotionValidation } from '../pose/motion/kneeMotionValidation';
 
+vi.mock('../replay/mediaArtifact', async (original) => ({ ...await original<typeof import('../replay/mediaArtifact')>(), finalizeMediaArtifact: (...args: Parameters<typeof fixtureFinalizer>) => fixtureFinalizer(...args) }));
 vi.mock('../camera/usePoseCamera', () => ({ usePoseCamera: vi.fn() }));
 
 describe('controller remote lifecycle', () => {
@@ -20,7 +22,8 @@ describe('controller remote lifecycle', () => {
   let camera: ReturnType<typeof usePoseCamera>;
   const snapshot = () => socket.emit.mock.calls.filter(([event]) => event === 'calibration:state:publish').at(-1)![1] as CalibrationRemoteState;
   const request = async (event: string, requestId = event) => act(async () => socket.receive(event, { requestId, timestamp: Date.now() }));
-  async function advance(ms: number) { now += ms; await act(async () => vi.advanceTimersByTime(ms)); }
+  // Fake interval callbacks are synchronous; flush every tick without an extra async act task.
+  async function advance(ms: number) { now += ms; act(() => vi.advanceTimersByTime(ms)); }
   function inference(values = features()) {
     const points = Array.from({ length: 33 }, () => ({ x: 0.5 + (values.deltaHipCenterX ?? 0), y: 0.5 + (values.deltaHipCenterY ?? 0), z: 0, visibility: 0.9 }));
     const world = points.map((point) => ({ ...point }));
@@ -361,6 +364,28 @@ describe('controller remote lifecycle', () => {
     const panel = container.querySelector('[aria-labelledby="knee-kick-title"]')!;
     expect(panel.textContent).toContain('Normalized Y LEFT-');
     expect(panel.textContent).toContain('Normalized Y RIGHT-');
+  });
+
+  it.each(['desktop', 'remote'] as const)('gates %s Guided start only during capture and never pauses a started timeline', async (path) => {
+    vi.stubGlobal('MediaRecorder', mockRecorder); vi.mocked(camera.getCaptureContext).mockReturnValue(captureCamera());
+    const button = (name: string) => [...container.querySelectorAll('button')].find((b) => b.textContent === name)!;
+    await act(async () => button('Start Replay Capture').click());
+    await freezeKickNeutral();
+    await advance(250);
+    expect(button('Start Guided Detector Test').disabled).toBe(true);
+    await request('kick:test:start:requested', 'blocked'); expect(snapshot().detectorTest.status).toBe('IDLE');
+    expect(container.textContent).toContain('자세를 유지하세요');
+    const f = motionFrame(now); f.landmarks[27].visibility = .49;
+    callbacks?.onFrame?.(f); await advance(250); expect(container.textContent).toContain('MISSING: LEFT_ANKLE');
+    for (let i = 0; i < 65; i++) { await advance(50); callbacks?.onFrame?.(motionFrame(now)); }
+    await advance(250); expect(button('Start Guided Detector Test').disabled).toBe(false);
+    if (path === 'desktop') await act(async () => button('Start Guided Detector Test').click());
+    else await request('kick:test:start:requested', 'ready');
+    await request('calibration:sync:requested'); expect(snapshot().detectorTest.status).toBe('ACTIVE');
+    await advance(50); callbacks?.onFrame?.({ ...motionFrame(now), landmarks: [], worldLandmarks: [] });
+    await advance(21950); await request('calibration:sync:requested');
+    expect(snapshot().detectorTest.status).toBe('COMPLETED');
+    await act(async () => button('Stop Replay Capture').click());
   });
 
   it('runs the guided detector test remotely, retains per-stage measurements, and resets safely', async () => {

@@ -1,3 +1,5 @@
+import type { VideoIntegrity } from './mediaArtifact';
+import type { CaptureValidation, EstimatorNeutralReference } from '../capture/estimatorValidationProtocol';
 import type { VideoReplayDiagnostics } from './videoReplayMetrics';
 import type { DetectorTestSummary, KneeKickState } from '@plank-stork/protocol';
 import type { PoseFrame } from '../recorder/poseRecorderTypes';
@@ -16,13 +18,15 @@ export interface ReplayPoint { x: number; y: number; z: number; visibility: numb
 export interface ReplayPoseFrame { tMs: number; order: number; landmarks: ReplayPoint[]; worldLandmarks: ReplayPoint[] }
 export interface ReplayEvent { id: number; direction: 'KNEE_LEFT' | 'KNEE_RIGHT'; tMs: number }
 export type ReplayMarkerType = 'CAPTURE_START' | 'CAPTURE_STOP' | 'NEUTRAL_CALIBRATION_START' | 'NEUTRAL_FROZEN' |
-  'GUIDED_TEST_START' | 'GUIDED_STAGE_CHANGE' | 'GUIDED_TEST_COMPLETE' | 'GUIDED_TEST_STOP';
+  'GUIDED_TEST_START' | 'GUIDED_STAGE_CHANGE' | 'GUIDED_TEST_COMPLETE' | 'GUIDED_TEST_STOP' | 'INVALID_MISSING_ESTIMATOR_REFERENCE';
 export interface ReplayMarker { type: ReplayMarkerType; tMs: number; order: number; trialId?: number; stageIndex?: number; expected?: string }
 export interface ReplayResult {
   poseFrameCount: number; poseUsableFrameCount: number; events: ReplayEvent[]; finalState: KneeKickState;
   guidedSummary: DetectorTestSummary | null;
 }
 export interface ReplayTrial {
+  estimatorNeutralReference?: EstimatorNeutralReference;
+  validationStatus?: 'REFERENCE_READY' | 'INVALID_MISSING_ESTIMATOR_REFERENCE';
   id: number; startMs: number; endMs: number | null; startOrder: number; endOrder: number | null;
   baseline: KneeKickBaseline; neutralBaseline: NeutralCalibration | null; result: ReplayResult;
   /** V3 baseline; result is PRIMARY according to session.detectorMode. baseline remains X for compatibility. */
@@ -32,8 +36,9 @@ export interface ReplayTrial {
 export interface ReplaySession {
   detectorMode?: KickDetectorMode;
   detectorConfigV3?: typeof Y_KICK_V3_CONFIG;
-  version: 1; captureId: string; createdAt: string;
-  video: { filename: string; mimeType: string; width: number; height: number; nominalFrameRate: number | null; videoBitsPerSecond: number; sourceVideoTimeAtStart: number };
+  version: 1 | 2; captureId: string; createdAt: string;
+  attemptId?: string; validation?: CaptureValidation;
+  video: { integrity?: VideoIntegrity; filename: string; mimeType: string; width: number; height: number; nominalFrameRate: number | null; videoBitsPerSecond: number; sourceVideoTimeAtStart: number };
   pose: { model: string; modelUrl: string; delegate: PoseDelegate; settings: Record<string, number | string | boolean> };
   display: { mirrorEnabled: boolean };
   timing: { durationMs: number; captureStartPerformanceMs: number };

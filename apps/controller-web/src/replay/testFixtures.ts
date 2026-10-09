@@ -3,6 +3,7 @@ import { KneeKickAnalysis, type KickDetectorMode } from '../pose/kick/kneeKickAn
 import { motionFrame } from '../pose/motion/testFixtures';
 import type { PoseFrame } from '../recorder/poseRecorderTypes';
 import { ReplayCapture } from './replayCapture';
+import type { finalizeMediaArtifact } from './mediaArtifact';
 import type { CaptureCamera, ReplaySession } from './replayTypes';
 
 export class MockMediaRecorder extends EventTarget {
@@ -25,10 +26,32 @@ export function captureCamera(): CaptureCamera {
   return { stream: { getVideoTracks: () => [track], getTracks: () => [track] } as unknown as MediaStream,
     delegate: 'CPU', width: 1280, height: 720, videoTime: 3 };
 }
+// Synthetic encoder bytes are not WebM. Media decoder/hash behavior has separate 4P tests.
+export const fixtureFinalizer: typeof finalizeMediaArtifact = async (blob, video, signal, phase) => {
+  phase?.('HASHING'); phase?.('MEDIA_INSPECTION');
+  if (signal.aborted) throw new Error('cancelled');
+  return { algorithm: 'SHA-256', sha256: 'a'.repeat(64), byteLength: blob.size, decodedFrameCount: 2,
+    firstPtsMs: 0, lastPtsMs: 33, timestampHash: 'b'.repeat(64), decodedWidth: video.width, decodedHeight: video.height, finalizedAt: '2026-10-09T00:00:00.000Z' };
+};
+export function createTestCapture(legacyFixture = false) {
+  return new class extends ReplayCapture {
+    constructor() { super(fixtureFinalizer); }
+    override getFiles() {
+      const files = super.getFiles();
+      if (!legacyFixture) return files;
+      // Preserve the historical V1 analysis fixtures (including their 1s calibration timeline).
+      const session = JSON.parse(files.json) as ReplaySession;
+      session.version = 1; delete session.attemptId; delete session.validation; delete session.video.integrity;
+      session.markers = session.markers.filter((m) => m.type !== 'INVALID_MISSING_ESTIMATOR_REFERENCE');
+      for (const trial of session.liveResult.trials) { delete trial.estimatorNeutralReference; delete trial.validationStatus; }
+      return { ...files, json: JSON.stringify(session) };
+    }
+  }();
+}
 export const ORIGIN = 100000.25;
 export const TRIAL_AT = 1200;
 export function liveHarness(captureEnabled = true, detectorMode: KickDetectorMode = 'LEGACY_X') {
-  const capture = new ReplayCapture(), neutral = new PoseFeatureAnalysis(), kick = new KneeKickAnalysis(null, detectorMode);
+  const capture = createTestCapture(true), neutral = new PoseFeatureAnalysis(), kick = new KneeKickAnalysis(null, detectorMode);
   const context = captureCamera();
   if (captureEnabled) capture.start(context, true, ORIGIN, mockRecorder);
   neutral.startCalibration(ORIGIN + 100); capture.neutralStarted(ORIGIN + 100);

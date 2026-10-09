@@ -86,7 +86,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
     });
   }
   function startDetectorTest() {
-    return status === 'RUNNING' && features.getCurrent().collectionState === 'FROZEN' && kick.startTest();
+    return status === 'RUNNING' && features.getCurrent().collectionState === 'FROZEN' && capture.canStartGuided() && kick.startTest();
   }
   const remote = useCalibrationRemote(socket, {
     getCamera: () => ({ cameraRunning: status === 'RUNNING', poseDetected: status === 'RUNNING' && getRecordingContext() !== null }),
@@ -204,7 +204,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
       />
       <PoseActions actions={actions} onStart={startAction} onReset={resetAction} />
       <PoseValidation validation={validation} canStart={validationReady(status === 'RUNNING', features.view, actions.view)} onStart={startValidation} />
-      <KneeKickDetectorPanel kick={kick} canStart={status === 'RUNNING' && kick.view.detector.ready} onStart={startDetectorTest} />
+      <KneeKickDetectorPanel kick={kick} canStart={status === 'RUNNING' && kick.view.detector.ready && capture.view.guidedStartAllowed} onStart={startDetectorTest} />
       <KneeMotionValidationPanel motion={motion} canStart={kneeMotionReady(status === 'RUNNING', metrics.detected, features.view)} onStart={startMotion} />
       <ReplayRunner />
       <KickFeatureDiscovery />

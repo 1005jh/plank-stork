@@ -1,3 +1,4 @@
+import type { AnalysisNeutralWindow } from './multiSignalFeatures';
 import { LIMBS, type Limb } from './discoveryFeatures';
 import { discoveryStages, stageForTime, type DiscoveryStage } from './discoveryStages';
 import { flexionBaseline, flexionIncrease, kneeAngle, FLEXION_VISIBILITY, type Channel, type MultiFrame, type MultiRole } from './multiSignalFeatures';
@@ -61,11 +62,11 @@ export function signalStats(points: readonly { timestamp: number; value: number 
       return { threshold, longestAboveMs, framesAbove };
     }) };
 }
-export function prepareMultiFixture(input: MultiInput, trialId: number, production: ReturnType<typeof replayKneeKickV3>) {
+export function prepareMultiFixture(input: MultiInput, trialId: number, production: ReturnType<typeof replayKneeKickV3>, analysisWindow?: AnalysisNeutralWindow) {
   const { session, filename, role } = input, trial = session.liveResult.trials.find((t) => t.id === trialId)!;
   const stages = discoveryStages(session, trial);
   if (stages.source !== 'GUIDED_STAGE_CHANGE') throw new Error(`${filename}: STEP 4J는 GUIDED_STAGE_CHANGE marker가 필요합니다.`);
-  const baseline = flexionBaseline(session, trial, input.calibrationSelection), yByTime = new Map(production.diagnostics.map((d) => [d.timestamp, d]));
+  const baseline = flexionBaseline(session, trial, input.calibrationSelection, analysisWindow), yByTime = new Map(production.diagnostics.map((d) => [d.timestamp, d]));
   const frames: SeriesFrame[] = orderedFrames(session.poseFrames).flatMap((f) => {
     const y = yByTime.get(f.tMs); if (!y) return [];
     const stage = stageForTime(stages.stages, f.tMs);

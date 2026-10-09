@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { fullV3Trial, liveHarness, ORIGIN, TRIAL_AT } from '../replay/testFixtures';
 import { motionFrame } from '../pose/motion/testFixtures';
 import { prepareTwistInputs, type TwistRole } from './twistConfusionFeatures';
@@ -26,6 +26,16 @@ async function cleanCapture(falseTwist = false) {
   }
   return live.finish();
 }
+async function prepareFiveRoleRegression() {
+  const clean = await cleanCapture(), falseCapture = await cleanCapture(true);
+  const roles: TwistRole[] = ['REFERENCE_OLD_CLEAN', 'STRESS', 'REFERENCE_LIVE_1', 'REFERENCE_LIVE_2_INDEPENDENT', 'REFERENCE_LIVE_3_HOLDOUT_FAILURE'];
+  const inputs = roles.map((role, i) => ({ filename: `${i}.json`, role, session: { ...(i === 4 ? falseCapture : clean), captureId: `capture-${i}` } }));
+  const oldFixtures = prepareIntegrityInputs(inputs.slice(0, 4).map((i) => ({ ...i, role: i.role as 'REFERENCE_LIVE_1' })));
+  const previous = analyzeIntegrity(oldFixtures, undefined, 'fixed');
+  const fixtures = prepareTwistInputs(inputs), evidence = createTwistConfusionEvidence(fixtures);
+  return { fixtures, evidence, oldFixtures, previous };
+}
+
 describe('post-failure exploratory reporting', () => {
   it('keeps production replay and original HOLDOUT acceptance immutable and marks both role aliases exploratory', async () => {
     const session = (await fullV3Trial()).session!, input = { filename: 'holdout.json', role: 'REFERENCE_LIVE_3_HOLDOUT' as const, session };
@@ -49,23 +59,27 @@ describe('post-failure exploratory reporting', () => {
     expect(() => analyzeTwistStrategy([], evidence, twistGuardConfigs()[0])).toThrow('same assigned fixtures');
     expect(evidence).not.toHaveProperty('strategyResults');
   });
-  it('requires all five roles and can report EXPLORATORY_VIABLE only when stage recall/false regressions pass', async () => {
-    const clean = await cleanCapture(), falseCapture = await cleanCapture(true);
-    const roles: TwistRole[] = ['REFERENCE_OLD_CLEAN', 'STRESS', 'REFERENCE_LIVE_1', 'REFERENCE_LIVE_2_INDEPENDENT', 'REFERENCE_LIVE_3_HOLDOUT_FAILURE'];
-    const inputs = roles.map((role, i) => ({ filename: `${i}.json`, role, session: { ...(i === 4 ? falseCapture : clean), captureId: `capture-${i}` } }));
-    const fixtures = prepareTwistInputs(inputs), evidence = createTwistConfusionEvidence(fixtures);
-    expect(evidence.references[4].fixedFlexionIntegrity12.falseEvents).toBe(1);
-    const config = twistGuardConfigs().find((c) => c.guardType === 'HIP_DEPTH_AND_BILATERAL_Y' && c.hipThreshold === .75 && c.symmetryThreshold === .5)!;
-    const result = analyzeTwistStrategy(fixtures, evidence, config);
-    expect(result).toMatchObject({ assessment: 'EXPLORATORY_VIABLE', falseRemoved: 1, falseAdded: 0, trueEventsLost: 0, trueEventsPreserved: 10, wrong: 0, duplicates: 0 });
-    expect(result.perFixture[4].guardActivationsDuringTwist).toBeGreaterThan(0);
-    expect(result.perFixture[4].guardActivationsDuringExpectedLimbKick).toBe(0);
-    const partial = fixtures.slice(1);
-    expect(analyzeTwistStrategy(partial, createTwistConfusionEvidence(partial), config).assessment).toBe('INSUFFICIENT_EVIDENCE');
-    const oldFixtures = prepareIntegrityInputs(inputs.slice(0, 4).map((i) => ({ ...i, role: i.role as 'REFERENCE_LIVE_1' })));
-    const previous = analyzeIntegrity(oldFixtures, undefined, 'fixed');
-    analyzeTwistStrategy(fixtures, evidence, config);
-    expect(analyzeIntegrity(oldFixtures, undefined, 'fixed')).toEqual(previous);
+  describe('five-role regression', () => {
+    let fiveRoleRegression: Awaited<ReturnType<typeof prepareFiveRoleRegression>>;
+    // STEP 4P.1: fixture preparation + the full pre-analysis report took 4.03s under
+    // default worker contention (the original test took 6.15s vs 1.71s alone).
+    // Prepare that oracle once; only the five-role test owns these fixtures. Keep
+    // the independent full post-analysis recomputation and every equality assertion.
+    beforeAll(async () => { fiveRoleRegression = await prepareFiveRoleRegression(); });
+
+    it('requires all five roles and can report EXPLORATORY_VIABLE only when stage recall/false regressions pass', async () => {
+      const { fixtures, evidence, oldFixtures, previous } = fiveRoleRegression;
+      expect(evidence.references[4].fixedFlexionIntegrity12.falseEvents).toBe(1);
+      const config = twistGuardConfigs().find((c) => c.guardType === 'HIP_DEPTH_AND_BILATERAL_Y' && c.hipThreshold === .75 && c.symmetryThreshold === .5)!;
+      const result = analyzeTwistStrategy(fixtures, evidence, config);
+      expect(result).toMatchObject({ assessment: 'EXPLORATORY_VIABLE', falseRemoved: 1, falseAdded: 0, trueEventsLost: 0, trueEventsPreserved: 10, wrong: 0, duplicates: 0 });
+      expect(result.perFixture[4].guardActivationsDuringTwist).toBeGreaterThan(0);
+      expect(result.perFixture[4].guardActivationsDuringExpectedLimbKick).toBe(0);
+      const partial = fixtures.slice(1);
+      expect(analyzeTwistStrategy(partial, createTwistConfusionEvidence(partial), config).assessment).toBe('INSUFFICIENT_EVIDENCE');
+      analyzeTwistStrategy(fixtures, evidence, config);
+      expect(analyzeIntegrity(oldFixtures, undefined, 'fixed')).toEqual(previous);
+    });
   });
   it('halts on LIVE parity mismatch before measuring distributions or new rule evaluation', async () => {
     const session = (await fullV3Trial()).session!; session.liveResult.trials[0].result.events[0].tMs++;

@@ -1,16 +1,18 @@
+import { ReplayMediaValidationCache } from '../replay/mediaArtifact';
 import { memo, useEffect, useRef, useState } from 'react';
 import { readReplaySession } from '../replay/readReplaySession';
 import { useLocalDownload } from '../replay/useLocalDownload';
 import type { BodyInput, BodyRole } from '../discovery/bodyLocalFeatures';
 import { ESTIMATOR_VARIANTS, type EstimatorVariant } from '../estimator/estimatorConfig';
-import { decodeEstimatorFrames, runEstimator, validateEstimatorMedia, type FramePlan, type EstimatorRun } from '../estimator/estimatorInference';
+import { decodeEstimatorFrames, runEstimator, validateEstimatorMediaArtifact, type FramePlan, type EstimatorRun } from '../estimator/estimatorInference';
 import { ESTIMATOR_ROLES, estimatorAnchors, analyzeEstimator, compareEstimators, type EstimatorAnchors, type EstimatorAnalysis } from '../estimator/estimatorAnalysis';
 
 import { compareEstimatorRepetition } from '../estimator/estimatorRepeatability';
 
 interface Input extends BodyInput { video: File | null }
-interface JobData { anchors: EstimatorAnchors; plan?: FramePlan; runs: Partial<Record<EstimatorVariant, EstimatorRun>> }
+interface JobData { identity: Awaited<ReturnType<typeof validateEstimatorMediaArtifact>>; anchors: EstimatorAnchors; plan?: FramePlan; runs: Partial<Record<EstimatorVariant, EstimatorRun>> }
 export const EstimatorContinuityAnalysis = memo(function EstimatorContinuityAnalysis() {
+  const mediaCache = useRef(new ReplayMediaValidationCache());
   const loaded = useRef<Input[]>([]), jobs = useRef(new Map<string, JobData>()), abort = useRef<AbortController | null>(null);
   const [inputs, setInputs] = useState<Input[]>([]), [validated, setValidated] = useState(false), [decoded, setDecoded] = useState(false);
   const [results, setResults] = useState<(EstimatorAnalysis & { repeatability?: ReturnType<typeof compareEstimatorRepetition> })[]>([]), [report, setReport] = useState<ReturnType<typeof compareEstimators> | null>(null);
@@ -18,7 +20,7 @@ export const EstimatorContinuityAnalysis = memo(function EstimatorContinuityAnal
   const { download, clear } = useLocalDownload();
   useEffect(() => () => { abort.current?.abort(); abort.current = null; jobs.current.clear(); loaded.current = []; }, []);
   function cancel() { abort.current?.abort(); abort.current = null; setProgress(null); }
-  function invalidate() { cancel(); clear(); jobs.current.clear(); setValidated(false); setDecoded(false); setResults([]); setReport(null); setError(null); }
+  function invalidate() { cancel(); mediaCache.current = new ReplayMediaValidationCache(); clear(); jobs.current.clear(); setValidated(false); setDecoded(false); setResults([]); setReport(null); setError(null); }
   function update(next: Input[]) { invalidate(); loaded.current = next; setInputs(next); }
   async function task(label: string, operation: (signal: AbortSignal, show: (message: string) => void) => Promise<void>) {
     cancel(); const controller = new AbortController(); abort.current = controller; setError(null); setProgress(label);
@@ -46,10 +48,11 @@ export const EstimatorContinuityAnalysis = memo(function EstimatorContinuityAnal
       for (const input of loaded.current) {
         if (input.role === 'UNASSIGNED' || !input.video) throw new Error('각 JSON의 role과 matching WebM을 직접 선택하세요.');
         if (roles.has(input.role)) throw new Error('Each role must be unique.'); roles.add(input.role);
-        validateEstimatorMedia(input.session, input.video);
+        const identity = await validateEstimatorMediaArtifact(input.session, input.video, signal, mediaCache.current);
+        if (signal.aborted) return;
         const anchors = estimatorAnchors(input);
         if (!anchors.length) throw new Error('A completed Guided trial is required.');
-        jobs.current.set(input.session.captureId, { anchors, runs: {} });
+        jobs.current.set(input.session.captureId, { identity, anchors, runs: {} });
         await new Promise<void>((r) => setTimeout(r, 0)); if (signal.aborted) return;
       }
       setValidated(true);
@@ -58,7 +61,7 @@ export const EstimatorContinuityAnalysis = memo(function EstimatorContinuityAnal
   function decode() {
     void task('Decoding all frames…', async (signal, show) => {
       for (const input of loaded.current) {
-        const plan = await decodeEstimatorFrames(input.video!, input.session, signal, (n) => show(`${input.role}: decoded ${n} frames`));
+        const plan = await decodeEstimatorFrames(input.video!, input.session, signal, (n) => show(`${input.role}: decoded ${n} frames`), mediaCache.current);
         if (signal.aborted) return;
         jobs.current.get(input.session.captureId)!.plan = plan;
       }
@@ -71,7 +74,7 @@ export const EstimatorContinuityAnalysis = memo(function EstimatorContinuityAnal
       for (const input of loaded.current) {
         const job = jobs.current.get(input.session.captureId)!;
         const run = await runEstimator(input.video!, input.session, variant, job.plan!, signal,
-          (n) => show(`${input.role} / ${variant}: ${n}/${job.plan!.timestamps.length}`));
+          (n) => show(`${input.role} / ${variant}: ${n}/${job.plan!.timestamps.length}`), mediaCache.current);
         if (signal.aborted) return;
         const analysis = analyzeEstimator(input, run, job.anchors);
         const previous = results.find((r) => r.variant === variant && r.input.captureId === input.session.captureId);
@@ -86,7 +89,7 @@ export const EstimatorContinuityAnalysis = memo(function EstimatorContinuityAnal
   const finished = (v: EstimatorVariant) => inputs.length > 0 && inputs.every((i) => results.some((r) => r.variant === v && r.input.captureId === i.session.captureId));
   return <section aria-labelledby="estimator-continuity-title">
     <h3 id="estimator-continuity-title">STEP 4O — Pose Estimator Continuity</h3>
-    <p>POST_FAILURE_EXPLORATORY · 저장된 영상의 모든 PTS를 순차 처리합니다. Role은 직접 지정하며, 원래 JSON/WebM 이름과 capture ID가 맞아야 합니다. 새 촬영은 필요하지 않습니다.</p>
+    <p>POST_FAILURE_EXPLORATORY · 저장된 영상의 모든 PTS를 순차 처리합니다. Role은 직접 지정하며, V1은 원래 filename/capture ID, V2는 SHA-256과 decoded manifest로 검증합니다. V2 파일명 변경은 허용합니다. 새 촬영은 필요하지 않습니다.</p>
     <label>Estimator Replay JSON <input type="file" multiple accept=".json,application/json" onChange={(e) => void load(Array.from(e.target.files ?? []))} /></label>
     {inputs.map((i, index) => <div key={`${i.session.captureId}/${index}`}>
       <p>{i.filename} · {i.session.captureId}</p>
@@ -104,10 +107,10 @@ export const EstimatorContinuityAnalysis = memo(function EstimatorContinuityAnal
     <button onClick={() => update([])}>Reset Estimator Analysis</button>{' '}
     <button disabled={!report || busy} onClick={() => { if (report) download(new Blob([JSON.stringify(report)], { type: 'application/json' }), 'plank-stork-step-4o-results.json'); }}>Download Estimator Report</button>
     {progress && <p role="status">{progress}</p>}{error && <p role="alert">{error}</p>}
-    {validated && <p>Media pairs validated. {decoded ? 'Frame sequences decoded.' : 'Ready to decode.'}</p>}
+    {validated && <><p>Media pairs validated. {decoded ? 'Frame sequences decoded.' : 'Ready to decode.'}</p><pre>{JSON.stringify(inputs.map((i) => jobs.current.get(i.session.captureId)?.identity), null, 2)}</pre></>}
     {decoded && <details><summary>Decoded sequence / SHA-256</summary><pre>{JSON.stringify(inputs.map((i) => ({ role: i.role, ...jobs.current.get(i.session.captureId)?.plan?.sequence })), null, 2)}</pre></details>}
     {results.map((r) => <details key={`${r.input.captureId}/${r.variant}`}><summary>{r.input.role} / {r.variant} · {r.sequence.decodedFrameCount} frames</summary>
-      <pre>{JSON.stringify({ sequence: r.sequence, performance: { ...r.performance, inferenceDurationsMs: undefined }, repeatability: r.repeatability, trials: r.trials.map((t) => ({ trialId: t.trialId, baselineStatus: t.baselineStatus,
+      <pre>{JSON.stringify({ sequence: r.sequence, performance: { ...r.performance, inferenceDurationsMs: undefined }, repeatability: r.repeatability, trials: r.trials.map((t) => ({ trialId: t.trialId, baselineStatus: t.baselineStatus, baseline: t.baseline,
         production: t.detectorReplay?.PRODUCTION_Y_V3.counts, fixed: t.detectorReplay && { left: t.detectorReplay.FIXED_REFERENCE.left, right: t.detectorReplay.FIXED_REFERENCE.right, false: t.detectorReplay.FIXED_REFERENCE.falseEvents } })) }, null, 2)}</pre>
       <button disabled={busy} onClick={() => {
         const run = jobs.current.get(r.input.captureId)?.runs[r.variant];
