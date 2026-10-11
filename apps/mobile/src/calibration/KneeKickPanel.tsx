@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
-import type { RemoteDetectorTestState, RemoteKneeKickState } from '@plank-stork/protocol';
+import type { RemoteCaptureReadinessState, RemoteDetectorTestState, RemoteKneeKickState } from '@plank-stork/protocol';
 import type { CalibrationCommand } from './useCalibrationRemote';
 
 const instructions = { NEUTRAL: '기본 자세', TWIST_LEFT: '왼쪽 트위스트', TWIST_RIGHT: '오른쪽 트위스트', KNEE_LEFT: '왼쪽 니킥', KNEE_RIGHT: '오른쪽 니킥' };
-export function KneeKickPanel({ detector, test, prerequisiteMessage, send }: {
-  detector: RemoteKneeKickState; test: RemoteDetectorTestState; prerequisiteMessage: string | null; send: (command: CalibrationCommand) => void;
+export function KneeKickPanel({ detector, test, captureReadiness, prerequisiteMessage, send }: {
+  detector: RemoteKneeKickState; test: RemoteDetectorTestState; captureReadiness: RemoteCaptureReadinessState;
+  prerequisiteMessage: string | null; send: (command: CalibrationCommand) => void;
 }) {
   const guide = useRef<HTMLDivElement>(null);
   const active = test.status === 'ACTIVE';
@@ -12,6 +13,8 @@ export function KneeKickPanel({ detector, test, prerequisiteMessage, send }: {
     ? 'Tracking OK' : 'Tracking Weak';
   const blockedReason = active ? 'Guided Detector Test가 진행 중입니다.' : prerequisiteMessage
     ?? (!detector.ready ? '양쪽 무릎이 보이는 Neutral을 보정하고 Detector READY를 확인하세요.'
+    : captureReadiness.captureRecording && captureReadiness.estimatorNeutralStatus !== 'READY' ? '분석용 Neutral READY까지 기본 자세를 유지하세요.'
+    : captureReadiness.captureRecording && !captureReadiness.guidedStartAllowed ? '이번 분석용 Neutral은 이미 테스트에 사용했습니다. 새 테스트에는 Neutral을 다시 보정하세요.'
     : null);
   useEffect(() => { if (active) guide.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); }, [active]);
   return <section className="calibration-card" aria-labelledby="mobile-kick-title">

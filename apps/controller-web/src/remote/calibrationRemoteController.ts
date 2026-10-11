@@ -1,5 +1,5 @@
 import type { KneeKickAnalysis } from '../pose/kick/kneeKickAnalysis';
-import type { CalibrationControllerStatus, CalibrationRemoteState, CalibrationRequest } from '@plank-stork/protocol';
+import type { CalibrationControllerStatus, CalibrationRemoteState, CalibrationRequest, RemoteCaptureReadinessState } from '@plank-stork/protocol';
 import type { PoseFeatureView } from '../pose/features/poseFeatureTypes';
 import { POSE_ACTIONS, type PoseActionView } from '../pose/actions/poseActionTypes';
 import type { ValidationView } from '../pose/validation/validationTypes';
@@ -19,6 +19,7 @@ export interface CalibrationPorts {
   startMotion: () => boolean;
   resetMotion: () => void;
   getKick: () => ReturnType<KneeKickAnalysis['getView']>;
+  getCaptureReadiness: () => RemoteCaptureReadinessState;
   startDetectorTest: () => boolean;
   resetDetectorTest: () => void;
 }
@@ -61,8 +62,15 @@ export class CalibrationRemoteController {
       this.lastCommandError = 'NEUTRAL_NOT_FROZEN';
     } else if (command === 'kick:start') {
       const detector = ports.getKick().detector;
+      // Match mobile prerequisite priority: camera, Neutral, detector, then capture.
+      // Read the port now; neither a mobile snapshot nor frame counts authorize a start.
+      const captureBlocked = () => {
+        const capture = ports.getCaptureReadiness();
+        return capture.captureRecording && (capture.estimatorNeutralStatus !== 'READY' || !capture.guidedStartAllowed);
+      };
       if (!detector.ready) this.lastCommandError = 'DETECTOR_NOT_READY';
-      else if (!ports.startDetectorTest()) this.lastCommandError = 'DETECTOR_NOT_READY';
+      else if (captureBlocked()) this.lastCommandError = 'ESTIMATOR_NEUTRAL_NOT_READY';
+      else if (!ports.startDetectorTest()) this.lastCommandError = captureBlocked() ? 'ESTIMATOR_NEUTRAL_NOT_READY' : 'DETECTOR_NOT_READY';
     } else if (command === 'motion:start') {
       if (!camera.poseDetected) this.lastCommandError = 'POSE_NOT_DETECTED';
       else if (!ports.startMotion()) this.lastCommandError = 'MOTION_NOT_READY';
@@ -119,6 +127,7 @@ export class CalibrationRemoteController {
         usableLeftNow: detector.usableLeftNow, usableRightNow: detector.usableRightNow,
         lastEvent: detector.lastEvent ? { id: detector.lastEvent.id, direction: detector.lastEvent.direction, timestamp: detector.lastEvent.timestamp } : null, counts: { ...detector.counts } },
       detectorTest: { status: test.status, expected: test.expected, remainingMs: test.remainingMs, waitingForArmed: test.waitingForArmed, eventCount: test.eventCount, summary: test.summary },
+      captureReadiness: ports.getCaptureReadiness(),
       lastCommandError: this.lastCommandError,
     };
   }

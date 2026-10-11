@@ -10,6 +10,8 @@ export function useReplayCapture() {
   const [view, setView] = useState(() => capture.getView(performance.now()));
   const files = useLocalDownload();
   const stop = useCallback(() => capture.stop(performance.now()), [capture]);
+  // Remote requests must read current capture state, not the last 250ms React view.
+  const getCurrent = useCallback(() => capture.getView(performance.now()), [capture]);
   useEffect(() => {
     const timer = window.setInterval(() => setView(capture.getView(performance.now())), 250);
     return () => { window.clearInterval(timer); capture.dispose(); };
@@ -21,5 +23,5 @@ export function useReplayCapture() {
     const saved = capture.getFiles();
     files.download(kind === 'video' ? saved.video : new Blob([saved.json], { type: 'application/json' }), kind === 'video' ? saved.filename : saved.jsonFilename);
   }
-  return { view, start, stop, download, observe: capture.observe, neutralStarted: capture.neutralStarted, canStartGuided: () => capture.canStartGuided(performance.now()), cancelFinalization: capture.cancelFinalization };
+  return { view, getCurrent, start, stop, download, observe: capture.observe, neutralStarted: capture.neutralStarted, canStartGuided: () => capture.canStartGuided(performance.now()), cancelFinalization: capture.cancelFinalization };
 }

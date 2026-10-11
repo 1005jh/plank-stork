@@ -152,3 +152,20 @@ Timeout(전역/파일/개별)과 maxWorkers, package script는 변경하지 않�
 | 이후 `pnpm build` | PASS, 기존 500kB bundle warning만 발생 |
 
 세 전체 실행은 모두 `pnpm --filter @plank-stork/controller-web test`를 옵션 없이 연속 실행한 결과다. 최종 테스트는 924개이며 삭제/skip, timeout 증가, worker 제한, 설정/threshold 변경은 없다. Commit/push는 하지 않았다.
+
+## STEP 4P.2c — Test concurrency stabilization
+
+STEP4P.2b의 기본 concurrency 비교에서 clean HEAD `f5287cc9031e633697a2aeaf528a689520c89820`도 3회 각각 11/1/2개 실패했고, CURRENT는 14/14/0개 실패했다. Remote validation suspect는 CURRENT에서만 2회 timeout이 있었지만 기능 assertion regression은 확인되지 않았다. 두 suspect 파일(controllerRemote/KickFeatureDiscovery)은 HEAD/CURRENT 각각 단독 5회 모두 PASS했다.
+
+8 logical cores, Node 24.18.0, pnpm 12.4.2, Vitest 5.0.1에서 `--maxWorkers=2`를 먼저 CLI로 검증했다. 아래 사전 전체 실행과 targeted/typecheck/build가 모두 통과한 후에만 controller-web의 test script를 `vitest run --environment jsdom --maxWorkers=2`로 변경했다.
+
+| 검증 | 결과 | Wall time |
+| --- | --- | --- |
+| CURRENT, script 변경 전 capped 연속 3회 | 매회 85 files / 962 PASS | 50.729 / 54.132 / 55.209s |
+| Clean HEAD, capped 연속 2회 | 매회 84 files / 924 PASS | 52.421 / 46.313s |
+| Script 변경 후 기본 명령 연속 3회 | 매회 85 files / 962 PASS | 54.011 / 59.001 / 61.333s |
+| 4P.2 관련 영역 + 두 suspect, 변경 전/후 targeted | 각각 14 files / 219 PASS | 11.298 / 13.822s |
+
+기존 default 대비 사전 capped wall time 중앙값은 HEAD 44.911→49.367s, CURRENT 71.564→54.132s로 수배 느려지지 않았다. 서로 다른 부하 구간의 기록이므로 통제된 속도 benchmark로 해석하지 않는다. 변경 후 `pnpm typecheck`와 `pnpm build`도 PASS했고 기존 500kB bundle warning만 유지됐다.
+
+Worker 상한은 CPU-heavy analysis와 React/jsdom 테스트의 과도한 동시 실행을 줄이는 **test infrastructure policy**다. CI/로컬/Codex 모두 `pnpm --filter @plank-stork/controller-web test`로 같은 상한을 적용한다. 기본 5000ms 및 기존 개별 timeout은 늘리지 않았고 minWorkers/pool 등 다른 scheduling 옵션, assertion, skip/삭제도 변경하지 않았다. STEP4P.2의 captureReadiness wire state, ESTIMATOR_NEUTRAL_NOT_READY, mobile Neutral UI, Guided start gate 및 production/capture/replay semantics는 그대로다. 이번 변경은 package.json의 test command와 이 문서 추가뿐이다. 판정은 SAFE_TO_COMMIT이며 commit/push는 하지 않았다.

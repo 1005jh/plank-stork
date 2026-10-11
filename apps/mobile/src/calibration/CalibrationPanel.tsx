@@ -4,6 +4,7 @@ import type { CalibrationAction, CalibrationRemoteState } from '@plank-stork/pro
 import type { CalibrationCommand } from './useCalibrationRemote';
 import { ValidationPanel } from './ValidationPanel';
 import { KneeMotionPanel } from './KneeMotionPanel';
+import { EstimatorNeutralPanel } from './EstimatorNeutralPanel';
 
 const ACTIONS: CalibrationAction[] = ['TWIST_LEFT', 'TWIST_RIGHT', 'KNEE_LEFT', 'KNEE_RIGHT'];
 const LABELS: Record<CalibrationAction, string> = {
@@ -13,6 +14,7 @@ const LABELS: Record<CalibrationAction, string> = {
 const ERRORS = {
   DETECTOR_NOT_ARMED: '이전 요청의 detector 상태입니다. 새 테스트는 보정된 baseline으로 시작합니다.',
   DETECTOR_NOT_READY: '양쪽 knee가 보이는 Neutral을 보정하고 Detector READY와 현재 Pose를 확인하세요.',
+  ESTIMATOR_NEUTRAL_NOT_READY: '분석용 Neutral READY까지 기본 자세를 유지하세요.',
   CAMERA_NOT_READY: '카메라 준비 필요 — 노트북에서 Start Camera를 눌러주세요.',
   POSE_NOT_DETECTED: 'Pose not detected — 몸 전체가 카메라에 보이도록 이동하세요.',
   NEUTRAL_NOT_FROZEN: '기본 자세 보정을 먼저 완료하세요.',
@@ -44,13 +46,20 @@ export function CalibrationPanel({ state, connected, send }: {
     </section>
   );
 
-  const { controller, neutral, actionCalibration: action, classification } = state;
+  const { controller, neutral, actionCalibration: action, classification, captureReadiness: capture } = state;
   const collectingNeutral = neutral.collectionState === 'HIP' || neutral.collectionState === 'FINISHING';
   const active = action.status === 'ACTIVE';
   const complete = action.status === 'COMPLETED';
   const allReady = ACTIONS.every((key) => action.readiness[key]);
   const poseStale = !controller.poseDetected || classification?.reason === 'POSE_STALE';
   const stable = classification?.stableAction ?? 'NONE';
+  // A rejected request must not leave a Neutral hold instruction after READY, Stop or test start.
+  const estimatorBlocked = capture.captureRecording && (capture.estimatorNeutralStatus !== 'READY' || !capture.guidedStartAllowed);
+  const commandError = state.lastCommandError === 'ESTIMATOR_NEUTRAL_NOT_READY'
+    ? !estimatorBlocked || state.detectorTest.status === 'ACTIVE' ? null
+      : capture.estimatorNeutralStatus === 'READY' ? '이번 분석용 Neutral은 이미 테스트에 사용했습니다. 새 테스트에는 Neutral을 다시 보정하세요.'
+      : ERRORS.ESTIMATOR_NEUTRAL_NOT_READY
+    : state.lastCommandError ? ERRORS[state.lastCommandError] : null;
   return (
     <section aria-labelledby="remote-title">
       <h2 id="remote-title">Calibration Remote</h2>
@@ -60,7 +69,7 @@ export function CalibrationPanel({ state, connected, send }: {
           <p>Pose <strong>{controller.poseDetected ? 'DETECTED' : 'NOT DETECTED'}</strong></p>
         </div>
         {!controller.cameraRunning && <p>노트북에서 Start Camera를 눌러주세요.</p>}
-        {state.lastCommandError && <p role="alert">{ERRORS[state.lastCommandError]}</p>}
+        {commandError && <p role="alert">{commandError}</p>}
       </div>
 
       <section className="calibration-card" aria-labelledby="neutral-title">
@@ -84,9 +93,11 @@ export function CalibrationPanel({ state, connected, send }: {
           <li>RIGHT KNEE <strong>{neutral.rightKneeSamples} / 20 {neutral.rightKneeReady ? 'READY' : 'PARTIAL'}</strong></li>
         </ul>
         {neutral.frozen && (!neutral.leftKneeReady || !neutral.rightKneeReady) && <p>Knee PARTIAL이어도 다음 보정을 진행할 수 있습니다.</p>}
+        <EstimatorNeutralPanel capture={state.captureReadiness} neutralFrozen={neutral.frozen} testStatus={state.detectorTest.status}
+          canStartGuided={controller.cameraRunning && neutral.frozen && state.kneeKick.ready && state.captureReadiness.guidedStartAllowed} />
       </section>
 
-      <KneeKickPanel detector={state.kneeKick} test={state.detectorTest} prerequisiteMessage={
+      <KneeKickPanel detector={state.kneeKick} test={state.detectorTest} captureReadiness={state.captureReadiness} prerequisiteMessage={
         !controller.cameraRunning ? '노트북에서 카메라를 시작하세요.' : !neutral.frozen ? '기본 자세 보정을 먼저 완료하세요.'
         : null} send={send} />
       <KneeMotionPanel motion={state.motionValidation} canStart={controller.cameraRunning && controller.poseDetected && neutral.frozen} send={send} />

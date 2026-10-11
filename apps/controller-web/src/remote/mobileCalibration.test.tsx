@@ -6,6 +6,7 @@ import type { CalibrationRemoteState } from '@plank-stork/protocol';
 import { CalibrationPanel } from '../../../mobile/src/calibration/CalibrationPanel';
 import { useCalibrationRemote, REMOTE_STATE_TIMEOUT_MS } from '../../../mobile/src/calibration/useCalibrationRemote';
 import { testSocket } from './testSocket';
+import { captureReadinessFixture } from './testCaptureReadiness';
 
 function initialSnapshot(): CalibrationRemoteState {
   return {
@@ -20,6 +21,7 @@ function initialSnapshot(): CalibrationRemoteState {
     kneeKick: { ready: false, validNow: false, usableLeftNow: false, usableRightNow: false, state: 'NOT_READY', currentEvent: 'NONE', lastEvent: null, counts: { KNEE_LEFT: 0, KNEE_RIGHT: 0 } },
     detectorTest: { waitingForArmed: false, status: 'IDLE', expected: null, remainingMs: 0, eventCount: 0, summary: null },
     motionValidation: { status: 'IDLE', phase: 'IDLE', expectedMotion: null, remainingMs: 0, recordedFrames: 0 },
+    captureReadiness: captureReadinessFixture(),
   };
 }
 function completedSnapshot(): CalibrationRemoteState {
@@ -30,6 +32,13 @@ function completedSnapshot(): CalibrationRemoteState {
   state.classification = { rawAction: 'TWIST_LEFT', stableAction: 'TWIST_LEFT', confidence: 0.82, reason: 'OK',
     neutralMovementScore: 1.1, bestDistance: 0.2, secondBestDistance: 1.2,
     actionDistances: { TWIST_LEFT: 0.2, TWIST_RIGHT: 1.2, KNEE_LEFT: 2, KNEE_RIGHT: 2.1 } };
+  return state;
+}
+function kickReadySnapshot(capture = captureReadinessFixture()): CalibrationRemoteState {
+  const state = initialSnapshot();
+  state.neutral = completedSnapshot().neutral;
+  state.kneeKick = { ...state.kneeKick, ready: true, validNow: true, usableLeftNow: true, usableRightNow: true, state: 'ARMED' };
+  state.captureReadiness = capture;
   return state;
 }
 
@@ -350,6 +359,133 @@ describe('phone calibration remote UI and connection lifecycle', () => {
     await advance(1000);
     expect(container.textContent).toContain('연결 대기');
     expect(container.textContent).not.toContain('LEFT KICK');
+  });
+
+  it('adds no estimator requirement to ordinary Guided tests when capture is idle or stopped', async () => {
+    await receive(kickReadySnapshot());
+    expect(container.querySelector('[aria-label="분석용 Neutral"]')).toBeNull();
+    expect(button('Guided Detector Test 시작').disabled).toBe(false);
+    await act(async () => button('Guided Detector Test 시작').click());
+    expect(socket.emit).toHaveBeenLastCalledWith('kick:test:start', expect.any(Object));
+    // A stopped capture may retain old rolling counts; NOT_REQUIRED must still remove the gate.
+    await receive(kickReadySnapshot(captureReadinessFixture({ analysisReadyFrameCount: 2, missingJoints: ['LEFT_ANKLE'] })));
+    expect(container.querySelector('[aria-label="분석용 Neutral"]')).toBeNull();
+    expect(button('Guided Detector Test 시작').disabled).toBe(false);
+  });
+
+  it('asks for continued Neutral at 41/60 with good current pose, without camera movement advice', async () => {
+    await receive(kickReadySnapshot(captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'COLLECTING',
+      analysisReadyFrameCount: 41, allJointsReadyNow: true, guidedStartAllowed: false })));
+    const panel = container.querySelector('[aria-label="분석용 Neutral"]')!;
+    expect(panel.querySelector('.major-instruction')!.textContent).toBe('기본 자세를 계속 유지하세요');
+    expect(panel.textContent).toContain('분석용 Neutral 수집 중');
+    expect(panel.textContent).toContain('41 / 60');
+    expect(panel.textContent).toContain('현재 자세는 잘 인식되고 있습니다. 조금만 더 유지하세요.');
+    expect(panel.textContent).not.toContain('카메라');
+    expect(button('Guided Detector Test 시작').disabled).toBe(true);
+    expect(container.querySelector('#kick-start-reason')!.textContent).toBe('분석용 Neutral READY까지 기본 자세를 유지하세요.');
+    socket.emit.mockClear(); await act(async () => button('Guided Detector Test 시작').click());
+    expect(socket.emit).not.toHaveBeenCalled();
+  });
+
+  it('keeps production HIP/FINISHING guidance before FROZEN and shows NOT_STARTED for capture', async () => {
+    const state = initialSnapshot();
+    state.captureReadiness = captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'NOT_STARTED', guidedStartAllowed: false });
+    await receive(state);
+    expect(container.textContent).toContain('분석용 Neutral 수집 전');
+    state.neutral = { ...state.neutral, collectionState: 'HIP', status: 'CALIBRATING' };
+    state.captureReadiness.estimatorNeutralStatus = 'COLLECTING';
+    await receive({ ...state });
+    expect(container.querySelector('[aria-labelledby="neutral-title"]')!.textContent).toContain('기본 플랭크 자세를 유지하세요');
+    expect(container.querySelector('[aria-label="분석용 Neutral"] .major-instruction')).toBeNull();
+    state.neutral = { ...state.neutral, collectionState: 'FINISHING', kneeGraceRemainingMs: 600 };
+    await receive({ ...state });
+    expect(container.querySelector('[aria-labelledby="neutral-title"]')!.textContent).toContain('기본 자세를 조금만 더 유지하세요');
+  });
+
+  it('shows current missing joints in Korean and all eight exact counts in details', async () => {
+    const capture = captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'COLLECTING',
+      analysisReadyFrameCount: 42, missingJoints: ['RIGHT_KNEE', 'LEFT_ANKLE'], guidedStartAllowed: false,
+      perJointUsableFrames: { LEFT_SHOULDER: 81, RIGHT_SHOULDER: 81, LEFT_HIP: 79, RIGHT_HIP: 80, LEFT_KNEE: 77, RIGHT_KNEE: 78, LEFT_ANKLE: 42, RIGHT_ANKLE: 76 } });
+    await receive(kickReadySnapshot(capture));
+    const panel = container.querySelector('[aria-label="분석용 Neutral"]')!;
+    expect([...panel.querySelectorAll('[role="status"] li')].map((item) => item.textContent)).toEqual(['오른쪽 무릎', '왼쪽 발목']);
+    expect(panel.textContent).not.toContain('현재 자세는 잘 인식되고 있습니다');
+    expect([...panel.querySelectorAll('details li')].map((item) => item.textContent)).toEqual([
+      'LEFT SHOULDER: 81 / 60', 'RIGHT SHOULDER: 81 / 60', 'LEFT HIP: 79 / 60', 'RIGHT HIP: 80 / 60',
+      'LEFT KNEE: 77 / 60', 'RIGHT KNEE: 78 / 60', 'LEFT ANKLE: 42 / 60', 'RIGHT ANKLE: 76 / 60',
+    ]);
+  });
+
+  it('enables READY even after current joint loss and zero rolling frames', async () => {
+    await receive(kickReadySnapshot(captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'READY',
+      analysisReadyFrameCount: 0, missingJoints: ['LEFT_ANKLE'], allJointsReadyNow: false })));
+    const panel = container.querySelector('[aria-label="분석용 Neutral"]')!;
+    expect(panel.textContent).toContain('분석용 Neutral READY ✓');
+    expect(panel.textContent).toContain('Guided Detector Test를 시작할 수 있습니다.');
+    expect(panel.textContent).not.toContain('계속 유지');
+    expect(panel.querySelector('[role="status"]')!.textContent).not.toContain('현재 확인 필요');
+    expect(panel.querySelector('details')!.textContent).toContain('왼쪽 발목');
+    expect(button('Guided Detector Test 시작').disabled).toBe(false);
+  });
+
+  it.each(['READY', 'COLLECTING'] as const)('keeps camera, Neutral and detector prerequisites ahead of estimator %s', async (estimatorNeutralStatus) => {
+    const state = kickReadySnapshot(captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus, guidedStartAllowed: estimatorNeutralStatus === 'READY' }));
+    state.controller.cameraRunning = false;
+    await receive(state);
+    expect(container.querySelector('#kick-start-reason')!.textContent).toContain('카메라를 시작');
+    state.controller.cameraRunning = true; state.neutral.frozen = false;
+    await receive({ ...state });
+    expect(container.querySelector('#kick-start-reason')!.textContent).toContain('기본 자세 보정을 먼저 완료');
+    state.neutral.frozen = true; state.kneeKick.ready = false;
+    await receive({ ...state });
+    expect(container.querySelector('#kick-start-reason')!.textContent).toContain('Detector READY를 확인');
+    expect(button('Guided Detector Test 시작').disabled).toBe(true);
+    expect(container.querySelector('[aria-label="분석용 Neutral"]')!.textContent).not.toContain('Test를 시작할 수 있습니다');
+  });
+
+  it('does not enable a new Guided test after the READY reference has already been consumed', async () => {
+    await receive(kickReadySnapshot(captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'READY', guidedStartAllowed: false })));
+    expect(button('Guided Detector Test 시작').disabled).toBe(true);
+    expect(container.querySelector('#kick-start-reason')!.textContent).toContain('이미 테스트에 사용');
+    expect(container.querySelector('[aria-label="분석용 Neutral"]')!.textContent).toContain('분석용 Neutral READY ✓');
+    expect(container.textContent).not.toContain('Test를 시작할 수 있습니다');
+  });
+
+  it('translates the estimator-specific command error', async () => {
+    await receive({ ...kickReadySnapshot(captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'COLLECTING', guidedStartAllowed: false })),
+      lastCommandError: 'ESTIMATOR_NEUTRAL_NOT_READY' });
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain('분석용 Neutral READY까지 기본 자세를 유지하세요.');
+  });
+
+  it.each(['ready', 'stopped', 'active'] as const)('removes outdated estimator rejection guidance when %s', async (next) => {
+    const state = kickReadySnapshot(captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'COLLECTING', guidedStartAllowed: false }));
+    state.lastCommandError = 'ESTIMATOR_NEUTRAL_NOT_READY';
+    await receive(state);
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    if (next === 'ready') state.captureReadiness = { ...state.captureReadiness, estimatorNeutralStatus: 'READY', guidedStartAllowed: true };
+    if (next === 'stopped') state.captureReadiness = { ...state.captureReadiness, captureRecording: false, estimatorNeutralStatus: 'NOT_REQUIRED', guidedStartAllowed: true };
+    if (next === 'active') state.detectorTest = { ...state.detectorTest, status: 'ACTIVE', expected: 'TWIST_LEFT', remainingMs: 3000 };
+    await receive({ ...state });
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.textContent).not.toContain('분석용 Neutral READY까지 기본 자세를 유지하세요.');
+  });
+
+  it.each(['READY', 'COLLECTING', 'NOT_STARTED'] as const)('never asks for Neutral during ACTIVE Guided even with estimator %s and missing joints', async (estimatorNeutralStatus) => {
+    const state = kickReadySnapshot(captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus,
+      missingJoints: ['LEFT_ANKLE'], allJointsReadyNow: false, guidedStartAllowed: false }));
+    state.detectorTest = { ...state.detectorTest, status: 'ACTIVE', expected: 'KNEE_RIGHT', remainingMs: 1800 };
+    state.kneeKick.validNow = false;
+    await receive(state);
+    const estimator = container.querySelector('[aria-label="분석용 Neutral"]')!;
+    expect(estimator.querySelector('[role="status"]')!.textContent).not.toMatch(/유지하세요|보정을 시작|현재 확인 필요/);
+    expect(estimator.textContent).toContain('타이머와 동작 안내는 계속');
+    expect(container.querySelector('#kick-start-reason')!.textContent).toBe('Guided Detector Test가 진행 중입니다.');
+    const guide = container.querySelector('[aria-labelledby="mobile-kick-title"] .action-guide')!;
+    expect(guide.textContent).toContain('오른쪽 니킥');
+    expect(guide.querySelector('.countdown')!.textContent).toBe('1.8초');
+    await advance(500);
+    expect(guide.querySelector('.countdown')!.textContent).toBe('1.8초'); // No phone-side timeline.
   });
 
 });

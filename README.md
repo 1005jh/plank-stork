@@ -1348,3 +1348,13 @@ STEP4O.2의 판정은 그대로 두고, 사용자가 지정한 5쌍만 `PROVISIO
 Capture 중 Neutral은 production FROZEN 후에도 자세를 유지해야 합니다. 최근 3초에서 양쪽 shoulder/hip/knee/ankle이 모두 usable인 frame 60개가 확보되면 **Estimator Neutral reference READY**가 됩니다. Capture panel에서 missing joint와 counts를 확인할 수 있습니다. Capture 중 desktop/remote Guided 시작은 이 reference가 있어야 가능하고, 시작 후에는 pose loss와 무관하게 기존 22초 timeline을 진행합니다.
 
 다음 실제 attempt는 기존 foot-side 배치를 유지하고 **Camera → Replay Capture → Neutral → reference READY → Guided 1회 → Stop → ARTIFACT_READY → WebM/JSON 저장** 순서로 진행합니다. 실패도 보존하고 결과를 보고 threshold를 바꾸지 않습니다. 이번 STEP에서는 실제 운동·capture·새 estimator 비교를 수행하지 않았습니다. [구현, 호환성, 사전 고정 protocol 및 검증](docs/step-4p-capture-hardening.md)을 참고하세요.
+
+## STEP 4P.2 — Mobile Estimator Neutral Readiness
+
+폰의 **1. 기본 자세 보정**에서도 capture가 RECORDING인 동안 분석용 Neutral 상태와 `확보 frame / 필요 frame`을 확인할 수 있습니다. Production Neutral FROZEN 후에도 COLLECTING이면 **기본 자세를 계속 유지하세요**가 표시됩니다. 현재 누락 관절은 한국어로 안내하고, 현재 관절이 모두 보이지만 수집 frame이 부족하면 자세를 조금 더 유지하도록 안내합니다. 접힌 **관절별 수집 frame · debug**에는 8개 관절의 rolling count가 있습니다.
+
+Capture를 사용하지 않거나 Stop한 경우에는 `NOT_REQUIRED`이며 기존 Guided 시작 조건을 유지합니다. Capture 중에는 camera → production Neutral → detector → estimator 순서로 준비 상태를 안내합니다. Estimator READY가 되어도 최종 시작 가능 여부는 기존 capture gate를 따르며, 이미 사용한 reference로 새 테스트를 시작하지 않습니다. Mobile의 READY 표시는 편의용이고 요청 처리와 실제 시작 시 controller가 현재 상태를 재검증합니다. Estimator만 준비되지 않았다면 `ESTIMATOR_NEUTRAL_NOT_READY`로 구분합니다.
+
+Reference READY는 현재 frame의 관절 누락이나 rolling count 감소로 해제되지 않습니다. Guided가 시작되면 Neutral 유지 안내로 동작을 막지 않고 기존 22초 timeline을 계속 표시합니다. 이미 있는 250ms calibration state relay에 status/count만 추가했으며 landmark 좌표, baseline, raw feature, artifact finalization 상태를 새로 전송하지 않습니다. Readiness 기준과 detector, V2 schema/hash, server 동작은 변경하지 않았습니다. 이번 작업의 검증은 synthetic fixture와 자동 테스트만 사용하며 실제 운동/capture를 수행하지 않습니다.
+
+검증: `pnpm typecheck`와 `pnpm build` PASS(기존 bundle 크기 warning 유지). 별도 mobile test script는 없으며 기존 controller runner에서 mobile UI를 검증합니다. Remote projection/controller/mobile/Socket relay 5개 파일 **115 tests PASS**. 최종 기본 전체 명령은 **85 files / 962 tests 중 952 PASS, 10 FAIL**로 전체 PASS가 아닙니다. 기존 holdout/Geometry UI/PoseActions/controller lifecycle 테스트의 timeout 및 후속 실패가 발생했습니다. Node 24에서 수정 전 HEAD `f5287cc`를 임시 복사해 같은 기본 명령으로 비교한 결과도 **924개 중 920 PASS, 기존 4개 timeout**이었습니다. Worker 수나 timeout을 조정하지 않았고, 기존 924개에 신규 38개 테스트를 추가했습니다. Commit/push는 하지 않았습니다.

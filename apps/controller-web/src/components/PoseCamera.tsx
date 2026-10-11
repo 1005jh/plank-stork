@@ -17,6 +17,7 @@ import { PoseFeatures } from './PoseFeatures';
 import { usePoseActions } from '../pose/actions/usePoseActions';
 import { PoseActions } from './PoseActions';
 import { useCalibrationRemote, type CalibrationSocket } from '../remote/useCalibrationRemote';
+import { captureReadinessSnapshot } from '../remote/captureReadiness';
 import { useActionValidation } from '../pose/validation/useActionValidation';
 import { validationReady } from '../pose/validation/actionValidation';
 import { PoseValidation } from './PoseValidation';
@@ -102,6 +103,7 @@ export function PoseCamera({ socket }: { socket?: CalibrationSocket | null }) {
     startMotion,
     resetMotion: motion.resetMotion,
     getKick: kick.getCurrent,
+    getCaptureReadiness: () => captureReadinessSnapshot(capture.getCurrent()),
     startDetectorTest,
     resetDetectorTest: kick.resetTest,
   });

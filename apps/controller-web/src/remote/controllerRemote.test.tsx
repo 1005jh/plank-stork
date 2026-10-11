@@ -89,6 +89,7 @@ describe('controller remote lifecycle', () => {
     await request('calibration:sync:requested');
     expect(socket.emit).toHaveBeenCalledTimes(2);
     expect(snapshot().controller).toEqual({ cameraRunning: true, poseDetected: true });
+    expect(snapshot().captureReadiness).toMatchObject({ captureRecording: false, estimatorNeutralStatus: 'NOT_REQUIRED', guidedStartAllowed: true });
     socket.connected = false;
     await advance(1000);
     expect(socket.emit).toHaveBeenCalledTimes(2);
@@ -370,22 +371,39 @@ describe('controller remote lifecycle', () => {
     vi.stubGlobal('MediaRecorder', mockRecorder); vi.mocked(camera.getCaptureContext).mockReturnValue(captureCamera());
     const button = (name: string) => [...container.querySelectorAll('button')].find((b) => b.textContent === name)!;
     await act(async () => button('Start Replay Capture').click());
+    await request('calibration:sync:requested');
+    expect(snapshot().captureReadiness).toMatchObject({ captureRecording: true, estimatorNeutralStatus: 'NOT_STARTED', guidedStartAllowed: false });
     await freezeKickNeutral();
     await advance(250);
     expect(button('Start Guided Detector Test').disabled).toBe(true);
     await request('kick:test:start:requested', 'blocked'); expect(snapshot().detectorTest.status).toBe('IDLE');
+    expect(snapshot().lastCommandError).toBe('ESTIMATOR_NEUTRAL_NOT_READY');
+    expect(snapshot().captureReadiness).toMatchObject({ estimatorNeutralStatus: 'COLLECTING', analysisReadyFrameCount: 20, requiredFrameCount: 60 });
     expect(container.textContent).toContain('자세를 유지하세요');
     const f = motionFrame(now); f.landmarks[27].visibility = .49;
     callbacks?.onFrame?.(f); await advance(250); expect(container.textContent).toContain('MISSING: LEFT_ANKLE');
+    await request('calibration:sync:requested');
+    expect(snapshot().captureReadiness).toMatchObject({ missingJoints: ['LEFT_ANKLE'], allJointsReadyNow: false,
+      perJointUsableFrames: { LEFT_ANKLE: 20, RIGHT_ANKLE: 21 } });
     for (let i = 0; i < 65; i++) { await advance(50); callbacks?.onFrame?.(motionFrame(now)); }
     await advance(250); expect(button('Start Guided Detector Test').disabled).toBe(false);
+    await request('calibration:sync:requested');
+    expect(snapshot().captureReadiness).toMatchObject({ estimatorNeutralStatus: 'READY', missingJoints: [], guidedStartAllowed: true });
     if (path === 'desktop') await act(async () => button('Start Guided Detector Test').click());
     else await request('kick:test:start:requested', 'ready');
     await request('calibration:sync:requested'); expect(snapshot().detectorTest.status).toBe('ACTIVE');
+    expect(snapshot().captureReadiness).toMatchObject({ estimatorNeutralStatus: 'READY', guidedStartAllowed: false });
     await advance(50); callbacks?.onFrame?.({ ...motionFrame(now), landmarks: [], worldLandmarks: [] });
     await advance(21950); await request('calibration:sync:requested');
     expect(snapshot().detectorTest.status).toBe('COMPLETED');
+    expect(snapshot().captureReadiness).toMatchObject({ estimatorNeutralStatus: 'READY', analysisReadyFrameCount: 0,
+      allJointsReadyNow: false, guidedStartAllowed: false });
+    await request('kick:test:start:requested', 'consumed-reference');
+    expect(snapshot().lastCommandError).toBe('ESTIMATOR_NEUTRAL_NOT_READY');
+    expect(snapshot().detectorTest.status).toBe('COMPLETED');
     await act(async () => button('Stop Replay Capture').click());
+    await request('calibration:sync:requested');
+    expect(snapshot().captureReadiness).toMatchObject({ captureRecording: false, estimatorNeutralStatus: 'NOT_REQUIRED', guidedStartAllowed: true });
   });
 
   it('runs the guided detector test remotely, retains per-stage measurements, and resets safely', async () => {

@@ -11,6 +11,7 @@ import type { CalibrationRequest, ClientToServerEvents, ServerToClientEvents } f
 import { CalibrationRemoteController } from './calibrationRemoteController';
 import { PoseFeatureAnalysis } from '../pose/features/poseFeatureAnalysis';
 import { PoseActionAnalysis } from '../pose/actions/poseActionAnalysis';
+import { captureReadinessFixture } from './testCaptureReadiness';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -67,6 +68,8 @@ describe('real NestJS Socket.IO relay', () => {
       getValidation: () => new ActionValidation().getView(0), startValidation: () => false, resetValidation() {},
       getMotion: () => new KneeMotionValidation().getView(0), startMotion: () => false, resetMotion() {},
       getKick: () => new KneeKickAnalysis().getView(0), startDetectorTest: () => false, resetDetectorTest() {},
+      getCaptureReadiness: () => captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'COLLECTING',
+        analysisReadyFrameCount: 45, missingJoints: ['LEFT_ANKLE'], guidedStartAllowed: false }),
     })).snapshot();
     const received = clients.map((client) => new Promise((resolve) => client.once('calibration:state', resolve)));
     clients[0].emit('calibration:state:publish', snapshot);

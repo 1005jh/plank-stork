@@ -8,6 +8,7 @@ import { PoseFeatureAnalysis } from '../pose/features/poseFeatureAnalysis';
 import { PoseActionAnalysis } from '../pose/actions/poseActionAnalysis';
 import { input, prototypes, RECORD_STARTS } from '../pose/actions/testFixtures';
 import { POSE_ACTIONS } from '../pose/actions/poseActionTypes';
+import { captureReadinessFixture } from './testCaptureReadiness';
 
 describe('controller calibration remote adapter with real engines', () => {
   let now: number;
@@ -17,6 +18,9 @@ describe('controller calibration remote adapter with real engines', () => {
   let camera: { cameraRunning: boolean; poseDetected: boolean };
   let startNeutral: Mock<() => void>;
   let startAction: Mock<() => void>;
+  let kick: ReturnType<KneeKickAnalysis['getView']>;
+  let capture: ReturnType<typeof captureReadinessFixture>;
+  let startDetectorTest: Mock<() => boolean>;
   const request = (requestId: string) => ({ requestId, timestamp: now });
   const points = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, z: 0, visibility: 0.9 }));
 
@@ -42,6 +46,7 @@ describe('controller calibration remote adapter with real engines', () => {
     now = 0;
     neutral = new PoseFeatureAnalysis(); actions = new PoseActionAnalysis();
     camera = { cameraRunning: true, poseDetected: true };
+    kick = new KneeKickAnalysis().getView(0); capture = captureReadinessFixture(); startDetectorTest = vi.fn(() => false);
     startNeutral = vi.fn(() => { actions.reset(); neutral.startCalibration(now); });
     startAction = vi.fn(() => { actions.start(neutral.getView(now), now); });
     remote = new CalibrationRemoteController(() => ({
@@ -50,7 +55,8 @@ describe('controller calibration remote adapter with real engines', () => {
       startNeutral, startAction, resetAction: () => actions.reset(),
       getValidation: () => new ActionValidation().getView(now), startValidation: () => false, resetValidation() {},
       getMotion: () => new KneeMotionValidation().getView(0), startMotion: () => false, resetMotion() {},
-      getKick: () => new KneeKickAnalysis().getView(0), startDetectorTest: () => false, resetDetectorTest() {},
+      getKick: () => kick, startDetectorTest, resetDetectorTest() {},
+      getCaptureReadiness: () => capture,
     }));
   });
 
@@ -135,5 +141,66 @@ describe('controller calibration remote adapter with real engines', () => {
     expect(snapshot.classification).toMatchObject({ stableAction: 'NONE', rawAction: 'NONE', reason: 'POSE_STALE' });
     expect(JSON.stringify(snapshot)).not.toMatch(/landmarks|deltaHip|previewMirrored/);
     expect(snapshot.actionCalibration.readiness.TWIST_LEFT).toBe(true);
+  });
+
+  it.each([
+    [false, 'NOT_REQUIRED', true, true, null],
+    [true, 'NOT_STARTED', false, true, 'ESTIMATOR_NEUTRAL_NOT_READY'],
+    [true, 'COLLECTING', false, true, 'ESTIMATOR_NEUTRAL_NOT_READY'],
+    [true, 'COLLECTING', false, false, 'DETECTOR_NOT_READY'],
+    [true, 'READY', true, false, 'DETECTOR_NOT_READY'],
+    [true, 'READY', true, true, null],
+    [true, 'READY', false, true, 'ESTIMATOR_NEUTRAL_NOT_READY'],
+  ] as const)('gates capture=%s status=%s allowed=%s detector=%s with error %s', (captureRecording, estimatorNeutralStatus, guidedStartAllowed, detectorReady, error) => {
+    freezeNeutral(); kick.detector.ready = detectorReady;
+    capture = captureReadinessFixture({ captureRecording, estimatorNeutralStatus, guidedStartAllowed });
+    startDetectorTest.mockReturnValue(true);
+    remote.handle('kick:start', request('kick'));
+    expect(remote.snapshot().captureReadiness).toEqual(capture);
+    expect(remote.snapshot().lastCommandError).toBe(error);
+    expect(startDetectorTest).toHaveBeenCalledTimes(error === null ? 1 : 0);
+  });
+
+  it('keeps camera and production Neutral errors ahead of estimator errors', () => {
+    capture = captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'COLLECTING', guidedStartAllowed: false });
+    camera.cameraRunning = false;
+    remote.handle('kick:start', request('camera'));
+    expect(remote.snapshot().lastCommandError).toBe('CAMERA_NOT_READY');
+    camera.cameraRunning = true;
+    remote.handle('kick:start', request('neutral'));
+    expect(remote.snapshot().lastCommandError).toBe('NEUTRAL_NOT_FROZEN');
+    expect(startDetectorTest).not.toHaveBeenCalled();
+  });
+
+  it('reads current controller capture state even after a published READY snapshot', () => {
+    freezeNeutral(); kick.detector.ready = true;
+    capture = captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'READY' });
+    const published = remote.snapshot();
+    capture = { ...capture, estimatorNeutralStatus: 'COLLECTING', guidedStartAllowed: false };
+    remote.handle('kick:start', request('stale-mobile'));
+    expect(published.captureReadiness.estimatorNeutralStatus).toBe('READY');
+    expect(remote.snapshot().lastCommandError).toBe('ESTIMATOR_NEUTRAL_NOT_READY');
+    expect(startDetectorTest).not.toHaveBeenCalled();
+  });
+
+  it('still calls the authoritative start gate and explains a rejection using fresh capture state', () => {
+    freezeNeutral(); kick.detector.ready = true;
+    capture = captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'READY' });
+    startDetectorTest.mockImplementation(() => { capture = { ...capture, guidedStartAllowed: false }; return false; });
+    remote.handle('kick:start', request('race-at-start'));
+    expect(startDetectorTest).toHaveBeenCalledOnce();
+    expect(remote.snapshot().lastCommandError).toBe('ESTIMATOR_NEUTRAL_NOT_READY');
+  });
+
+  it('retains duplicate request and active trial guards after the capture reference is consumed', () => {
+    freezeNeutral(); kick.detector.ready = true; startDetectorTest.mockReturnValue(true);
+    capture = captureReadinessFixture({ captureRecording: true, estimatorNeutralStatus: 'READY' });
+    remote.handle('kick:start', request('once'));
+    capture = { ...capture, guidedStartAllowed: false }; kick.test.status = 'ACTIVE';
+    remote.handle('kick:start', request('once'));
+    remote.handle('kick:start', request('active-repeat'));
+    expect(startDetectorTest).toHaveBeenCalledOnce();
+    expect(remote.snapshot().lastCommandError).toBeNull();
+    expect(remote.snapshot().detectorTest.status).toBe('ACTIVE');
   });
 });

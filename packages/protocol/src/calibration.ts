@@ -40,6 +40,22 @@ export interface RemoteValidationState {
   remainingMs: number;
   recordedFrames: number;
 }
+export type RemoteEstimatorNeutralStatus = 'NOT_REQUIRED' | 'NOT_STARTED' | 'COLLECTING' | 'READY';
+export type RemoteCaptureJoint =
+  | 'LEFT_SHOULDER' | 'RIGHT_SHOULDER' | 'LEFT_HIP' | 'RIGHT_HIP'
+  | 'LEFT_KNEE' | 'RIGHT_KNEE' | 'LEFT_ANKLE' | 'RIGHT_ANKLE';
+/** Capture observability only; no pose coordinates, baselines or detector rules. */
+export interface RemoteCaptureReadinessState {
+  captureRecording: boolean;
+  estimatorNeutralStatus: RemoteEstimatorNeutralStatus;
+  analysisReadyFrameCount: number;
+  requiredFrameCount: number;
+  perJointUsableFrames: Record<RemoteCaptureJoint, number>;
+  missingJoints: RemoteCaptureJoint[];
+  allJointsReadyNow: boolean;
+  /** Authoritative capture gate only. Camera/Neutral/detector prerequisites still apply. */
+  guidedStartAllowed: boolean;
+}
 export interface CalibrationRemoteState {
   /** Controller wall clock, for display only; mobile freshness uses local receipt time. */
   timestamp: number;
@@ -51,7 +67,8 @@ export interface CalibrationRemoteState {
   motionValidation: RemoteMotionValidationState;
   kneeKick: RemoteKneeKickState;
   detectorTest: RemoteDetectorTestState;
-  lastCommandError: 'CAMERA_NOT_READY' | 'POSE_NOT_DETECTED' | 'NEUTRAL_NOT_FROZEN' | 'ACTION_NOT_READY' | 'MOTION_NOT_READY' | 'DETECTOR_NOT_READY' | 'DETECTOR_NOT_ARMED' | null;
+  captureReadiness: RemoteCaptureReadinessState;
+  lastCommandError: 'CAMERA_NOT_READY' | 'POSE_NOT_DETECTED' | 'NEUTRAL_NOT_FROZEN' | 'ACTION_NOT_READY' | 'MOTION_NOT_READY' | 'DETECTOR_NOT_READY' | 'DETECTOR_NOT_ARMED' | 'ESTIMATOR_NEUTRAL_NOT_READY' | null;
 }
 export interface RemoteMotionValidationState {
   status: 'IDLE' | 'ACTIVE' | 'COMPLETED';
