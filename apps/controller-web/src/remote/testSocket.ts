@@ -5,6 +5,7 @@ export function testSocket() {
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
   const fake = {
     connected: true,
+    get volatile() { return fake; },
     emit: vi.fn(),
     on(event: string, callback: (...args: unknown[]) => void) {
       if (!listeners.has(event)) listeners.set(event, new Set());

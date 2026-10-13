@@ -127,7 +127,11 @@ describe('local game panel and existing controller composition', () => {
     button('LEFT').focus(); press('ArrowLeft');
     expect(value('Test score')).toBe('0 / 4');
     panel().focus(); press('ArrowLeft'); expect(value('Test score')).toBe('1 / 4');
-    expect(socket.emit.mock.calls.filter(([name]) => String(name).startsWith('game:'))).toEqual([]);
+    // STEP 4V publishes the locally approved score; control:test echoes still never score.
+    const gameMessages = socket.emit.mock.calls.filter(([name]) => String(name).startsWith('game:'));
+    expect(gameMessages).toHaveLength(1);
+    expect(gameMessages[0]).toEqual(['game:state:publish', expect.objectContaining({ score: 1, targetIndex: 1,
+      provenance: { kind: 'TEST', method: 'KEYBOARD' } })]);
     act(() => { socket.connected = false; socket.receive('disconnect'); });
     press('ArrowRight'); expect(value('Test score')).toBe('2 / 4');
   });

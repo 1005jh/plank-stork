@@ -14,6 +14,7 @@ import type {
   TestControlEvent,
 } from '@plank-stork/protocol';
 import type { Server, Socket } from 'socket.io';
+import { isGameStateSnapshot, isGameSyncRequest, isGameOperatorCommand } from '@plank-stork/protocol';
 
 @WebSocketGateway({
   cors: {
@@ -34,6 +35,22 @@ export class ControlGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
   handleDisconnect(client: Socket<ClientToServerEvents, ServerToClientEvents>) {
     this.logger.log(`Socket disconnected: ${client.id}`);
+  }
+
+  // Game transport only. No game owner, score calculation, persistence or offline replay.
+  @SubscribeMessage('game:state:publish')
+  handleGameState(@MessageBody() payload: unknown): void {
+    if (isGameStateSnapshot(payload)) this.server.emit('game:state', payload);
+  }
+
+  @SubscribeMessage('game:sync:request')
+  handleGameSync(@MessageBody() payload: unknown): void {
+    if (isGameSyncRequest(payload)) this.server.emit('game:sync:requested', payload);
+  }
+
+  @SubscribeMessage('game:command')
+  handleGameCommand(@MessageBody() payload: unknown): void {
+    if (isGameOperatorCommand(payload)) this.server.emit('game:command:requested', payload);
   }
 
   @SubscribeMessage('control:test')

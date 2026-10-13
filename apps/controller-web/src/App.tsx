@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { PoseCamera } from './components/PoseCamera';
 import { GameTestPanel } from './components/GameTestPanel';
+import { GameController, getPageControllerInstanceId } from './game/gameController';
 import type {
   ClientToServerEvents,
   ControlDirection,
@@ -10,6 +11,8 @@ import type {
 } from '@plank-stork/protocol';
 
 const socketServerUrl = `http://${window.location.hostname}:3000`;
+// One owner for the page, including a view unmount/remount. Reload creates a new instance.
+const gameOwner = new GameController(getPageControllerInstanceId(), () => performance.now());
 
 export default function App() {
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
@@ -54,7 +57,7 @@ export default function App() {
   return (
     <main>
       <h1>Plank Stork Controller</h1>
-      <GameTestPanel />
+      <GameTestPanel socket={socket} owner={gameOwner} />
       <PoseCamera socket={socket} />
       <h2>Socket test</h2>
       <p role="status">Socket: {connected ? 'CONNECTED' : 'DISCONNECTED'}</p>

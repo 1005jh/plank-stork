@@ -28,3 +28,9 @@ summary { padding: 12px 0; cursor: pointer; }
 code { overflow-wrap: anywhere; }
 [role="alert"] { color: #a42828; }
 .socket-test { margin-top: 28px; }
+.game-panel { border: 2px solid #497d70; border-radius: 14px; padding: 20px; margin: 24px 0; }
+.game-panel select { width: 100%; margin: 8px 0; padding: 10px; }
+.game-panel dd { margin: 4px 0 12px; }
+.game-target { font-size: 2.5rem; font-weight: 800; }
+.game-last-known { border-left: 4px solid #997836; padding-left: 12px; color: #625a48; }
+.game-commands { display: flex; flex-wrap: wrap; gap: 8px; }

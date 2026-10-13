@@ -1,4 +1,6 @@
 import type { CalibrationRemoteState, CalibrationRequest } from './calibration.js';
+import type { GameStateSnapshot, GameSyncRequest, GameOperatorCommand } from './game.js';
+export * from './game.js';
 export type * from './calibration.js';
 export type * from './kneeKick.js';
 
@@ -10,6 +12,9 @@ export interface TestControlEvent {
 }
 
 export interface ClientToServerEvents {
+  'game:state:publish': (snapshot: GameStateSnapshot) => void;
+  'game:sync:request': (request: GameSyncRequest) => void;
+  'game:command': (command: GameOperatorCommand) => void;
   'control:test': (event: TestControlEvent) => void;
   'calibration:sync:request': (request: CalibrationRequest) => void;
   'calibration:neutral:start': (request: CalibrationRequest) => void;
@@ -25,6 +30,9 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
+  'game:state': (snapshot: GameStateSnapshot) => void;
+  'game:sync:requested': (request: GameSyncRequest) => void;
+  'game:command:requested': (command: GameOperatorCommand) => void;
   'control:test:received': (event: TestControlEvent) => void;
   'calibration:sync:requested': (request: CalibrationRequest) => void;
   'calibration:neutral:start:requested': (request: CalibrationRequest) => void;

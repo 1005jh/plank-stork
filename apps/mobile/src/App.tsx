@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { CalibrationPanel } from './calibration/CalibrationPanel';
 import { useCalibrationRemote } from './calibration/useCalibrationRemote';
+import { useGameRemote } from './game/useGameRemote';
+import { GamePanel } from './game/GamePanel';
 import './App.css';
 import type {
   ClientToServerEvents,
@@ -18,6 +20,7 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<TestControlEvent | null>(null);
   const remote = useCalibrationRemote(socket);
+  const game = useGameRemote(socket);
 
   useEffect(() => {
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(socketServerUrl, {
@@ -59,6 +62,7 @@ export default function App() {
       <p>Mobile Game</p>
       <p role="status">Socket: {connected ? 'CONNECTED' : 'DISCONNECTED'}</p>
       <p>Socket server: <code>{socketServerUrl}</code></p>
+      <GamePanel remote={game} />
       <CalibrationPanel state={remote.state} connected={connected} send={remote.send} />
       <details className="socket-test"><summary>STEP 1 · Socket test</summary>
       <div>
