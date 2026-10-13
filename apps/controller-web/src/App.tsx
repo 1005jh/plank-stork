@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { PoseCamera } from './components/PoseCamera';
+import { GameTestPanel } from './components/GameTestPanel';
 import type {
   ClientToServerEvents,
   ControlDirection,
@@ -53,6 +54,7 @@ export default function App() {
   return (
     <main>
       <h1>Plank Stork Controller</h1>
+      <GameTestPanel />
       <PoseCamera socket={socket} />
       <h2>Socket test</h2>
       <p role="status">Socket: {connected ? 'CONNECTED' : 'DISCONNECTED'}</p>
