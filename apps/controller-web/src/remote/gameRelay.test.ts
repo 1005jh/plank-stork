@@ -126,4 +126,29 @@ describe('real NestJS controller-authoritative game relay', () => {
     }
     expect(owner.getView().snapshot).toMatchObject({ phase: 'IDLE', score: 0 });
   });
+  it('relays SCRIPT provenance, an interrupted demo and hands-free completion over the existing wire events', async () => {
+    let now = 100;
+    let pending: { callback: () => void; delay: number } | null = null;
+    unsubscribe(); owner = new GameController(owner.instanceId, () => now); unsubscribe = owner.subscribe(publish);
+    const runtime = { isVisible: () => true, schedule: (callback: () => void, delay: number) => {
+      const job = { callback, delay }; pending = job;
+      return () => { if (pending === job) pending = null; };
+    } };
+    const tick = async () => {
+      if (!pending) throw new Error('Expected one scheduled SCRIPT input');
+      const job = pending; pending = null;
+      const revision = owner.getView().snapshot.revision;
+      const result = next((s) => s.revision > revision);
+      now += job.delay; job.callback(); return await result;
+    };
+    const first = next((s) => s.provenance.method === 'SCRIPT'); owner.startScriptedDemo(runtime); await first;
+    expect(await tick()).toMatchObject({ score: 0, feedback: { outcome: 'WRONG' } });
+    expect(await tick()).toMatchObject({ score: 1 });
+    expect(await send('STOP')).toMatchObject({ phase: 'IDLE', score: 0, scriptStopReason: 'STOP', provenance: { method: 'SCRIPT' } });
+    expect(pending).toBeNull();
+    const restart = next((s) => s.phase === 'RUNNING'); owner.startScriptedDemo(runtime); await restart;
+    for (let i = 0; i < 5; i++) await tick();
+    expect(remote.getView().snapshot).toMatchObject({ phase: 'COMPLETED', score: 4, provenance: { kind: 'TEST', method: 'SCRIPT' } });
+    expect(owner.getView().state.history).toHaveLength(5); expect(pending).toBeNull();
+  });
 });

@@ -4,9 +4,10 @@ export function GamePanel({ remote }: { remote: ReturnType<typeof useGameRemote>
   const { snapshot: s, status, pending } = remote;
   const current = status === 'LIVE';
   const enabled = current && !pending;
+  const scripted = s?.provenance.method === 'SCRIPT';
   return <section className="game-panel" aria-labelledby="game-title">
     <h2 id="game-title">LAN Game Remote</h2>
-    <p><strong>TEST INPUT — KEYBOARD</strong></p>
+    <p><strong>{scripted ? 'DEMO — SCRIPTED INPUT' : 'TEST INPUT — KEYBOARD'}</strong></p>
     <p>테스트 점수입니다. 실제 운동 기록이나 니킥 인식 횟수가 아닙니다.</p>
     <p role="status">Game connection: <strong>{status}</strong></p>
     <label>Controller 선택 <select aria-label="Game Controller" value={remote.selectedId ?? ''}
@@ -28,8 +29,11 @@ export function GamePanel({ remote }: { remote: ReturnType<typeof useGameRemote>
         <dt>Feedback</dt><dd>{s.feedback ? `${s.feedback.outcome}: ${s.feedback.action.replace('_ACTION', '')}` : '—'}</dd>
       </dl>
       {s.phase === 'COMPLETED' && <p>{current ? 'COMPLETED — TEST 결과' : '이전 TEST 완료 결과'}</p>}
+      {s.scriptStopReason && <p role="status">{current ? 'DEMO 중단' : '이전 DEMO 중단'} — {s.scriptStopReason} · 점수 초기화됨. 자동 재개하지 않습니다.</p>}
     </div> : <p>Controller 선택 및 최신 snapshot 수신 대기</p>}
-    <p>운동 전후 조작용입니다. 실제 TEST action은 노트북의 방향키로 입력하세요.</p>
+    <p>{scripted ? '고정된 TEST 시나리오가 자동 진행됩니다. 반복 터치가 필요 없으며 실제 운동 인식이 아닙니다.'
+      : '운동 전후 조작용입니다. 실제 TEST action은 노트북의 방향키로 입력하세요.'}</p>
+    <p>Mobile Start Game은 KEYBOARD TEST를 시작합니다. SCRIPT 데모 시작·재시작은 Controller에서 선택하세요.</p>
     <div className="game-commands">
       <button disabled={!enabled || s?.phase === 'RUNNING'} onClick={() => remote.send('START')}>Start Game</button>
       <button disabled={!enabled} onClick={() => remote.send('RESET')}>Reset Game</button>

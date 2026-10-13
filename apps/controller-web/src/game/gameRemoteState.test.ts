@@ -102,4 +102,19 @@ describe('mobile full snapshot gate (no scoring authority)', () => {
     remote.select('new-page', 4);
     expect(remote.getView()).toMatchObject({ selectedId: 'new-page', commandMessage: null, snapshot: { phase: 'IDLE' } });
   });
+  it.each(['KEYBOARD', 'SCRIPT'] as const)('blocks source changes within the same %s run, even at a newer revision', (method) => {
+    const { remote, owner } = fixture();
+    if (method === 'KEYBOARD') owner.start();
+    else owner.startScriptedDemo({ isVisible: () => true, schedule: () => () => {} });
+    const original = owner.getView().snapshot; remote.receive(original, 1);
+    remote.receive({ ...original, revision: original.revision + 1,
+      provenance: { kind: 'TEST', method: method === 'KEYBOARD' ? 'SCRIPT' : 'KEYBOARD' } }, 2);
+    expect(remote.getView()).toMatchObject({ error: 'RUN_SOURCE_CHANGED', status: 'STALE', snapshot: original });
+    owner.reset(); remote.receive(owner.getView().snapshot, 3);
+    if (method === 'KEYBOARD') owner.startScriptedDemo({ isVisible: () => true, schedule: () => () => {} });
+    else owner.start();
+    remote.receive(owner.getView().snapshot, 4);
+    expect(remote.getView().status).toBe('LIVE');
+    expect(remote.getView().snapshot?.provenance.method).not.toBe(method);
+  });
 });

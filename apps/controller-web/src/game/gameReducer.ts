@@ -1,5 +1,5 @@
 import {
-  GAME_TARGETS, KEYBOARD_TEST_PROVENANCE,
+  GAME_TARGETS, KEYBOARD_TEST_PROVENANCE, SCRIPT_TEST_PROVENANCE,
   type GameEvent, type GameInput, type GameRejectReason, type GameState,
 } from './gameTypes';
 
@@ -24,9 +24,12 @@ export function gameReducer(state: GameState, event: GameEvent): GameState {
     if (state.status === 'RUNNING') return reject(state, 'ALREADY_RUNNING');
     const run = event.run;
     if (!run || !validId(run.runId) || !validId(run.sourceInstanceId) || !validTime(run.startedAtMs)) return reject(state, 'INVALID_START');
+    if (run.provenance !== undefined && (!isObject(run.provenance) || run.provenance.kind !== 'TEST' ||
+        (run.provenance.method !== 'KEYBOARD' && run.provenance.method !== 'SCRIPT'))) return reject(state, 'INVALID_START');
     if (state.usedRunIds.includes(run.runId)) return reject(state, 'REUSED_RUN_ID');
     return { ...createInitialGameState(), status: 'RUNNING',
-      run: { runId: run.runId, sourceInstanceId: run.sourceInstanceId, startedAtMs: run.startedAtMs },
+      run: { runId: run.runId, sourceInstanceId: run.sourceInstanceId, startedAtMs: run.startedAtMs,
+        ...(run.provenance ? { provenance: run.provenance.method === 'SCRIPT' ? SCRIPT_TEST_PROVENANCE : KEYBOARD_TEST_PROVENANCE } : {}) },
       usedRunIds: [...state.usedRunIds, run.runId] };
   }
 
@@ -36,7 +39,8 @@ export function gameReducer(state: GameState, event: GameEvent): GameState {
   if (input.runId !== state.run.runId) return reject(state, 'RUN_MISMATCH');
   if (input.sourceInstanceId !== state.run.sourceInstanceId) return reject(state, 'UNREGISTERED_SOURCE');
   const provenance = input.provenance;
-  if (!isObject(provenance) || provenance.kind !== 'TEST' || provenance.method !== 'KEYBOARD') return reject(state, 'UNSUPPORTED_PROVENANCE');
+  const registered = state.run.provenance ?? KEYBOARD_TEST_PROVENANCE;
+  if (!isObject(provenance) || provenance.kind !== 'TEST' || provenance.method !== registered.method) return reject(state, 'UNSUPPORTED_PROVENANCE');
   if (input.action !== 'LEFT_ACTION' && input.action !== 'RIGHT_ACTION') return reject(state, 'INVALID_ACTION');
   if (typeof input.sequence !== 'number' || !Number.isSafeInteger(input.sequence) || input.sequence <= 0) return reject(state, 'INVALID_SEQUENCE');
   if (input.sequence <= state.lastAcceptedSequence) return reject(state, 'SEQUENCE_NOT_INCREASING');
@@ -47,7 +51,7 @@ export function gameReducer(state: GameState, event: GameEvent): GameState {
   // Snapshot only admitted primitives; never retain the caller's mutable object/extra fields.
   const admitted: GameInput = { runId: input.runId, sourceInstanceId: input.sourceInstanceId,
     sequence: input.sequence, occurredAtMs: input.occurredAtMs, action: input.action,
-    provenance: KEYBOARD_TEST_PROVENANCE };
+    provenance: registered };
   const target = GAME_TARGETS[state.targetIndex], correct = admitted.action === target;
   const targetIndex = state.targetIndex + (correct ? 1 : 0);
   return { ...state, status: targetIndex === GAME_TARGETS.length ? 'COMPLETED' : 'RUNNING',

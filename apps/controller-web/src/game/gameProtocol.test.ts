@@ -22,7 +22,7 @@ describe('game wire runtime boundary', () => {
     { ...idle, phase: 'STOPPED' }, { ...idle, phase: 'RUNNING' }, { ...idle, runId: 'run-1' },
     { ...idle, phase: 'COMPLETED', runId: 'run-1' },
     { ...idle, phase: 'RUNNING', runId: 'run-1', currentTarget: 'RIGHT_ACTION' },
-    { ...idle, provenance: { kind: 'POSE', method: 'KEYBOARD' } }, { ...idle, provenance: { kind: 'TEST', method: 'SCRIPT' } },
+    { ...idle, provenance: { kind: 'POSE', method: 'KEYBOARD' } }, { ...idle, provenance: { kind: 'TEST', method: 'UNREGISTERED' } },
     { ...idle, history: [] }, { ...idle, landmarks: [] }, { ...idle, baseline: {} },
     { ...idle, commandResult: { requestId: 'r', command: 'START', status: 'ACCEPTED', reason: 'WRONG_RUN' } },
     { ...idle, feedback: { action: 'RIGHT_ACTION', target: 'LEFT_ACTION', outcome: 'WRONG' } },
@@ -41,5 +41,19 @@ describe('game wire runtime boundary', () => {
     const reordered = Object.fromEntries(Object.entries(idle).reverse()) as unknown as GameStateSnapshot;
     expect(gameSnapshotKey(reordered)).toBe(gameSnapshotKey(idle));
     expect(gameSnapshotKey({ ...idle, revision: 1 })).not.toBe(gameSnapshotKey(idle));
+  });
+  it('accepts SCRIPT and optional IDLE interruption metadata without breaking legacy KEYBOARD snapshots', () => {
+    expect(isGameStateSnapshot(idle)).toBe(true);
+    const script = { ...idle, provenance: { kind: 'TEST', method: 'SCRIPT' } };
+    expect(isGameStateSnapshot(script)).toBe(true);
+    expect(isGameStateSnapshot({ ...script, phase: 'RUNNING', runId: 'script-1', currentTarget: 'LEFT_ACTION' })).toBe(true);
+    expect(isGameStateSnapshot({ ...script, scriptStopReason: 'TIMER_DELAY' })).toBe(true);
+    expect(isGameStateSnapshot({ ...script, scriptStopReason: undefined })).toBe(false);
+    expect(isGameStateSnapshot({ ...script, scriptStopReason: 'SUCCEEDED' })).toBe(false);
+    expect(isGameStateSnapshot({ ...idle, scriptStopReason: 'STOP' })).toBe(false);
+    expect(isGameStateSnapshot({ ...script, phase: 'COMPLETED', runId: 'script-1', score: 4, targetIndex: 4,
+      feedback: { action: 'RIGHT_ACTION', target: 'RIGHT_ACTION', outcome: 'CORRECT' }, scriptStopReason: 'STOP' })).toBe(false);
+    expect(gameSnapshotKey({ ...idle, provenance: { kind: 'TEST', method: 'SCRIPT' }, scriptStopReason: 'STOP' }))
+      .not.toBe(gameSnapshotKey({ ...idle, provenance: { kind: 'TEST', method: 'SCRIPT' } }));
   });
 });

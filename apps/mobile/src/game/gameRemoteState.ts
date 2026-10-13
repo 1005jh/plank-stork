@@ -75,6 +75,7 @@ export class GameRemoteState {
       let error: string | null = null;
       if (payload.revision === previous.revision && gameSnapshotKey(payload) !== gameSnapshotKey(previous)) error = 'REVISION_CONFLICT';
       if (payload.revision > previous.revision) {
+        if (payload.runId !== null && payload.runId === previous.runId && payload.provenance.method !== previous.provenance.method) error = 'RUN_SOURCE_CHANGED';
         if (payload.runId !== null && entry.retiredRuns.has(payload.runId)) error = 'RETIRED_RUN';
         if (payload.runId !== null && payload.runId === previous.runId &&
             (payload.targetIndex < previous.targetIndex || (previous.phase === 'COMPLETED' && payload.phase !== 'COMPLETED'))) error = 'RUN_REGRESSION';

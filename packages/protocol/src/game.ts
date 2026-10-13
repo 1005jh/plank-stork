@@ -4,6 +4,10 @@ export const GAME_HEARTBEAT_MS = 1000;
 export const GAME_STALE_MS = 3000;
 export const GAME_COMMAND_TIMEOUT_MS = 4000;
 export type GameWireAction = 'LEFT_ACTION' | 'RIGHT_ACTION';
+export type GameTestMethod = 'KEYBOARD' | 'SCRIPT';
+export type GameTestProvenance = { readonly kind: 'TEST'; readonly method: GameTestMethod };
+// An interrupted demo returns to the existing IDLE phase with its score discarded.
+export type GameScriptStopReason = 'RESET' | 'STOP' | 'PAGE_HIDDEN' | 'TIMER_DELAY' | 'UNMOUNT' | 'CLOCK_INVALID' | 'INPUT_REJECTED';
 export type GameCommandType = 'START' | 'RESET' | 'STOP';
 export type GameCommandRejection = 'WRONG_CONTROLLER' | 'WRONG_RUN' | 'WRONG_REVISION' | 'ALREADY_RUNNING' | 'NOT_RUNNING';
 export interface GameCommandResult {
@@ -22,7 +26,9 @@ export interface GameStateSnapshot {
   currentTarget: GameWireAction | null;
   score: number;
   totalTargets: 4;
-  provenance: { kind: 'TEST'; method: 'KEYBOARD' };
+  provenance: GameTestProvenance;
+  /** Optional so existing STEP 4V KEYBOARD snapshots remain valid without new fields. */
+  scriptStopReason?: GameScriptStopReason;
   feedback: { action: GameWireAction; target: GameWireAction; outcome: 'CORRECT' | 'WRONG' } | null;
   commandResult: GameCommandResult | null;
 }
@@ -72,11 +78,15 @@ function isResult(value: unknown): value is GameCommandResult | null {
 }
 export function isGameStateSnapshot(value: unknown): value is GameStateSnapshot {
   if (!object(value) || !keys(value, ['version', 'controllerInstanceId', 'runId', 'revision', 'phase', 'targetIndex',
-    'currentTarget', 'score', 'totalTargets', 'provenance', 'feedback', 'commandResult'])) return false;
+    'currentTarget', 'score', 'totalTargets', 'provenance', 'feedback', 'commandResult',
+    ...(Object.hasOwn(value, 'scriptStopReason') ? ['scriptStopReason'] : [])])) return false;
   if (value.version !== 1 || !id(value.controllerInstanceId) || !nullableId(value.runId) || !integer(value.revision) ||
       !integer(value.targetIndex) || value.targetIndex > 4 || value.score !== value.targetIndex || value.totalTargets !== 4) return false;
   const p = value.provenance;
-  if (!object(p) || !keys(p, ['kind', 'method']) || p.kind !== 'TEST' || p.method !== 'KEYBOARD' || !isResult(value.commandResult)) return false;
+  if (!object(p) || !keys(p, ['kind', 'method']) || p.kind !== 'TEST' ||
+      (p.method !== 'KEYBOARD' && p.method !== 'SCRIPT') || !isResult(value.commandResult)) return false;
+  if (Object.hasOwn(value, 'scriptStopReason') && (p.method !== 'SCRIPT' || value.phase !== 'IDLE' ||
+      !['RESET', 'STOP', 'PAGE_HIDDEN', 'TIMER_DELAY', 'UNMOUNT', 'CLOCK_INVALID', 'INPUT_REJECTED'].includes(value.scriptStopReason as string))) return false;
   if (value.phase === 'IDLE') {
     if (value.runId !== null || value.targetIndex !== 0 || value.currentTarget !== null || value.feedback !== null) return false;
   } else if (value.phase === 'RUNNING') {
@@ -96,5 +106,5 @@ export function gameSnapshotKey(s: GameStateSnapshot): string {
   return JSON.stringify([s.version, s.controllerInstanceId, s.runId, s.revision, s.phase, s.targetIndex,
     s.currentTarget, s.score, s.totalTargets, s.provenance.kind, s.provenance.method,
     s.feedback && [s.feedback.action, s.feedback.target, s.feedback.outcome],
-    s.commandResult && [s.commandResult.requestId, s.commandResult.command, s.commandResult.status, s.commandResult.reason]]);
+    s.commandResult && [s.commandResult.requestId, s.commandResult.command, s.commandResult.status, s.commandResult.reason], s.scriptStopReason ?? null]);
 }

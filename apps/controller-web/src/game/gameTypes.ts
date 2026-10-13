@@ -1,4 +1,4 @@
-import type { ControlDirection } from '@plank-stork/protocol';
+import type { ControlDirection, GameTestProvenance } from '@plank-stork/protocol';
 
 // Reuse the shared direction vocabulary without changing its Socket test contract.
 export type GameAction = `${ControlDirection}_ACTION`;
@@ -7,6 +7,7 @@ export const GAME_TARGETS: readonly GameAction[] = Object.freeze([
   'LEFT_ACTION', 'RIGHT_ACTION', 'LEFT_ACTION', 'RIGHT_ACTION',
 ]);
 export const KEYBOARD_TEST_PROVENANCE = Object.freeze({ kind: 'TEST', method: 'KEYBOARD' } as const);
+export const SCRIPT_TEST_PROVENANCE = Object.freeze({ kind: 'TEST', method: 'SCRIPT' } as const);
 
 export interface GameInput {
   readonly runId: string;
@@ -18,7 +19,7 @@ export interface GameInput {
    */
   readonly occurredAtMs: number;
   readonly action: GameAction;
-  readonly provenance: typeof KEYBOARD_TEST_PROVENANCE;
+  readonly provenance: GameTestProvenance;
 }
 
 /** Only the local game owner can register a run/source. This is not a wire/authentication API. */
@@ -26,6 +27,8 @@ export interface GameRun {
   readonly runId: string;
   readonly sourceInstanceId: string;
   readonly startedAtMs: number;
+  /** Omitted only for existing STEP 4U KEYBOARD registrations. Fixed for the entire run. */
+  readonly provenance?: GameTestProvenance;
 }
 
 export interface GameActionRecord {
@@ -56,5 +59,5 @@ export interface GameState {
 export type GameEvent =
   | { readonly type: 'START'; readonly run: GameRun }
   | { readonly type: 'RESET' }
-  // Validate at the core boundary, even though the only current adapter is local/typed.
+  // Validate both local TEST adapters at the same pure core boundary.
   | { readonly type: 'INPUT'; readonly input: unknown };
